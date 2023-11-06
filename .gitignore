@@ -30,3 +30,47 @@
 *.exe
 *.out
 *.app
+
+# CMake
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+
+# VS Code
+.vscode/*
+/Debug/*
+
+# Eclipse
+.cproject
+.project
+.settings/*
+
+# Doxygen
+docs/html/*
+docs/latex/*
+
+/Debug/
+/build/*
+/build-*/
+
+# CLion
+.idea/*
+cmake-build-*/
+
+imgui.ini
+
+# Build script
+Shipping/*
+.build/*
+.build_*
+third_party/*
+dependencies/*
+vcpkg_installed/*
+
+# macOS
+.DS_Store
