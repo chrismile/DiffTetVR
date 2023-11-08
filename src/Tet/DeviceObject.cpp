@@ -26,22 +26,20 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <torch/script.h>
-#include <torch/types.h>
-#include <torch/extension.h>
-#include <pybind11/functional.h>
+#include "DeviceObject.hpp"
 
-void difftetvrCleanup() {
-    ;
+#ifdef SUPPORT_CUDA_INTEROP
+CUdeviceptr DeviceBuffer::getCudaBuffer() {
+    if (!cudaBuffer) {
+        cudaBuffer = std::make_shared<sgl::vk::BufferCudaExternalMemoryVk>(vulkanBuffer);
+    }
+    return cudaBuffer->getCudaDevicePtr();
 }
 
-torch::Tensor forward(torch::Tensor X) {
-    return X;
+const sgl::vk::BufferCudaExternalMemoryVkPtr& DeviceBuffer::getBufferCudaExternalMemory() {
+    if (!cudaBuffer) {
+        cudaBuffer = std::make_shared<sgl::vk::BufferCudaExternalMemoryVk>(vulkanBuffer);
+    }
+    return cudaBuffer;
 }
-
-PYBIND11_MODULE(difftetvr, m) {
-    m.def("_cleanup", difftetvrCleanup, "Cleanup module data.");
-    m.def("forward", forward,
-        "Forward rendering pass.",
-        py::arg("X"));
-}
+#endif

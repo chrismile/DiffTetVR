@@ -1,7 +1,7 @@
 /*
  * BSD 2-Clause License
  *
- * Copyright (c) 2023, Christoph Neuhauser
+ * Copyright (c) 2020, Christoph Neuhauser
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,22 +26,25 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <torch/script.h>
-#include <torch/types.h>
-#include <torch/extension.h>
-#include <pybind11/functional.h>
+#ifndef STRESSLINEVIS_PPLL_HPP
+#define STRESSLINEVIS_PPLL_HPP
 
-void difftetvrCleanup() {
-    ;
-}
+const char* const SORTING_MODE_NAMES[] = {
+        "Priority Queue", "Bubble Sort", "Insertion Sort", "Shell Sort", "Max Heap", "Bitonic Sort",
+        "Quicksort", "Quicksort Hybrid"
+};
 
-torch::Tensor forward(torch::Tensor X) {
-    return X;
-}
+const int NUM_SORTING_MODES = ((int)(sizeof(SORTING_MODE_NAMES) / sizeof(*SORTING_MODE_NAMES)));
 
-PYBIND11_MODULE(difftetvr, m) {
-    m.def("_cleanup", difftetvrCleanup, "Cleanup module data.");
-    m.def("forward", forward,
-        "Forward rendering pass.",
-        py::arg("X"));
-}
+enum SortingAlgorithmMode {
+    SORTING_ALGORITHM_MODE_PRIORITY_QUEUE,
+    SORTING_ALGORITHM_MODE_BUBBLE_SORT,
+    SORTING_ALGORITHM_MODE_INSERTION_SORT,
+    SORTING_ALGORITHM_MODE_SHELL_SORT,
+    SORTING_ALGORITHM_MODE_MAX_HEAP,
+    SORTING_ALGORITHM_MODE_BITONIC_SORT,
+    SORTING_ALGORITHM_MODE_QUICKSORT,
+    SORTING_ALGORITHM_MODE_QUICKSORT_HYBRID
+};
+
+#endif //STRESSLINEVIS_PPLL_HPP

@@ -12,9 +12,10 @@ file(GLOB_RECURSE CUDA_SOURCES src/*.cu)
 include_directories(src)
 
 file(GLOB_RECURSE MODULE_SOURCES src/Module/*.cpp src/Module/*.hpp)
+# TODO: Undo when module is excluded.
 foreach(MODULE_SOURCE ${MODULE_SOURCES})
     list(REMOVE_ITEM SOURCES ${MODULE_SOURCE})
-endforeach ()
+endforeach()
 
 file(GLOB_RECURSE SHADER_FILES Data/Shaders/*.glsl)
 file(GLOB_RECURSE CUDA_MODULES Data/Shaders/*.cu)
@@ -284,6 +285,10 @@ if (${SUPPORT_PYTORCH} AND Torch_FOUND)
     target_include_directories(DiffTetVR PRIVATE ${TORCH_INCLUDE_DIR})
     target_compile_definitions(DiffTetVR PRIVATE SUPPORT_PYTORCH)
 endif()
+
+# TODO: Remove when module is excluded.
+#find_package(Python3 COMPONENTS Development REQUIRED)
+#target_link_libraries(DiffTetVR PRIVATE Python3::Python)
 
 if(VCPKG_TOOLCHAIN)
     find_package(CURL CONFIG REQUIRED)

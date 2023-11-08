@@ -26,22 +26,50 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <torch/script.h>
-#include <torch/types.h>
-#include <torch/extension.h>
-#include <pybind11/functional.h>
+#ifndef DIFFTETVR_DEVICEBUFFER_HPP
+#define DIFFTETVR_DEVICEBUFFER_HPP
 
-void difftetvrCleanup() {
-    ;
-}
+#include <memory>
 
-torch::Tensor forward(torch::Tensor X) {
-    return X;
-}
+#ifdef SUPPORT_CUDA_INTEROP
+#include <Graphics/Vulkan/Utils/InteropCuda.hpp>
+#endif
 
-PYBIND11_MODULE(difftetvr, m) {
-    m.def("_cleanup", difftetvrCleanup, "Cleanup module data.");
-    m.def("forward", forward,
-        "Forward rendering pass.",
-        py::arg("X"));
-}
+namespace sgl { namespace vk {
+class Image;
+typedef std::shared_ptr<Image> ImagePtr;
+class ImageView;
+typedef std::shared_ptr<ImageView> ImageViewPtr;
+class ImageSampler;
+typedef std::shared_ptr<ImageSampler> ImageSamplerPtr;
+class Texture;
+typedef std::shared_ptr<Texture> TexturePtr;
+class ImageCudaExternalMemoryVk;
+typedef std::shared_ptr<ImageCudaExternalMemoryVk> ImageCudaExternalMemoryVkPtr;
+class TextureCudaExternalMemoryVk;
+typedef std::shared_ptr<TextureCudaExternalMemoryVk> TextureCudaExternalMemoryVkPtr;
+class Buffer;
+typedef std::shared_ptr<Buffer> BufferPtr;
+}}
+
+class DeviceBuffer {
+public:
+    DeviceBuffer();
+    inline const sgl::vk::BufferPtr& getVulkanBuffer() { return vulkanBuffer; }
+#ifdef SUPPORT_CUDA_INTEROP
+    CUdeviceptr getCudaBuffer();
+    const sgl::vk::BufferCudaExternalMemoryVkPtr& getBufferCudaExternalMemory();
+#endif
+
+private:
+    sgl::vk::BufferPtr vulkanBuffer;
+
+#ifdef SUPPORT_CUDA_INTEROP
+    /// Optional, created when @see getCudaBuffer is called.
+    sgl::vk::BufferCudaExternalMemoryVkPtr cudaBuffer;
+#endif
+};
+
+typedef std::shared_ptr<DeviceBuffer> DeviceBufferPtr;
+
+#endif //DIFFTETVR_DEVICEBUFFER_HPP

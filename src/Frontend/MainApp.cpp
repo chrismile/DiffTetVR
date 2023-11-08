@@ -1,0 +1,620 @@
+/*
+ * BSD 2-Clause License
+ *
+ * Copyright (c) 2023, Christoph Neuhauser
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * * Redistributions of source code must retain the above copyright notice, this
+ *   list of conditions and the following disclaimer.
+ *
+ * * Redistributions in binary form must reproduce the above copyright notice,
+ *   this list of conditions and the following disclaimer in the documentation
+ *   and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#ifdef __linux__
+#include <signal.h>
+#endif
+
+#include <Utils/StringUtils.hpp>
+#include <Utils/AppSettings.hpp>
+#include <Utils/Dialog.hpp>
+#include <Graphics/Window.hpp>
+#include <Graphics/Vulkan/Utils/Instance.hpp>
+#include <Graphics/Vulkan/Utils/Swapchain.hpp>
+#include <Graphics/Vulkan/Render/Renderer.hpp>
+
+#include <ImGui/ImGuiWrapper.hpp>
+#include <ImGui/ImGuiFileDialog/ImGuiFileDialog.h>
+#include <ImGui/imgui_internal.h>
+#include <ImGui/imgui_custom.h>
+#include <ImGui/imgui_stdlib.h>
+
+#include "Tet/TetMesh.hpp"
+#include "Renderer/TetMeshVolumeRenderer.hpp"
+#include "DataView.hpp"
+#include "MainApp.hpp"
+
+void vulkanErrorCallback() {
+    SDL_CaptureMouse(SDL_FALSE);
+    std::cerr << "Application callback" << std::endl;
+}
+
+#ifdef __linux__
+void signalHandler(int signum) {
+    SDL_CaptureMouse(SDL_FALSE);
+    std::cerr << "Interrupt signal (" << signum << ") received." << std::endl;
+    exit(signum);
+}
+#endif
+
+MainApp::MainApp()
+        : sceneData(
+            camera, clearColor, screenshotTransparentBackground, recording, useCameraFlight) {
+    sgl::AppSettings::get()->getVulkanInstance()->setDebugCallback(&vulkanErrorCallback);
+    clearColor = sgl::Color(0, 0, 0, 255);
+    clearColorSelection = ImColor(0, 0, 0, 255);
+    std::string clearColorString;
+    if (sgl::AppSettings::get()->getSettings().getValueOpt("clearColor", clearColorString)) {
+        std::vector<std::string> clearColorStringParts;
+        sgl::splitString(clearColorString, ',', clearColorStringParts);
+        if (clearColorStringParts.size() == 3 || clearColorStringParts.size() == 4) {
+            clearColor.setR(uint8_t(sgl::fromString<int>(clearColorStringParts.at(0))));
+            clearColor.setG(uint8_t(sgl::fromString<int>(clearColorStringParts.at(1))));
+            clearColor.setB(uint8_t(sgl::fromString<int>(clearColorStringParts.at(2))));
+            clearColorSelection = ImColor(clearColor.getR(), clearColor.getG(), clearColor.getB(), 255);
+        }
+    }
+
+    //viewManager = new ViewManager(&clearColor, rendererVk);
+
+    checkpointWindow.setStandardWindowSize(1254, 390);
+    checkpointWindow.setStandardWindowPosition(841, 53);
+
+    propertyEditor.setInitWidthValues(sgl::ImGuiWrapper::get()->getScaleDependentSize(280.0f));
+
+    camera->setNearClipDistance(0.01f);
+    camera->setFarClipDistance(100.0f);
+
+    useDockSpaceMode = true;
+    sgl::AppSettings::get()->getSettings().getValueOpt("useDockSpaceMode", useDockSpaceMode);
+    sgl::AppSettings::get()->getSettings().getValueOpt("useFixedSizeViewport", useFixedSizeViewport);
+    sgl::AppSettings::get()->getSettings().getValueOpt("fixedViewportSizeX", fixedViewportSize.x);
+    sgl::AppSettings::get()->getSettings().getValueOpt("fixedViewportSizeY", fixedViewportSize.y);
+    fixedViewportSizeEdit = fixedViewportSize;
+    showPropertyEditor = true;
+    sgl::ImGuiWrapper::get()->setUseDockSpaceMode(useDockSpaceMode);
+    //useDockSpaceMode = false;
+
+#ifdef NDEBUG
+    showFpsOverlay = false;
+#else
+    showFpsOverlay = true;
+#endif
+    sgl::AppSettings::get()->getSettings().getValueOpt("showFpsOverlay", showFpsOverlay);
+    sgl::AppSettings::get()->getSettings().getValueOpt("showCoordinateAxesOverlay", showCoordinateAxesOverlay);
+
+    useLinearRGB = false;
+    coordinateAxesOverlayWidget.setClearColor(clearColor);
+
+    if (usePerformanceMeasurementMode) {
+        useCameraFlight = true;
+    }
+    if (useCameraFlight && recording) {
+        sgl::Window *window = sgl::AppSettings::get()->getMainWindow();
+        window->setWindowSize(recordingResolution.x, recordingResolution.y);
+        realTimeCameraFlight = false;
+    }
+
+    //fileDialogInstance = IGFD_Create();
+    //customDataSetFileName = sgl::FileUtils::get()->getUserDirectory();
+    //loadAvailableDataSetInformation();
+
+    tetMeshVolumeRenderer = std::make_shared<TetMeshVolumeRenderer>(rendererVk, &cameraHandle);
+    tetMeshVolumeRenderer->setUseLinearRGB(useLinearRGB);
+    tetMeshVolumeRenderer->setClearColor(clearColor);
+    //tetMeshVolumeRenderer->setFileDialogInstance(fileDialogInstance);
+    dataView = std::make_shared<DataView>(camera, rendererVk, tetMeshVolumeRenderer);
+    dataView->useLinearRGB = useLinearRGB;
+    if (useDockSpaceMode) {
+        cameraHandle = dataView->camera;
+    } else {
+        cameraHandle = camera;
+    }
+
+    resolutionChanged(sgl::EventPtr());
+
+    if (!recording && !usePerformanceMeasurementMode) {
+        // Just for convenience...
+        int desktopWidth = 0;
+        int desktopHeight = 0;
+        int refreshRate = 60;
+        sgl::AppSettings::get()->getDesktopDisplayMode(desktopWidth, desktopHeight, refreshRate);
+        if (desktopWidth == 3840 && desktopHeight == 2160) {
+            sgl::Window *window = sgl::AppSettings::get()->getMainWindow();
+            window->setWindowSize(2186, 1358);
+        }
+    }
+    if (!sgl::AppSettings::get()->getSettings().hasKey("cameraNavigationMode")) {
+        cameraNavigationMode = sgl::CameraNavigationMode::TURNTABLE;
+        updateCameraNavigationMode();
+    }
+
+#ifdef __linux__
+    signal(SIGSEGV, signalHandler);
+#endif
+}
+
+MainApp::~MainApp() {
+    device->waitIdle();
+
+    tetMeshVolumeRenderer = {};
+    dataView = {};
+
+    /*delete tfOptimization;
+    volumeRenderers = {};
+    volumeData = {};
+    dataViews.clear();
+    delete viewManager;
+    viewManager = nullptr;
+
+    IGFD_Destroy(fileDialogInstance);*/
+
+/*#ifdef SUPPORT_CUDA_INTEROP
+    if (sgl::vk::getIsNvrtcFunctionTableInitialized()) {
+        sgl::vk::freeNvrtcFunctionTable();
+    }
+    if (sgl::vk::getIsCudaDeviceApiFunctionTableInitialized()) {
+        if (cuContext) {
+            CUresult cuResult = sgl::vk::g_cudaDeviceApiFunctionTable.cuCtxDestroy(cuContext);
+            sgl::vk::checkCUresult(cuResult, "Error in cuCtxDestroy: ");
+            cuContext = {};
+        }
+        sgl::vk::freeCudaDeviceApiFunctionTable();
+    }
+#endif*/
+
+    for (int i = 0; i < int(nonBlockingMsgBoxHandles.size()); i++) {
+        auto& handle = nonBlockingMsgBoxHandles.at(i);
+        if (handle->ready(0)) {
+            nonBlockingMsgBoxHandles.erase(nonBlockingMsgBoxHandles.begin() + i);
+            i--;
+        } else {
+            handle->kill();
+        }
+    }
+    nonBlockingMsgBoxHandles.clear();
+
+    std::string clearColorString =
+            std::to_string(int(clearColor.getR())) + ","
+            + std::to_string(int(clearColor.getG())) + ","
+            + std::to_string(int(clearColor.getB()));
+    sgl::AppSettings::get()->getSettings().addKeyValue("clearColor", clearColorString);
+    sgl::AppSettings::get()->getSettings().addKeyValue("useDockSpaceMode", useDockSpaceMode);
+    if (!usePerformanceMeasurementMode) {
+        sgl::AppSettings::get()->getSettings().addKeyValue("useFixedSizeViewport", useFixedSizeViewport);
+        sgl::AppSettings::get()->getSettings().addKeyValue("fixedViewportSizeX", fixedViewportSize.x);
+        sgl::AppSettings::get()->getSettings().addKeyValue("fixedViewportSizeY", fixedViewportSize.y);
+    }
+    sgl::AppSettings::get()->getSettings().addKeyValue("showFpsOverlay", showFpsOverlay);
+    sgl::AppSettings::get()->getSettings().addKeyValue("showCoordinateAxesOverlay", showCoordinateAxesOverlay);
+}
+
+void MainApp::resolutionChanged(sgl::EventPtr event) {
+    SciVisApp::resolutionChanged(event);
+
+    sgl::Window *window = sgl::AppSettings::get()->getMainWindow();
+    auto width = uint32_t(window->getWidth());
+    auto height = uint32_t(window->getHeight());
+
+    if (!useDockSpaceMode) {
+        tetMeshVolumeRenderer->setOutputImage(sceneTextureVk->getImageView());
+        tetMeshVolumeRenderer->recreateSwapchain(width, height);
+    }
+}
+
+void MainApp::updateColorSpaceMode() {
+    SciVisApp::updateColorSpaceMode();
+    tetMeshVolumeRenderer->setUseLinearRGB(useLinearRGB);
+    if (dataView) {
+        dataView->useLinearRGB = useLinearRGB;
+        dataView->viewportWidth = 0;
+        dataView->viewportHeight = 0;
+    }
+}
+
+void MainApp::render() {
+    // Test Code.
+    static bool isFirstFrame = true;
+    if (isFirstFrame) {
+        //selectedDataSetIndex = 0;
+        //customDataSetFileName = "/home/christoph/datasets/Toy/chord/linear_4x4.nc";
+        //loadVolumeDataSet({ customDataSetFileName });
+        tetMesh = std::make_shared<TetMesh>(device);
+        tetMesh->loadTestData(TestCase::SINGLE_TETRAHEDRON);
+        tetMeshVolumeRenderer->setTetMeshData(tetMesh);
+        isFirstFrame = false;
+    }
+
+    SciVisApp::preRender();
+    if (dataView) {
+        dataView->saveScreenshotDataIfAvailable();
+    }
+
+    if (!useDockSpaceMode) {
+        reRender = reRender || tetMeshVolumeRenderer->needsReRender();
+
+        if (reRender || continuousRendering) {
+            SciVisApp::prepareReRender();
+
+            if (tetMesh) {
+                rendererVk->setProjectionMatrix(camera->getProjectionMatrix());
+                rendererVk->setViewMatrix(camera->getViewMatrix());
+                rendererVk->setModelMatrix(sgl::matrixIdentity());
+                tetMeshVolumeRenderer->render();
+            }
+
+            reRender = false;
+        }
+    }
+
+    SciVisApp::postRender();
+
+    if (useDockSpaceMode && !uiOnScreenshot && recording && !isFirstRecordingFrame) {
+        rendererVk->transitionImageLayout(
+                dataView->compositedDataViewTexture->getImage(),
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        videoWriter->pushFramebufferImage(dataView->compositedDataViewTexture->getImage());
+        rendererVk->transitionImageLayout(
+                dataView->compositedDataViewTexture->getImage(),
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    }
+}
+
+void MainApp::renderGui() {
+    focusedWindowIndex = -1;
+    mouseHoverWindowIndex = -1;
+
+    if (useDockSpaceMode) {
+        static bool isProgramStartup = true;
+        ImGuiID dockSpaceId = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+        if (isProgramStartup) {
+            ImGuiDockNode* centralNode = ImGui::DockBuilderGetNode(dockSpaceId);
+            if (centralNode->IsEmpty()) {
+                auto* window = sgl::AppSettings::get()->getMainWindow();
+                const ImVec2 dockSpaceSize(float(window->getWidth()), float(window->getHeight()));
+                ImGui::DockBuilderSetNodeSize(dockSpaceId, dockSpaceSize);
+
+                ImGuiID dockLeftId, dockMainId;
+                ImGui::DockBuilderSplitNode(
+                        dockSpaceId, ImGuiDir_Left, 0.29f, &dockLeftId, &dockMainId);
+                ImGui::DockBuilderSetNodeSize(dockLeftId, ImVec2(dockSpaceSize.x * 0.29f, dockSpaceSize.y));
+                ImGui::DockBuilderDockWindow("Tet Mesh Volume Renderer", dockMainId);
+
+                ImGuiID dockLeftUpId, dockLeftDownId;
+                ImGui::DockBuilderSplitNode(
+                        dockLeftId, ImGuiDir_Up, 0.8f,
+                        &dockLeftUpId, &dockLeftDownId);
+                ImGui::DockBuilderDockWindow("Property Editor", dockLeftUpId);
+
+                ImGui::DockBuilderDockWindow("Transfer Function", dockLeftDownId);
+                ImGui::DockBuilderDockWindow("Camera Checkpoints", dockLeftDownId);
+
+                ImGui::DockBuilderFinish(dockLeftId);
+                ImGui::DockBuilderFinish(dockSpaceId);
+            }
+            isProgramStartup = false;
+        }
+
+        renderGuiMenuBar();
+
+        if (showRendererWindow) {
+            bool isViewOpen = true;
+            sgl::ImGuiWrapper::get()->setNextWindowStandardSize(800, 600);
+            if (ImGui::Begin("Tet Mesh Volume Renderer", &isViewOpen)) {
+                if (ImGui::IsWindowFocused()) {
+                    focusedWindowIndex = 0;
+                }
+                sgl::ImGuiWrapper::get()->setWindowViewport(0, ImGui::GetWindowViewport());
+                sgl::ImGuiWrapper::get()->setWindowViewport(0, ImGui::GetWindowViewport());
+                sgl::ImGuiWrapper::get()->setWindowPosAndSize(0, ImGui::GetWindowPos(), ImGui::GetWindowSize());
+
+                ImVec2 sizeContent = ImGui::GetContentRegionAvail();
+                if (useFixedSizeViewport) {
+                    sizeContent = ImVec2(float(fixedViewportSize.x), float(fixedViewportSize.y));
+                }
+                if (int(sizeContent.x) != int(dataView->viewportWidth)
+                    || int(sizeContent.y) != int(dataView->viewportHeight)) {
+                    dataView->resize(int(sizeContent.x), int(sizeContent.y));
+                    if (dataView->viewportWidth > 0 && dataView->viewportHeight > 0) {
+                        tetMeshVolumeRenderer->setOutputImage(dataView->dataViewTexture->getImageView());
+                        tetMeshVolumeRenderer->recreateSwapchain(
+                                dataView->viewportWidth, dataView->viewportHeight);
+                    }
+                    reRender = true;
+                }
+
+                reRender = reRender || tetMeshVolumeRenderer->needsReRender();
+
+                if (reRender || continuousRendering) {
+                    if (dataView->viewportWidth > 0 && dataView->viewportHeight > 0) {
+                        dataView->beginRender();
+                        if (tetMesh) {
+                            tetMeshVolumeRenderer->render();
+                        }
+                        dataView->endRender();
+                    }
+
+                    reRender = false;
+                }
+
+                if (dataView->viewportWidth > 0 && dataView->viewportHeight > 0) {
+                    if (!uiOnScreenshot && screenshot) {
+                        printNow = true;
+                        std::string screenshotFilename =
+                                saveDirectoryScreenshots + saveFilenameScreenshots
+                                + "_" + sgl::toString(screenshotNumber);
+                        screenshotFilename += ".png";
+
+                        dataView->screenshotReadbackHelper->setScreenshotTransparentBackground(
+                                screenshotTransparentBackground);
+                        dataView->saveScreenshot(screenshotFilename);
+                        screenshot = false;
+
+                        printNow = false;
+                        screenshot = true;
+                    }
+
+                    if (isViewOpen) {
+                        ImTextureID textureId = dataView->getImGuiTextureId();
+                        ImGui::Image(
+                                textureId, sizeContent, ImVec2(0, 0), ImVec2(1, 1));
+                        if (ImGui::IsItemHovered()) {
+                            mouseHoverWindowIndex = 0;
+                        }
+                    }
+
+                    if (showFpsOverlay) {
+                        renderGuiFpsOverlay();
+                    }
+                    if (showCoordinateAxesOverlay) {
+                        renderGuiCoordinateAxesOverlay(dataView->camera);
+                    }
+                }
+            }
+            ImGui::End();
+        }
+
+        if (!uiOnScreenshot && screenshot) {
+            screenshot = false;
+            screenshotNumber++;
+        }
+        reRender = false;
+    }
+
+    if (checkpointWindow.renderGui()) {
+        fovDegree = camera->getFOVy() / sgl::PI * 180.0f;
+        reRender = true;
+        hasMoved();
+    }
+
+    if (showPropertyEditor) {
+        renderGuiPropertyEditorWindow();
+    }
+}
+
+void MainApp::renderGuiGeneralSettingsPropertyEditor() {
+    if (propertyEditor.addColorEdit3("Clear Color", (float*)&clearColorSelection, 0)) {
+        clearColor = sgl::colorFromFloat(
+                clearColorSelection.x, clearColorSelection.y, clearColorSelection.z, clearColorSelection.w);
+        coordinateAxesOverlayWidget.setClearColor(clearColor);
+        if (tetMeshVolumeRenderer) {
+            tetMeshVolumeRenderer->setClearColor(clearColor);
+        }
+        reRender = true;
+    }
+
+    newDockSpaceMode = useDockSpaceMode;
+    if (propertyEditor.addCheckbox("Use Docking Mode", &newDockSpaceMode)) {
+        scheduledDockSpaceModeChange = true;
+    }
+
+    if (propertyEditor.addCheckbox("Fixed Size Viewport", &useFixedSizeViewport)) {
+        reRender = true;
+    }
+    if (useFixedSizeViewport) {
+        if (propertyEditor.addSliderInt2Edit("Viewport Size", &fixedViewportSizeEdit.x, 1, 8192)
+            == ImGui::EditMode::INPUT_FINISHED) {
+            fixedViewportSize = fixedViewportSizeEdit;
+            reRender = true;
+        }
+    }
+}
+
+/*void MainApp::openFileDialog() {
+    selectedDataSetIndex = 0;
+    if (fileDialogDirectory.empty() || !sgl::FileUtils::get()->directoryExists(fileDialogDirectory)) {
+        fileDialogDirectory = sgl::AppSettings::get()->getDataDirectory() + "CloudDataSets/";
+        if (!sgl::FileUtils::get()->exists(fileDialogDirectory)) {
+            fileDialogDirectory = sgl::AppSettings::get()->getDataDirectory();
+        }
+    }
+    IGFD_OpenModal(
+            fileDialogInstance,
+            "ChooseDataSetFile", "Choose a File",
+            ".*,.xyz,.nvdb,.dat,.raw",
+            fileDialogDirectory.c_str(),
+            "", 1, nullptr,
+            ImGuiFileDialogFlags_ConfirmOverwrite);
+}*/
+
+void MainApp::renderGuiMenuBar() {
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            /*if (ImGui::MenuItem("Open Dataset...", "CTRL+O")) {
+                openFileDialog();
+            }
+
+            if (ImGui::BeginMenu("Datasets")) {
+                for (int i = 1; i < NUM_MANUAL_LOADERS; i++) {
+                    if (ImGui::MenuItem(dataSetNames.at(i).c_str())) {
+                        selectedDataSetIndex = i;
+                    }
+                }
+
+                if (dataSetInformationRoot) {
+                    std::stack<std::pair<DataSetInformationPtr, size_t>> dataSetInformationStack;
+                    dataSetInformationStack.push(std::make_pair(dataSetInformationRoot, 0));
+                    while (!dataSetInformationStack.empty()) {
+                        std::pair<DataSetInformationPtr, size_t> dataSetIdxPair = dataSetInformationStack.top();
+                        DataSetInformationPtr dataSetInformationParent = dataSetIdxPair.first;
+                        size_t idx = dataSetIdxPair.second;
+                        dataSetInformationStack.pop();
+                        while (idx < dataSetInformationParent->children.size()) {
+                            DataSetInformationPtr dataSetInformationChild =
+                                    dataSetInformationParent->children.at(idx);
+                            if (dataSetInformationChild->type == DATA_SET_TYPE_NODE) {
+                                if (ImGui::BeginMenu(dataSetInformationChild->name.c_str())) {
+                                    dataSetInformationStack.push(std::make_pair(dataSetInformationRoot, idx + 1));
+                                    dataSetInformationStack.push(std::make_pair(dataSetInformationChild, 0));
+                                    break;
+                                }
+                            } else {
+                                if (ImGui::MenuItem(dataSetInformationChild->name.c_str())) {
+                                    selectedDataSetIndex = int(dataSetInformationChild->sequentialIndex);
+                                    loadCloudDataSet(getSelectedDataSetFilename(), getSelectedDataSetEmissionFilename());
+                                }
+                            }
+                            idx++;
+                        }
+
+                        if (idx == dataSetInformationParent->children.size() && !dataSetInformationStack.empty()) {
+                            ImGui::EndMenu();
+                        }
+                    }
+                }
+
+                ImGui::EndMenu();
+            }*/
+
+            if (ImGui::MenuItem("Quit", "CTRL+Q")) {
+                quit();
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Window")) {
+            if (ImGui::MenuItem("Tet Mesh Volume Renderer", nullptr, showRendererWindow)) {
+                showRendererWindow = !showRendererWindow;
+            }
+            if (ImGui::MenuItem("FPS Overlay", nullptr, showFpsOverlay)) {
+                showFpsOverlay = !showFpsOverlay;
+            }
+            if (ImGui::MenuItem("Coordinate Axes Overlay", nullptr, showCoordinateAxesOverlay)) {
+                showCoordinateAxesOverlay = !showCoordinateAxesOverlay;
+            }
+            if (ImGui::MenuItem("Property Editor", nullptr, showPropertyEditor)) {
+                showPropertyEditor = !showPropertyEditor;
+            }
+            if (ImGui::MenuItem("Checkpoint Window", nullptr, checkpointWindow.getShowWindow())) {
+                checkpointWindow.setShowWindow(!checkpointWindow.getShowWindow());
+            }
+            ImGui::EndMenu();
+        }
+
+        //if (dataRequester.getIsProcessingRequest()) {
+        //    ImGui::SetCursorPosX(ImGui::GetWindowContentRegionWidth() - ImGui::GetTextLineHeight());
+        //    ImGui::ProgressSpinner(
+        //            "##progress-spinner", -1.0f, -1.0f, 4.0f,
+        //            ImVec4(0.1f, 0.5f, 1.0f, 1.0f));
+        //}
+
+        ImGui::EndMainMenuBar();
+    }
+}
+
+void MainApp::renderGuiPropertyEditorBegin() {
+    if (!useDockSpaceMode) {
+        renderGuiFpsCounter();
+
+        /*if (ImGui::Combo(
+                "Data Set", &selectedDataSetIndex, dataSetNames.data(),
+                int(dataSetNames.size()))) {
+            if (selectedDataSetIndex >= NUM_MANUAL_LOADERS) {
+                loadCloudDataSet(getSelectedDataSetFilename(), getSelectedDataSetEmissionFilename());
+            }
+        }
+
+        if (selectedDataSetIndex == 0) {
+            ImGui::InputText("##datasetfilenamelabel", &customDataSetFileName);
+            ImGui::SameLine();
+            if (ImGui::Button("Load File")) {
+                loadCloudDataSet(getSelectedDataSetFilename(), getSelectedDataSetEmissionFilename());
+            }
+        }*/
+
+        ImGui::Separator();
+    }
+}
+
+void MainApp::renderGuiPropertyEditorCustomNodes() {
+    if (propertyEditor.beginNode("Tet Mesh Volume Renderer")) {
+        tetMeshVolumeRenderer->renderGuiPropertyEditorNodes(propertyEditor);
+        propertyEditor.endNode();
+    }
+}
+
+void MainApp::update(float dt) {
+    sgl::SciVisApp::update(dt);
+
+    if (scheduledDockSpaceModeChange) {
+        useDockSpaceMode = newDockSpaceMode;
+        scheduledDockSpaceModeChange = false;
+        if (useDockSpaceMode) {
+            cameraHandle = dataView->camera;
+        } else {
+            cameraHandle = camera;
+        }
+
+        device->waitGraphicsQueueIdle();
+        resolutionChanged(sgl::EventPtr());
+    }
+
+    //updateCameraFlight(cloudData.get() != nullptr, usesNewState);
+
+    //checkLoadingRequestFinished();
+
+    ImGuiIO &io = ImGui::GetIO();
+    if (!io.WantCaptureKeyboard || recording || focusedWindowIndex != -1) {
+        moveCameraKeyboard(dt);
+    }
+
+    if (!io.WantCaptureMouse || mouseHoverWindowIndex != -1) {
+        moveCameraMouse(dt);
+    }
+}
+
+void MainApp::hasMoved() {
+    dataView->syncCamera();
+    //tetMeshVolumeRenderer->onHasMoved();
+}
+
+void MainApp::onCameraReset() {
+}
+
+void MainApp::reloadDataSet() {
+    //loadCloudDataSet(getSelectedDataSetFilename(), getSelectedDataSetEmissionFilename());
+}

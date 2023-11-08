@@ -26,9 +26,86 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <iostream>
+#include <Utils/StringUtils.hpp>
+#include <Utils/AppSettings.hpp>
+#include <Utils/AppLogic.hpp>
+#include <Utils/File/FileUtils.hpp>
+#include <Utils/File/Logfile.hpp>
+#include <Graphics/Window.hpp>
+#include <Graphics/Vulkan/Utils/Instance.hpp>
+#include <Graphics/Vulkan/Utils/Device.hpp>
+#include <Graphics/Vulkan/Utils/Swapchain.hpp>
+#include <Graphics/Vulkan/Shader/ShaderManager.hpp>
+#include <ImGui/imgui.h>
 
-int main() {
-    std::cout << "Test" << std::endl;
+#include "MainApp.hpp"
+
+int main(int argc, char *argv[]) {
+    // Initialize the filesystem utilities.
+    sgl::FileUtils::get()->initialize("Correrender", argc, argv);
+
+#ifdef DATA_PATH
+    if (!sgl::FileUtils::get()->directoryExists("Data") && !sgl::FileUtils::get()->directoryExists("../Data")) {
+        sgl::AppSettings::get()->setDataDirectory(DATA_PATH);
+    }
+#endif
+    sgl::AppSettings::get()->initializeDataDirectory();
+
+    std::string iconPath = sgl::AppSettings::get()->getDataDirectory() + "Fonts/icon_256.png";
+    sgl::AppSettings::get()->loadApplicationIconFromFile(iconPath);
+
+    // Load the file containing the app settings
+    ImVector<ImWchar> fontRanges;
+    std::string settingsFile = sgl::FileUtils::get()->getConfigDirectory() + "settings.txt";
+    sgl::AppSettings::get()->loadSettings(settingsFile.c_str());
+    sgl::AppSettings::get()->getSettings().addKeyValue("window-multisamples", 0);
+    sgl::AppSettings::get()->getSettings().addKeyValue("window-debugContext", true);
+    sgl::AppSettings::get()->getSettings().addKeyValue("window-vSync", true);
+    sgl::AppSettings::get()->getSettings().addKeyValue("window-resizable", true);
+    sgl::AppSettings::get()->getSettings().addKeyValue("window-savePosition", true);
+    //sgl::AppSettings::get()->setVulkanDebugPrintfEnabled();
+
+    ImFontGlyphRangesBuilder builder;
+    builder.AddChar(L'\u03BB'); // lambda
+    builder.AddChar(L'\u03C3'); // sigma
+    builder.BuildRanges(&fontRanges);
+    sgl::AppSettings::get()->setLoadGUI(fontRanges.Data, true, false);
+
+    sgl::AppSettings::get()->setRenderSystem(sgl::RenderSystem::VULKAN);
+
+    sgl::Window* window = nullptr;
+    std::vector<const char*> optionalDeviceExtensions;
+    window = sgl::AppSettings::get()->createWindow();
+
+#ifdef SUPPORT_CUDA_INTEROP
+    optionalDeviceExtensions = sgl::vk::Device::getCudaInteropDeviceExtensions();
+#endif
+    optionalDeviceExtensions.push_back(VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
+
+    sgl::vk::Instance* instance = sgl::AppSettings::get()->getVulkanInstance();
+    auto* device = new sgl::vk::Device;
+
+    sgl::vk::DeviceFeatures requestedDeviceFeatures{};
+    requestedDeviceFeatures.requestedPhysicalDeviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
+
+    device->createDeviceSwapchain(
+            instance, window, {
+                    VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME
+            },
+            optionalDeviceExtensions, requestedDeviceFeatures);
+
+    sgl::vk::Swapchain* swapchain = new sgl::vk::Swapchain(device);
+    swapchain->create(window);
+    sgl::AppSettings::get()->setSwapchain(swapchain);
+
+    sgl::AppSettings::get()->setPrimaryDevice(device);
+    sgl::AppSettings::get()->initializeSubsystems();
+
+    auto app = new MainApp();
+    app->run();
+    delete app;
+
+    sgl::AppSettings::get()->release();
+
     return 0;
 }

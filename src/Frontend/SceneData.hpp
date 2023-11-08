@@ -1,7 +1,7 @@
 /*
  * BSD 2-Clause License
  *
- * Copyright (c) 2023, Christoph Neuhauser
+ * Copyright (c) 2021, Christoph Neuhauser
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,22 +26,20 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <torch/script.h>
-#include <torch/types.h>
-#include <torch/extension.h>
-#include <pybind11/functional.h>
+#ifndef DIFFTETVR_SCENEDATA_HPP
+#define DIFFTETVR_SCENEDATA_HPP
 
-void difftetvrCleanup() {
-    ;
-}
+struct SceneData {
+    SceneData(
+            sgl::CameraPtr& camera, sgl::Color& clearColor,
+            bool& screenshotTransparentBackground, bool& recordingMode, bool& useCameraFlight)
+            : camera(camera), clearColor(clearColor), screenshotTransparentBackground(screenshotTransparentBackground),
+              recordingMode(recordingMode), useCameraFlight(useCameraFlight) {}
+    sgl::CameraPtr& camera;
+    sgl::Color& clearColor;
+    bool& screenshotTransparentBackground;
+    bool& recordingMode;
+    bool& useCameraFlight;
+};
 
-torch::Tensor forward(torch::Tensor X) {
-    return X;
-}
-
-PYBIND11_MODULE(difftetvr, m) {
-    m.def("_cleanup", difftetvrCleanup, "Cleanup module data.");
-    m.def("forward", forward,
-        "Forward rendering pass.",
-        py::arg("X"));
-}
+#endif //DIFFTETVR_SCENEDATA_HPP

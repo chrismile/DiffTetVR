@@ -1,7 +1,7 @@
 /*
  * BSD 2-Clause License
  *
- * Copyright (c) 2023, Christoph Neuhauser
+ * Copyright (c) 2020 - 2021, Christoph Neuhauser
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,22 +26,26 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <torch/script.h>
-#include <torch/types.h>
-#include <torch/extension.h>
-#include <pybind11/functional.h>
+-- Vertex
 
-void difftetvrCleanup() {
-    ;
+#version 450 core
+
+layout(location = 0) in vec3 vertexPosition;
+
+void main() {
+    gl_Position = vec4(vertexPosition, 1.0);
 }
 
-torch::Tensor forward(torch::Tensor X) {
-    return X;
-}
 
-PYBIND11_MODULE(difftetvr, m) {
-    m.def("_cleanup", difftetvrCleanup, "Cleanup module data.");
-    m.def("forward", forward,
-        "Forward rendering pass.",
-        py::arg("X"));
+-- Fragment
+
+#version 450 core
+
+#include "LinkedListHeader.glsl"
+
+void main() {
+    int x = int(gl_FragCoord.x);
+    int y = int(gl_FragCoord.y);
+    uint pixelIndex = addrGen(uvec2(x,y));
+    startOffset[pixelIndex] = -1;
 }
