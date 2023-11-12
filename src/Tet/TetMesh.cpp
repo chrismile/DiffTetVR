@@ -78,14 +78,26 @@ void TetMesh::loadTestData(TestCase testCase) {
         std::vector<glm::vec3> _vertexPositions = {
                 {-0.1f, -0.1f,  0.1f},
                 { 0.1f, -0.1f,  0.1f},
-                { 0.1f, -0.1f, -0.1f},
                 { 0.0f,  0.1f,  0.0f},
+                { 0.1f, -0.1f, -0.1f},
         };
-        std::vector<glm::vec4> _vertexColors = {
+        /*std::vector<glm::vec4> _vertexColors = {
                 {0.8f, 0.0f, 0.0f, 0.2f},
                 {0.0f, 0.8f, 0.0f, 0.4f},
                 {0.0f, 0.0f, 0.8f, 0.1f},
                 {0.8f, 0.8f, 0.0f, 0.3f},
+        };
+        std::vector<glm::vec4> _vertexColors = {
+                {0.8f, 0.0f, 0.0f, 0.4f},
+                {0.0f, 0.8f, 0.0f, 0.4f},
+                {0.0f, 0.0f, 0.8f, 0.4f},
+                {0.8f, 0.8f, 0.0f, 0.4f},
+        };*/
+        std::vector<glm::vec4> _vertexColors = {
+                {1.0f, 1.0f, 1.0f, 0.1f},
+                {1.0f, 1.0f, 1.0f, 0.1f},
+                {0.0f, 1.0f, 0.0f, 0.1f},
+                {1.0f, 1.0f, 1.0f, 0.8f},
         };
         setTetMeshData(_cellIndices, _vertexPositions, _vertexColors);
     }
@@ -107,7 +119,7 @@ void buildVerticesSlim(
 const int tetFaceTable[4][3] = {
         // Use consistent winding for faces at the boundary (normals pointing out of the cell - no arbitrary decisions).
         { 0, 1, 2 },
-        { 1, 3, 0 },
+        { 1, 0, 3 },
         { 0, 2, 3 },
         { 2, 1, 3 },
 };

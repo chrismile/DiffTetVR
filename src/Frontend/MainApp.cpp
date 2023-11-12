@@ -423,6 +423,7 @@ void MainApp::renderGuiGeneralSettingsPropertyEditor() {
                 clearColorSelection.x, clearColorSelection.y, clearColorSelection.z, clearColorSelection.w);
         coordinateAxesOverlayWidget.setClearColor(clearColor);
         if (tetMeshVolumeRenderer) {
+            rendererVk->syncWithCpu();
             tetMeshVolumeRenderer->setClearColor(clearColor);
         }
         reRender = true;

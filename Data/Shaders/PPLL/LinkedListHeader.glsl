@@ -42,12 +42,14 @@ struct LinkedListFragmentNode {
     uint next;
 };
 
-uint packDepth(float normalizedDepth, uint isBoundaryBit) {
-    return (min(2147483647u, uint(normalizedDepth * 2147483648.0)) << 1u) | isBoundaryBit;
+uint packDepth(float normalizedDepth, uint bitArray) {
+    //return (min(2147483647u, uint(normalizedDepth * 2147483648.0)) << 1u) | isBoundaryBit;
+    return (min(1073741823, uint(normalizedDepth * 1073741824.0)) << 2u) | bitArray;
 }
 
 float unpackDepth(uint packedDepth) {
-    return float((packedDepth >> 1u) & 2147483647u) / 2147483647.0;
+    //return float((packedDepth >> 1u) & 2147483647u) / 2147483647.0;
+    return float((packedDepth >> 2u) & 1073741823u) / 1073741823.0;
 }
 
 layout(binding = 0) uniform UniformDataBuffer {
@@ -57,6 +59,8 @@ layout(binding = 0) uniform UniformDataBuffer {
     int viewportW;
     // Camera near/far plane distance.
     float zNear, zFar;
+    // Camera front vector.
+    vec3 cameraFront;
     // Volume attenuation.
     float attenuationCoefficient;
 };

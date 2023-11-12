@@ -129,6 +129,8 @@ private:
         int viewportW;
         // Camera near/far plane distance.
         float zNear, zFar;
+        // Camera front vector.
+        glm::vec3 cameraFront;
         // Volume attenuation.
         float attenuationCoefficient;
     };

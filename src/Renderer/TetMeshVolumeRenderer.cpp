@@ -74,6 +74,7 @@ protected:
     void setGraphicsPipelineInfo(sgl::vk::GraphicsPipelineInfo& pipelineInfo) {
         //pipelineInfo.setCullMode(sgl::vk::CullMode::CULL_BACK);
         pipelineInfo.setCullMode(sgl::vk::CullMode::CULL_NONE);
+        pipelineInfo.setIsFrontFaceCcw(true);
         pipelineInfo.setColorWriteEnabled(false);
         pipelineInfo.setDepthWriteEnabled(false);
         pipelineInfo.setDepthTestEnabled(false);
@@ -96,6 +97,9 @@ public:
 protected:
     void loadShader() override {
         std::map<std::string, std::string> preprocessorDefines;
+        preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
+        preprocessorDefines.insert(std::make_pair("PI_SQRT", std::to_string(std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
         preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(shaderIds, preprocessorDefines);
@@ -321,6 +325,7 @@ void TetMeshVolumeRenderer::render() {
     uniformData.viewportW = paddedWindowWidth;
     uniformData.zNear = (*camera)->getNearClipDistance();
     uniformData.zFar = (*camera)->getFarClipDistance();
+    uniformData.cameraFront = (*camera)->getCameraFront();
     uniformData.attenuationCoefficient = attenuationCoefficient;
     uniformDataBuffer->updateData(
             sizeof(UniformData), &uniformData, renderer->getVkCommandBuffer());

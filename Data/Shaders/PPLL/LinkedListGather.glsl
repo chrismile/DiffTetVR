@@ -84,7 +84,7 @@ void main() {
 
     LinkedListFragmentNode frag;
     frag.color = packUnorm4x8(fragmentColor);
-    frag.depth = packDepth(gl_FragCoord.z, isBoundaryBit);
+    frag.depth = packDepth(gl_FragCoord.z, isBoundaryBit | (uint(gl_FrontFacing) << 1u));
     frag.next = -1;
 
     uint insertIndex = atomicAdd(fragCounter, 1u);

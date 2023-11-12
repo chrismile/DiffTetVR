@@ -205,14 +205,87 @@ void minHeapSink4(uint x, uint fragsCount) {
 }
 
 
-void getNextFragment(in uint i, in uint fragsCount, out vec4 color, out float depth, out bool boundary) {
+void getNextFragment(in uint i, in uint fragsCount, out vec4 color, out float depth, out bool boundary, out bool frontFace) {
     minHeapSink4(0, fragsCount - i);
     color = unpackUnorm4x8(colorList[0]);
-    depth = convertDepthBufferValueToLinearDepth(unpackDepth(depthList[0]));
-    boundary = (depthList[0] & 1u) == 1u ? true : false;
+    uint depthValuePacked = depthList[0];
+    depth = convertDepthBufferValueToLinearDepth(unpackDepth(depthValuePacked));
+    boundary = (depthValuePacked & 1u) == 1u ? true : false;
+    frontFace = ((depthValuePacked >> 1u) & 1u) == 1u ? true : false;
     colorList[0] = colorList[fragsCount - i - 1];
     depthList[0] = depthList[fragsCount - i - 1];
 }
+
+float erfi(float z) {
+    float z2 = z * z;
+    float z3 = z * z2;
+    float z5 = z3 * z2;
+    float z7 = z5 * z2;
+    float z9 = z7 * z2;
+    return 2.0 * INV_PI_SQRT * (z + z3 / 3.0 + z5 / 10.0 + z7 / 42.0 + z9 / 216.0);
+}
+
+float erf(float z) {
+    // Maclaurin series
+    //float z2 = z * z;
+    //float z3 = z * z2;
+    //float z5 = z3 * z2;
+    //float z7 = z5 * z2;
+    //float z9 = z7 * z2;
+    //return 2.0 * INV_PI_SQRT * (z - z3 / 3.0 + z5 / 10.0 - z7 / 42.0 + z9 / 216.0);
+    // Buermann series
+    float A = exp(-z * z);
+    float B = sqrt(1.0 - A);
+    return 2.0 * INV_PI_SQRT * sign(z) * B * (0.5 * PI_SQRT + 31.0 / 200.0 * A - 341.0 / 8000.0 * A * A);
+}
+
+/*vec4 accumulateLinearConst(float t, vec3 c0, vec3 c1, float a) {
+    vec3 p0 = a * c0;
+    vec3 p1 = a * (c1 - c0);
+    float A = exp(-a * t);
+    float B = -1.0 / a;
+    return vec4(B * ((A - 1.0) * p0 + ((t - B) * A + B) * p1), 1.0 - A);
+}*/
+
+vec4 accumulateLinearConst(float t, vec3 c0, vec3 c1, float a) {
+    float A = exp(-a * t);
+    return vec4((1.0 - A) * c0 + ((t + 1.0 / a) * A - 1.0 / a) * (c0 - c1), 1.0 - A);
+}
+
+vec4 accumulateLinear(float t, vec3 c0, vec3 c1, float a0, float a1) {
+    float aDiff = a0 - a1;
+    if (abs(aDiff) < 1e-4) {
+        return accumulateLinearConst(t, c0, c1, a0);
+    }
+
+    float a = 0.5 * aDiff;
+    float b = -a0 / aDiff;
+    float c = -a0 * a0 / (aDiff * aDiff);
+    float sqrta = sqrt(abs(a));
+    float tp = t + b;
+
+    float G;
+    float H;
+    if (a > 0.0) {
+        G = erfi(sqrta * tp);
+        H = erfi(sqrta * b);
+    } else if (a < 0.0) {
+        G = erf(sqrta * tp);
+        H = erf(sqrta * b);
+    }
+
+    vec3 p0 = a0 * c0;
+    vec3 p1 = -2.0 * a0 * c0 + a1 * c0 + a0 * c1;
+    vec3 p2 = a0 * c0 - a1 * c0 - a0 * c1 + a1 * c1;
+
+    vec3 A = (p0 - b * p1 + b * b * p2) * PI_SQRT / (2.0 * sqrta) * (G - H);
+    vec3 B = (p1 - 2 * b * p2) / (2.0 * a) * (exp(a * tp * tp) - exp(a * b * b));
+    vec3 C = p2 / (2.0 * a) * (tp * exp(a * tp * tp) - (PI_SQRT * G) / (2.0 * sqrta) - b * exp(a * b * b) + (PI_SQRT * H) / (2.0 * sqrta));
+    return vec4(exp(c) * (A + B + C), 1.0 - exp(-a0 * t + 0.5 * (a0 - a1) * t * t));
+}
+
+#define USE_SUBDIVS
+const uint NUM_SUBDIVS = 4;
 
 vec4 frontToBackPQ(uint fragsCount) {
     uint i;
@@ -226,33 +299,64 @@ vec4 frontToBackPQ(uint fragsCount) {
     vec4 fragment1Color, fragment2Color;
     float fragment1Depth, fragment2Depth;
     bool fragment1Boundary, fragment2Boundary;
-    float accumDepth = 0.0, currLengthTraveled;
-    getNextFragment(0, fragsCount, fragment2Color, fragment2Depth, fragment2Boundary);
+    bool fragment1FrontFace, fragment2FrontFace;
+    float t, tSeg;
+    getNextFragment(0, fragsCount, fragment2Color, fragment2Depth, fragment2Boundary, fragment2FrontFace);
 
     // Start with transparent Ray
     vec4 rayColor = vec4(0.0);
     vec4 currentColor;
+    bool isInMesh = false;
     for (i = 1; i < fragsCount && rayColor.a < 0.99; i++) {
         // Load the new fragment.
         fragment1Color = fragment2Color;
         fragment1Depth = fragment2Depth;
         fragment1Boundary = fragment2Boundary;
-        getNextFragment(i, fragsCount, fragment2Color, fragment2Depth, fragment2Boundary);
+        fragment1FrontFace = fragment2FrontFace;
+        getNextFragment(i, fragsCount, fragment2Color, fragment2Depth, fragment2Boundary, fragment2FrontFace);
 
         // Skip if the closest fragment is a boundary face.
-        if (fragment1Boundary && fragment1Boundary != fragment2Boundary) {
+        if ((fragment1Boundary && !fragment1FrontFace) && (fragment2Boundary && fragment2FrontFace)) {
             continue;
         }
 
-        // Compute the color of the fragment.
-        currLengthTraveled = fragment2Depth - fragment1Depth;
-        float volumeOpacityFactor = clamp(1.0 - exp(-fragment1Color.a * attenuationCoefficient * currLengthTraveled), 0.0, 1.0);
-        currentColor = vec4(fragment1Color.rgb, volumeOpacityFactor);
-        accumDepth += currLengthTraveled;
+        // Compute the accumulated color of the fragments.
+        t = fragment2Depth - fragment1Depth;
+
+        #ifdef USE_SUBDIVS
+        t = fragment2Depth - fragment1Depth;
+        tSeg = t / float(NUM_SUBDIVS);
+        for (uint s = 0; s < NUM_SUBDIVS; s++) {
+            float fbegin = (float(i)) * tSeg / t;
+            float fmid = (float(i) + 0.5) * tSeg / t;
+            float fend = (float(i) + 1.0) * tSeg / t;
+            vec3 c0 = mix(fragment1Color.rgb, fragment2Color.rgb, fbegin);
+            vec3 c1 = mix(fragment1Color.rgb, fragment2Color.rgb, fend);
+            float alpha = mix(fragment1Color.a, fragment2Color.a, fmid);
+            currentColor = accumulateLinearConst(tSeg, c0, c1, alpha * attenuationCoefficient);
+            rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
+            rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
+        }
+        #else
+        currentColor = accumulateLinear(
+                t, fragment1Color.rgb, fragment2Color.rgb,
+                fragment1Color.a * attenuationCoefficient, fragment2Color.a * attenuationCoefficient);
+        rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
+        rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
+        #endif
+        //currentColor = accumulateLinearConst(
+        //        t, fragment1Color.rgb, fragment2Color.rgb, fragment1Color.a * attenuationCoefficient);
+        /*float volumeOpacityFactor = clamp(1.0 - exp(-fragment1Color.a * attenuationCoefficient * t), 0.0, 1.0);
+        currentColor = vec4(fragment1Color.rgb, volumeOpacityFactor);*/
 
         // FTB Blending.
-        rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.a * currentColor.rgb;
-        rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
+        //rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.a * currentColor.rgb;
+        //rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
+        //rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
+
+        /*if (fragment1Color.a - fragment2Color.a > 0.0) {
+            rayColor = vec4(1.0);
+        }*/
 
         // Max Steps = #frags Stop when color is saturated enough
         /*minHeapSink4(0, fragsCount - i++); // Sink it right + increment i
@@ -269,6 +373,10 @@ vec4 frontToBackPQ(uint fragsCount) {
         colorList[0] = colorList[fragsCount-i];
         depthList[0] = depthList[fragsCount-i];*/
     }
+
+    /*if (fragment1FrontFace) {
+        rayColor = vec4(1.0);
+    }*/
 
     rayColor.rgb = rayColor.rgb / rayColor.a; // Correct rgb with alpha
     return rayColor;
