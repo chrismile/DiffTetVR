@@ -26,13 +26,17 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef __linux__
-#include <signal.h>
-#endif
+#include <stack>
+#include <csignal>
+
+#include <boost/algorithm/string.hpp>
 
 #include <Utils/StringUtils.hpp>
 #include <Utils/AppSettings.hpp>
 #include <Utils/Dialog.hpp>
+#include <Utils/File/Logfile.hpp>
+#include <Utils/File/FileUtils.hpp>
+#include <Input/Keyboard.hpp>
 #include <Graphics/Window.hpp>
 #include <Graphics/Vulkan/Utils/Instance.hpp>
 #include <Graphics/Vulkan/Utils/Swapchain.hpp>
@@ -45,6 +49,7 @@
 #include <ImGui/imgui_stdlib.h>
 
 #include "Tet/TetMesh.hpp"
+#include "Tet/Loaders/DataSetList.hpp"
 #include "Renderer/TetMeshVolumeRenderer.hpp"
 #include "DataView.hpp"
 #include "MainApp.hpp"
@@ -120,9 +125,9 @@ MainApp::MainApp()
         realTimeCameraFlight = false;
     }
 
-    //fileDialogInstance = IGFD_Create();
-    //customDataSetFileName = sgl::FileUtils::get()->getUserDirectory();
-    //loadAvailableDataSetInformation();
+    fileDialogInstance = IGFD_Create();
+    customDataSetFileName = sgl::FileUtils::get()->getUserDirectory();
+    loadAvailableDataSetInformation();
 
     tetMeshVolumeRenderer = std::make_shared<TetMeshVolumeRenderer>(rendererVk, &cameraHandle);
     tetMeshVolumeRenderer->setUseLinearRGB(useLinearRGB);
@@ -289,6 +294,110 @@ void MainApp::renderGui() {
     focusedWindowIndex = -1;
     mouseHoverWindowIndex = -1;
 
+    if (sgl::Keyboard->keyPressed(SDLK_o) && (sgl::Keyboard->getModifier() & (KMOD_LCTRL | KMOD_RCTRL)) != 0) {
+        openFileDialog();
+    }
+    if (sgl::Keyboard->keyPressed(SDLK_s) && (sgl::Keyboard->getModifier() & (KMOD_LCTRL | KMOD_RCTRL)) != 0) {
+        openSaveTetMeshFileDialog();
+    }
+
+    if (IGFD_DisplayDialog(
+            fileDialogInstance,
+            "ChooseDataSetFile", ImGuiWindowFlags_NoCollapse,
+            sgl::ImGuiWrapper::get()->getScaleDependentSize(1000, 580),
+            ImVec2(FLT_MAX, FLT_MAX))) {
+        if (IGFD_IsOk(fileDialogInstance)) {
+            std::string filePathName = IGFD_GetFilePathName(fileDialogInstance);
+            std::string filePath = IGFD_GetCurrentPath(fileDialogInstance);
+            std::string filter = IGFD_GetCurrentFilter(fileDialogInstance);
+            std::string userDatas;
+            if (IGFD_GetUserDatas(fileDialogInstance)) {
+                userDatas = std::string((const char*)IGFD_GetUserDatas(fileDialogInstance));
+            }
+            auto selection = IGFD_GetSelection(fileDialogInstance);
+
+            const char* currentPath = IGFD_GetCurrentPath(fileDialogInstance);
+            std::string filename = currentPath;
+            if (!filename.empty() && filename.back() != '/' && filename.back() != '\\') {
+                filename += "/";
+            }
+            if (selection.count != 0) {
+                filename += selection.table[0].fileName;
+            }
+            IGFD_Selection_DestroyContent(&selection);
+            if (currentPath) {
+                free((void*)currentPath);
+                currentPath = nullptr;
+            }
+
+            fileDialogDirectory = sgl::FileUtils::get()->getPathToFile(filename);
+
+            std::string filenameLower = boost::to_lower_copy(filename);
+
+            if (boost::ends_with(filenameLower, ".bintet")) {
+                selectedDataSetIndex = 0;
+                customDataSetFileName = filename;
+                loadTetMeshDataSet(getSelectedDataSetFilename());
+            } else {
+                sgl::Logfile::get()->writeError(
+                        "The selected file name has an unknown extension \""
+                        + sgl::FileUtils::get()->getFileExtension(filenameLower) + "\".");
+            }
+        }
+        IGFD_CloseDialog(fileDialogInstance);
+    }
+
+    if (IGFD_DisplayDialog(
+            fileDialogInstance,
+            "ChooseSaveFile", ImGuiWindowFlags_NoCollapse,
+            sgl::ImGuiWrapper::get()->getScaleDependentSize(1000, 580),
+            ImVec2(FLT_MAX, FLT_MAX))) {
+        if (IGFD_IsOk(fileDialogInstance)) {
+            std::string filePathName = IGFD_GetFilePathName(fileDialogInstance);
+            std::string filePath = IGFD_GetCurrentPath(fileDialogInstance);
+            std::string filter = IGFD_GetCurrentFilter(fileDialogInstance);
+            std::string userDatas;
+            if (IGFD_GetUserDatas(fileDialogInstance)) {
+                userDatas = std::string((const char*)IGFD_GetUserDatas(fileDialogInstance));
+            }
+            auto selection = IGFD_GetSelection(fileDialogInstance);
+
+            const char* currentPath = IGFD_GetCurrentPath(fileDialogInstance);
+            std::string filename = currentPath;
+            if (!filename.empty() && filename.back() != '/' && filename.back() != '\\') {
+                filename += "/";
+            }
+            std::string currentFileName;
+            if (filter == ".*") {
+                currentFileName = IGFD_GetCurrentFileNameRaw(fileDialogInstance);
+            } else {
+                currentFileName = IGFD_GetCurrentFileName(fileDialogInstance);
+            }
+            if (selection.count != 0 && selection.table[0].fileName == currentFileName) {
+                filename += selection.table[0].fileName;
+            } else {
+                filename += currentFileName;
+            }
+            IGFD_Selection_DestroyContent(&selection);
+            if (currentPath) {
+                free((void*)currentPath);
+                currentPath = nullptr;
+            }
+
+            saveTestMeshFileDialogDirectory = sgl::FileUtils::get()->getPathToFile(filename);
+
+            std::string filenameLower = boost::to_lower_copy(filename);
+            if (boost::ends_with(filenameLower, ".bintet")) {
+                tetMesh->saveToFile(filename);
+            } else {
+                sgl::Logfile::get()->writeError(
+                        "The selected file name has an unsupported extension \""
+                        + sgl::FileUtils::get()->getFileExtension(filenameLower) + "\".");
+            }
+        }
+        IGFD_CloseDialog(fileDialogInstance);
+    }
+
     if (useDockSpaceMode) {
         static bool isProgramStartup = true;
         ImGuiID dockSpaceId = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
@@ -446,10 +555,57 @@ void MainApp::renderGuiGeneralSettingsPropertyEditor() {
     }
 }
 
-/*void MainApp::openFileDialog() {
+void MainApp::loadAvailableDataSetInformation() {
+    dataSetNames.clear();
+    dataSetNames.emplace_back("Local file...");
+    selectedDataSetIndex = 0;
+
+    const std::string tetMeshDataSetsDirectory = sgl::AppSettings::get()->getDataDirectory() + "DataSets/";
+    if (sgl::FileUtils::get()->exists(tetMeshDataSetsDirectory + "datasets.json")) {
+        dataSetInformationRoot = loadDataSetList(tetMeshDataSetsDirectory + "datasets.json");
+
+        std::stack<std::pair<DataSetInformationPtr, size_t>> dataSetInformationStack;
+        dataSetInformationStack.push(std::make_pair(dataSetInformationRoot, 0));
+        while (!dataSetInformationStack.empty()) {
+            std::pair<DataSetInformationPtr, size_t> dataSetIdxPair = dataSetInformationStack.top();
+            DataSetInformationPtr dataSetInformationParent = dataSetIdxPair.first;
+            size_t idx = dataSetIdxPair.second;
+            dataSetInformationStack.pop();
+            while (idx < dataSetInformationParent->children.size()) {
+                DataSetInformationPtr dataSetInformationChild =
+                        dataSetInformationParent->children.at(idx);
+                idx++;
+                if (dataSetInformationChild->type == DataSetType::NODE) {
+                    dataSetInformationStack.push(std::make_pair(dataSetInformationRoot, idx));
+                    dataSetInformationStack.push(std::make_pair(dataSetInformationChild, 0));
+                    break;
+                } else {
+                    dataSetInformationChild->sequentialIndex = int(dataSetNames.size());
+                    dataSetInformationList.push_back(dataSetInformationChild);
+                    dataSetNames.push_back(dataSetInformationChild->name);
+                }
+            }
+        }
+    }
+}
+
+std::string MainApp::getSelectedDataSetFilename() {
+    std::vector<std::string> filenames;
+    if (selectedDataSetIndex == 0) {
+        filenames.push_back(customDataSetFileName);
+    } else {
+        for (const std::string& filename : dataSetInformationList.at(
+                selectedDataSetIndex - NUM_MANUAL_LOADERS)->filenames) {
+            filenames.push_back(filename);
+        }
+    }
+    return filenames.front();
+}
+
+void MainApp::openFileDialog() {
     selectedDataSetIndex = 0;
     if (fileDialogDirectory.empty() || !sgl::FileUtils::get()->directoryExists(fileDialogDirectory)) {
-        fileDialogDirectory = sgl::AppSettings::get()->getDataDirectory() + "CloudDataSets/";
+        fileDialogDirectory = sgl::AppSettings::get()->getDataDirectory() + "DataSets/";
         if (!sgl::FileUtils::get()->exists(fileDialogDirectory)) {
             fileDialogDirectory = sgl::AppSettings::get()->getDataDirectory();
         }
@@ -457,17 +613,38 @@ void MainApp::renderGuiGeneralSettingsPropertyEditor() {
     IGFD_OpenModal(
             fileDialogInstance,
             "ChooseDataSetFile", "Choose a File",
-            ".*,.xyz,.nvdb,.dat,.raw",
+            ".*,.bintet",
             fileDialogDirectory.c_str(),
             "", 1, nullptr,
+            ImGuiFileDialogFlags_None);
+}
+
+void MainApp::openSaveTetMeshFileDialog() {
+    if (saveTestMeshFileDialogDirectory.empty() || !sgl::FileUtils::get()->directoryExists(saveTestMeshFileDialogDirectory)) {
+        saveTestMeshFileDialogDirectory = sgl::AppSettings::get()->getDataDirectory() + "DataSets/";
+        if (!sgl::FileUtils::get()->exists(saveTestMeshFileDialogDirectory)) {
+            saveTestMeshFileDialogDirectory = sgl::AppSettings::get()->getDataDirectory();
+        }
+    }
+    IGFD_OpenModal(
+            fileDialogInstance,
+            "ChooseSaveFile", "Choose a File",
+            ".*,.bintet",
+            saveTestMeshFileDialogDirectory.c_str(),
+            "", 1, nullptr,
             ImGuiFileDialogFlags_ConfirmOverwrite);
-}*/
+}
 
 void MainApp::renderGuiMenuBar() {
+    bool openOptimizerDialog = false;
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
-            /*if (ImGui::MenuItem("Open Dataset...", "CTRL+O")) {
+            if (ImGui::MenuItem("Open Tet Mesh...", "CTRL+O")) {
                 openFileDialog();
+            }
+
+            if (tetMesh && ImGui::MenuItem("Save Tet Mesh...", "CTRL+S")) {
+                openSaveTetMeshFileDialog();
             }
 
             if (ImGui::BeginMenu("Datasets")) {
@@ -488,7 +665,7 @@ void MainApp::renderGuiMenuBar() {
                         while (idx < dataSetInformationParent->children.size()) {
                             DataSetInformationPtr dataSetInformationChild =
                                     dataSetInformationParent->children.at(idx);
-                            if (dataSetInformationChild->type == DATA_SET_TYPE_NODE) {
+                            if (dataSetInformationChild->type == DataSetType::NODE) {
                                 if (ImGui::BeginMenu(dataSetInformationChild->name.c_str())) {
                                     dataSetInformationStack.push(std::make_pair(dataSetInformationRoot, idx + 1));
                                     dataSetInformationStack.push(std::make_pair(dataSetInformationChild, 0));
@@ -497,7 +674,7 @@ void MainApp::renderGuiMenuBar() {
                             } else {
                                 if (ImGui::MenuItem(dataSetInformationChild->name.c_str())) {
                                     selectedDataSetIndex = int(dataSetInformationChild->sequentialIndex);
-                                    loadCloudDataSet(getSelectedDataSetFilename(), getSelectedDataSetEmissionFilename());
+                                    loadTetMeshDataSet(getSelectedDataSetFilename());
                                 }
                             }
                             idx++;
@@ -510,7 +687,7 @@ void MainApp::renderGuiMenuBar() {
                 }
 
                 ImGui::EndMenu();
-            }*/
+            }
 
             if (ImGui::MenuItem("Quit", "CTRL+Q")) {
                 quit();
@@ -536,6 +713,23 @@ void MainApp::renderGuiMenuBar() {
             ImGui::EndMenu();
         }
 
+        if (ImGui::BeginMenu("Tools")) {
+            if (tetMesh && ImGui::MenuItem("Optimizer...")) {
+                openOptimizerDialog = true;
+            }
+
+            if (ImGui::MenuItem("Print Camera State")) {
+                std::cout << "Position: (" << camera->getPosition().x << ", " << camera->getPosition().y
+                          << ", " << camera->getPosition().z << ")" << std::endl;
+                std::cout << "Look At: (" << camera->getLookAtLocation().x << ", " << camera->getLookAtLocation().y
+                          << ", " << camera->getLookAtLocation().z << ")" << std::endl;
+                std::cout << "Yaw: " << camera->getYaw() << std::endl;
+                std::cout << "Pitch: " << camera->getPitch() << std::endl;
+                std::cout << "FoVy: " << (camera->getFOVy() / sgl::PI * 180.0f) << std::endl;
+            }
+            ImGui::EndMenu();
+        }
+
         //if (dataRequester.getIsProcessingRequest()) {
         //    ImGui::SetCursorPosX(ImGui::GetWindowContentRegionWidth() - ImGui::GetTextLineHeight());
         //    ImGui::ProgressSpinner(
@@ -545,17 +739,26 @@ void MainApp::renderGuiMenuBar() {
 
         ImGui::EndMainMenuBar();
     }
+
+    // TODO
+    /*if (openOptimizerDialog) {
+        tetMeshOptimizer->openDialog();
+    }
+    tetMeshOptimizer->renderGuiDialog();
+    if (tetMeshOptimizer->getNeedsReRender()) {
+        reRender = true;
+    }*/
 }
 
 void MainApp::renderGuiPropertyEditorBegin() {
     if (!useDockSpaceMode) {
         renderGuiFpsCounter();
 
-        /*if (ImGui::Combo(
+        if (ImGui::Combo(
                 "Data Set", &selectedDataSetIndex, dataSetNames.data(),
                 int(dataSetNames.size()))) {
             if (selectedDataSetIndex >= NUM_MANUAL_LOADERS) {
-                loadCloudDataSet(getSelectedDataSetFilename(), getSelectedDataSetEmissionFilename());
+                loadTetMeshDataSet(getSelectedDataSetFilename());
             }
         }
 
@@ -563,9 +766,9 @@ void MainApp::renderGuiPropertyEditorBegin() {
             ImGui::InputText("##datasetfilenamelabel", &customDataSetFileName);
             ImGui::SameLine();
             if (ImGui::Button("Load File")) {
-                loadCloudDataSet(getSelectedDataSetFilename(), getSelectedDataSetEmissionFilename());
+                loadTetMeshDataSet(getSelectedDataSetFilename());
             }
-        }*/
+        }
 
         ImGui::Separator();
     }
@@ -594,9 +797,9 @@ void MainApp::update(float dt) {
         resolutionChanged(sgl::EventPtr());
     }
 
-    //updateCameraFlight(cloudData.get() != nullptr, usesNewState);
+    updateCameraFlight(tetMesh.get() != nullptr, usesNewState);
 
-    //checkLoadingRequestFinished();
+    checkLoadingRequestFinished();
 
     ImGuiIO &io = ImGui::GetIO();
     if (!io.WantCaptureKeyboard || recording || focusedWindowIndex != -1) {
@@ -616,6 +819,104 @@ void MainApp::hasMoved() {
 void MainApp::onCameraReset() {
 }
 
+
+// --- Visualization pipeline ---
+
+void MainApp::loadTetMeshDataSet(const std::string& fileName, bool blockingDataLoading) {
+    if (fileName.empty()) {
+        tetMesh = TetMeshPtr();
+        return;
+    }
+    currentlyLoadedDataSetIndex = selectedDataSetIndex;
+
+    DataSetInformation selectedDataSetInformation;
+    if (selectedDataSetIndex >= NUM_MANUAL_LOADERS && !dataSetInformationList.empty()) {
+        selectedDataSetInformation = *dataSetInformationList.at(selectedDataSetIndex - NUM_MANUAL_LOADERS);
+    } else {
+        selectedDataSetInformation.filenames = { fileName };
+    }
+
+    glm::mat4 transformationMatrix = sgl::matrixIdentity();
+    //glm::mat4* transformationMatrixPtr = nullptr;
+    if (selectedDataSetInformation.hasCustomTransform) {
+        transformationMatrix *= selectedDataSetInformation.transformMatrix;
+        //transformationMatrixPtr = &transformationMatrix;
+    }
+    if (rotateModelBy90DegreeTurns != 0) {
+        transformationMatrix *= glm::rotate(rotateModelBy90DegreeTurns * sgl::HALF_PI, modelRotationAxis);
+        //transformationMatrixPtr = &transformationMatrix;
+    }
+
+    TetMeshPtr tetMesh(new TetMesh(device));
+
+    if (blockingDataLoading) {
+        bool dataLoaded = tetMesh->loadFromFile(fileName);
+
+        if (dataLoaded) {
+            this->tetMesh = tetMesh;
+            newMeshLoaded = true;
+            boundingBox = tetMesh->getBoundingBox();
+
+            tetMeshVolumeRenderer->setTetMeshData(tetMesh);
+            tetMeshVolumeRenderer->setUseLinearRGB(useLinearRGB);
+            reRender = true;
+
+            const std::string& meshDescriptorName = fileName;
+            checkpointWindow.onLoadDataSet(meshDescriptorName);
+
+            if (true) { // useCameraFlight
+                std::string cameraPathFilename =
+                        saveDirectoryCameraPaths + sgl::FileUtils::get()->getPathAsList(meshDescriptorName).back()
+                        + ".binpath";
+                if (sgl::FileUtils::get()->exists(cameraPathFilename)) {
+                    cameraPath.fromBinaryFile(cameraPathFilename);
+                } else {
+                    cameraPath.fromCirclePath(
+                            boundingBox, meshDescriptorName,
+                            usePerformanceMeasurementMode
+                            ? CAMERA_PATH_TIME_PERFORMANCE_MEASUREMENT : CAMERA_PATH_TIME_RECORDING,
+                            usePerformanceMeasurementMode);
+                }
+            }
+        }
+    } else {
+        //dataRequester.queueRequest(tetMesh, fileName, selectedDataSetInformation, transformationMatrixPtr);
+    }
+}
+
+void MainApp::checkLoadingRequestFinished() {
+    /*TetMeshPtr tetMesh;
+    DataSetInformation loadedDataSetInformation;
+
+    //if (!tetMesh) {
+    //    tetMesh = dataRequester.getLoadedData(loadedDataSetInformation);
+    //}
+
+    if (tetMesh) {
+        this->tetMesh = tetMesh;
+        newMeshLoaded = true;
+        //modelBoundingBox = tetMesh->getModelBoundingBox();
+
+        std::string meshDescriptorName = tetMesh->getFileName();
+        checkpointWindow.onLoadDataSet(meshDescriptorName);
+
+        if (true) {
+            std::string cameraPathFilename =
+                    saveDirectoryCameraPaths + sgl::FileUtils::get()->getPathAsList(meshDescriptorName).back()
+                    + ".binpath";
+            if (sgl::FileUtils::get()->exists(cameraPathFilename)) {
+                cameraPath.fromBinaryFile(cameraPathFilename);
+            } else {
+                cameraPath.fromCirclePath(
+                        modelBoundingBox, meshDescriptorName,
+                        usePerformanceMeasurementMode
+                        ? CAMERA_PATH_TIME_PERFORMANCE_MEASUREMENT : CAMERA_PATH_TIME_RECORDING,
+                        usePerformanceMeasurementMode);
+            }
+        }
+    }*/
+}
+
 void MainApp::reloadDataSet() {
-    //loadCloudDataSet(getSelectedDataSetFilename(), getSelectedDataSetEmissionFilename());
+    loadTetMeshDataSet(getSelectedDataSetFilename());
 }

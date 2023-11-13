@@ -42,11 +42,19 @@ class MsgBoxHandle;
 typedef std::shared_ptr<MsgBoxHandle> MsgBoxHandlePtr;
 }}
 
+namespace IGFD {
+class FileDialog;
+}
+typedef IGFD::FileDialog ImGuiFileDialog;
+
 class DataView;
 typedef std::shared_ptr<DataView> DataViewPtr;
 class TetMesh;
 typedef std::shared_ptr<TetMesh> TetMeshPtr;
+struct DataSetInformation;
+typedef std::shared_ptr<DataSetInformation> DataSetInformationPtr;
 class TetMeshVolumeRenderer;
+class TetMeshOptimizer;
 
 class MainApp : public sgl::SciVisApp {
 public:
@@ -82,6 +90,7 @@ private:
     sgl::CameraPtr cameraHandle;
 
     std::shared_ptr<TetMeshVolumeRenderer> tetMeshVolumeRenderer;
+    bool usesNewState = true;
 
     /// Scene data (e.g., camera, main framebuffer, ...).
     SceneData sceneData;
@@ -92,21 +101,37 @@ private:
     glm::ivec2 fixedViewportSize{ 2186, 1358 };
 
     // Data set GUI information.
+    void loadAvailableDataSetInformation();
+    std::string getSelectedDataSetFilename();
+    void openFileDialog();
+    DataSetInformationPtr dataSetInformationRoot;
+    std::vector<DataSetInformationPtr> dataSetInformationList; //< List of all leaves.
+    std::vector<std::string> dataSetNames; //< Contains "Local file..." at beginning, thus starts actually at 1.
+    int selectedDataSetIndex = 0; //< Contains "Local file..." at beginning, thus starts actually at 1.
+    int currentlyLoadedDataSetIndex = -1;
+    std::string customDataSetFileName;
+    ImGuiFileDialog* fileDialogInstance = nullptr;
+    std::string fileDialogDirectory;
     std::vector<sgl::dialog::MsgBoxHandlePtr> nonBlockingMsgBoxHandles;
+    // For volume export dialog.
+    void openSaveTetMeshFileDialog();
+    std::string saveTestMeshFileDialogDirectory;
+    // Optimizer.
+    TetMeshOptimizer* tetMeshOptimizer = nullptr;
 
 
     /// --- Visualization pipeline ---
 
     /// Loads line data from a file.
-    //void loadCloudDataSet(const std::string& fileName, const std::string& emissionFileName, bool blockingDataLoading = true);
+    void loadTetMeshDataSet(const std::string& fileName, bool blockingDataLoading = true);
     /// Checks if an asynchronous loading request was finished.
-    //void checkLoadingRequestFinished();
+    void checkLoadingRequestFinished();
     /// Reload the currently loaded data set.
     void reloadDataSet() override;
 
     const int NUM_MANUAL_LOADERS = 1;
     bool newMeshLoaded = true;
-    sgl::AABB3 modelBoundingBox;
+    sgl::AABB3 boundingBox;
     TetMeshPtr tetMesh;
 };
 

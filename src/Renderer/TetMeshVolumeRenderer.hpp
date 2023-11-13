@@ -111,6 +111,7 @@ private:
     std::shared_ptr<GatherRasterPass> gatherRasterPass;
     std::shared_ptr<ResolveRasterPass> resolveRasterPass;
     std::shared_ptr<ClearRasterPass> clearRasterPass;
+    std::shared_ptr<ClearRasterPass> backwardRasterPass; // only for optimization
 
     // Sorting algorithm for PPLL.
     SortingAlgorithmMode sortingAlgorithmMode = SORTING_ALGORITHM_MODE_PRIORITY_QUEUE;

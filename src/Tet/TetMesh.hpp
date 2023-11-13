@@ -30,6 +30,8 @@
 #define DIFFTETVR_TETMESH_HPP
 
 #include <vector>
+#include <map>
+#include <functional>
 #include <string>
 #include <memory>
 #include <cstdint>
@@ -37,11 +39,16 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include <Math/Geometry/AABB3.hpp>
+
 namespace sgl { namespace vk {
 class Device;
 class Buffer;
 typedef std::shared_ptr<Buffer> BufferPtr;
 }}
+
+class TetMeshLoader;
+class TetMeshWriter;
 
 /**
  * Slim data representation for very large meshes.
@@ -65,7 +72,10 @@ public:
             const std::vector<uint32_t>& _cellIndices, const std::vector<glm::vec3>& _vertexPositions,
             const std::vector<glm::vec4>& _vertexColors);
     void loadTestData(TestCase testCase);
+    bool loadFromFile(const std::string& filePath);
+    bool saveToFile(const std::string& filePath);
     [[nodiscard]] inline bool isDirty() const { return dirty; }
+    [[nodiscard]] inline const sgl::AABB3& getBoundingBox() { return boundingBox; }
 
     sgl::vk::BufferPtr getTriangleIndexBuffer() { return triangleIndexBuffer; }
     sgl::vk::BufferPtr getVertexPositionBuffer() { return vertexPositionBuffer; }
@@ -76,6 +86,15 @@ public:
     [[nodiscard]] inline size_t getNumCells() const { return meshNumCells; }
     [[nodiscard]] inline size_t getNumVertices() const { return meshNumVertices; }
 
+    // File loaders.
+    TetMeshLoader* createTetMeshLoaderByExtension(const std::string& fileExtension);
+    std::map<std::string, std::function<TetMeshLoader*()>> factoriesLoader;
+    std::vector<TetMeshLoader*> tetMeshLoaders;
+
+    // File writers.
+    TetMeshWriter* createTetMeshWriterByExtension(const std::string& fileExtension);
+    std::map<std::string, std::function<TetMeshWriter*()>> factoriesWriter;
+
 private:
     sgl::vk::Device* device;
 
@@ -85,6 +104,7 @@ private:
     std::vector<uint32_t> cellIndices;
     std::vector<glm::vec3> vertexPositions;
     std::vector<glm::vec4> vertexColors;
+    sgl::AABB3 boundingBox;
     bool dirty = false;
 
     void rebuildInternalRepresentationIfNecessary_Slim();

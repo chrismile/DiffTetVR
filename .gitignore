@@ -63,6 +63,7 @@ docs/latex/*
 cmake-build-*/
 
 Data/Checkpoints/*
+Data/DataSets/*
 
 imgui.ini
 

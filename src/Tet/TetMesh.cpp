@@ -28,11 +28,68 @@
 
 #include <algorithm>
 
+#include <Utils/File/Logfile.hpp>
+#include <Utils/File/FileUtils.hpp>
 #include <Graphics/Vulkan/Buffers/Buffer.hpp>
 
+#include "Loaders/BinTetLoader.hpp"
 #include "TetMesh.hpp"
 
+template <typename T>
+static std::pair<std::vector<std::string>, std::function<TetMeshLoader*()>> registerTetMeshLoader() {
+    return { T::getSupportedExtensions(), []() { return new T{}; }};
+}
+
+TetMeshLoader* TetMesh::createTetMeshLoaderByExtension(const std::string& fileExtension) {
+    auto it = factoriesLoader.find(fileExtension);
+    if (it == factoriesLoader.end()) {
+        sgl::Logfile::get()->writeError(
+                "Error in TetMeshData::createTetMeshLoaderByExtension: Unsupported file extension '."
+                + fileExtension + "'.", true);
+        return nullptr;
+    } else {
+        return it->second();
+    }
+}
+
+template <typename T>
+static std::pair<std::vector<std::string>, std::function<TetMeshWriter*()>> registerTetMeshWriter() {
+    return { T::getSupportedExtensions(), []() { return new T{}; }};
+}
+
+TetMeshWriter* TetMesh::createTetMeshWriterByExtension(const std::string& fileExtension) {
+    auto it = factoriesWriter.find(fileExtension);
+    if (it == factoriesWriter.end()) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMeshData::createTetMeshWriterByExtension: Unsupported file extension '."
+                + fileExtension + "'.");
+        return nullptr;
+    } else {
+        return it->second();
+    }
+}
+
+
 TetMesh::TetMesh(sgl::vk::Device* device) : device(device) {
+    // Create the list of tet mesh loaders.
+    std::map<std::vector<std::string>, std::function<TetMeshLoader*()>> factoriesLoaderMap = {
+            registerTetMeshLoader<BinTetLoader>(),
+    };
+    for (auto& factory : factoriesLoaderMap) {
+        for (const std::string& extension : factory.first) {
+            factoriesLoader.insert(std::make_pair(extension, factory.second));
+        }
+    }
+
+    // Create the list of tet mesh writers.
+    std::map<std::vector<std::string>, std::function<TetMeshWriter*()>> factoriesWriterMap = {
+            registerTetMeshWriter<BinTetWriter>(),
+    };
+    for (auto& factory : factoriesWriterMap) {
+        for (const std::string& extension : factory.first) {
+            factoriesWriter.insert(std::make_pair(extension, factory.second));
+        }
+    }
 }
 
 void TetMesh::setTetMeshData(
@@ -43,6 +100,11 @@ void TetMesh::setTetMeshData(
     vertexColors = _vertexColors;
     rebuildInternalRepresentationIfNecessary_Slim();
     uploadDataToDevice();
+
+    boundingBox = {};
+    for (const glm::vec3& pt : vertexPositions) {
+        boundingBox.combine(pt);
+    }
 }
 
 void TetMesh::uploadDataToDevice() {
@@ -101,6 +163,34 @@ void TetMesh::loadTestData(TestCase testCase) {
         };
         setTetMeshData(_cellIndices, _vertexPositions, _vertexColors);
     }
+}
+
+bool TetMesh::loadFromFile(const std::string& filePath) {
+    std::string fileExtension = sgl::FileUtils::get()->getFileExtensionLower(filePath);
+    TetMeshLoader* tetMeshLoader = createTetMeshLoaderByExtension(fileExtension);
+    if (!tetMeshLoader) {
+        return false;
+    }
+    std::vector<uint32_t> _cellIndices;
+    std::vector<glm::vec3> _vertexPositions;
+    std::vector<glm::vec4> _vertexColors;
+    bool retVal = tetMeshLoader->loadFromFile(filePath, _cellIndices, _vertexPositions, _vertexColors);
+    if (retVal) {
+        setTetMeshData(_cellIndices, _vertexPositions, _vertexColors);
+    }
+    delete tetMeshLoader;
+    return retVal;
+}
+
+bool TetMesh::saveToFile(const std::string& filePath) {
+    std::string fileExtension = sgl::FileUtils::get()->getFileExtensionLower(filePath);
+    TetMeshWriter* tetMeshWriter = createTetMeshWriterByExtension(fileExtension);
+    if (!tetMeshWriter) {
+        return false;
+    }
+    bool retVal = tetMeshWriter->saveToFile(filePath, cellIndices, vertexPositions, vertexColors);
+    delete tetMeshWriter;
+    return retVal;
 }
 
 void buildVerticesSlim(
