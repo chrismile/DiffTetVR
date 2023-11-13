@@ -66,7 +66,7 @@ protected:
         auto numIndexedVertices = tetMesh->getTriangleIndexBuffer()->getSizeInBytes() / sizeof(uint32_t);
         rasterData->setStaticBuffer(tetMesh->getTriangleIndexBuffer(), "TriangleIndicesBuffer");
         rasterData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "VertexPositionBuffer");
-        rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "VertexColorBuffer");
+        //rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "VertexColorBuffer");
         rasterData->setStaticBuffer(tetMesh->getFaceBoundaryBitBuffer(), "FaceBoundaryBitBuffer");
         rasterData->setNumVertices(numIndexedVertices);
         volumeRenderer->setRenderDataBindings(rasterData);
@@ -108,6 +108,10 @@ protected:
         rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
         rasterData->setIndexBuffer(indexBuffer);
         rasterData->setVertexBuffer(vertexBuffer, 0);
+        const auto& tetMesh = volumeRenderer->getTetMesh();
+        rasterData->setStaticBuffer(tetMesh->getTriangleIndexBuffer(), "TriangleIndicesBuffer");
+        rasterData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "VertexPositionBuffer");
+        rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "VertexColorBuffer");
         volumeRenderer->setRenderDataBindings(rasterData);
     }
 
@@ -321,8 +325,11 @@ void TetMeshVolumeRenderer::onClearColorChanged() {
 }
 
 void TetMeshVolumeRenderer::render() {
+    auto imageSettings = outputImageView->getImage()->getImageSettings();
+    uniformData.inverseViewProjectionMatrix = (*camera)->getInverseViewProjMatrix();
     uniformData.linkedListSize = static_cast<uint32_t>(fragmentBufferSize);
     uniformData.viewportW = paddedWindowWidth;
+    uniformData.viewportSize = glm::uvec2(imageSettings.width, imageSettings.height);
     uniformData.zNear = (*camera)->getNearClipDistance();
     uniformData.zFar = (*camera)->getFarClipDistance();
     uniformData.cameraFront = (*camera)->getCameraFront();

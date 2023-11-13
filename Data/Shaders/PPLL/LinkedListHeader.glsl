@@ -34,10 +34,10 @@ in vec4 gl_FragCoord;
 
 // A fragment node stores rendering information about one specific fragment
 struct LinkedListFragmentNode {
-    // RGBA color of the node
+    // Bit 0: isFrontFacing, Bit 1: isBoundary, Bit 2-31: faceIndex.
     uint color;
-    // Depth value of the fragment (in view space)
-    uint depth;
+    // Depth value of the fragment
+    float depth;
     // The index of the next node in "nodes" array
     uint next;
 };
@@ -53,16 +53,23 @@ float unpackDepth(uint packedDepth) {
 }
 
 layout(binding = 0) uniform UniformDataBuffer {
+    // Inverse of (projectionMatrix * viewMatrix).
+    mat4 inverseViewProjectionMatrix;
+
     // Number of fragments we can store in total.
     uint linkedListSize;
     // Size of the viewport in x direction (in pixels).
     int viewportW;
     // Camera near/far plane distance.
     float zNear, zFar;
+
     // Camera front vector.
     vec3 cameraFront;
     // Volume attenuation.
     float attenuationCoefficient;
+
+    // Viewport size in x/y direction.
+    uvec2 viewportSize;
 };
 
 // Fragment-and-link buffer (linked list). Stores "nodesPerPixel" number of fragments.

@@ -86,12 +86,12 @@ void TetMesh::loadTestData(TestCase testCase) {
                 {0.0f, 0.8f, 0.0f, 0.4f},
                 {0.0f, 0.0f, 0.8f, 0.1f},
                 {0.8f, 0.8f, 0.0f, 0.3f},
-        };
-        std::vector<glm::vec4> _vertexColors = {
+        };*/
+        /*std::vector<glm::vec4> _vertexColors = {
                 {0.8f, 0.0f, 0.0f, 0.4f},
                 {0.0f, 0.8f, 0.0f, 0.4f},
+                {0.8f, 0.8f, 0.8f, 0.4f},
                 {0.0f, 0.0f, 0.8f, 0.4f},
-                {0.8f, 0.8f, 0.0f, 0.4f},
         };*/
         std::vector<glm::vec4> _vertexColors = {
                 {1.0f, 1.0f, 1.0f, 0.1f},
@@ -174,7 +174,7 @@ void buildFacesSlim(
 
             uint32_t faceId = 6 * cellId + faceIdx;
             totalFaces[faceId] = face;
-            std::sort(face.vs, face.vs + 4);
+            std::sort(face.vs, face.vs + 3);
             tempFaces[faceId] = TempFace{
                     { face.vs[0], face.vs[1], face.vs[2] }, faceId
             };

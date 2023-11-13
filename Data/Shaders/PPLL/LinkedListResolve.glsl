@@ -41,11 +41,24 @@ void main() {
 
 #version 450 core
 
+#extension GL_EXT_scalar_block_layout : require
+//#extension GL_EXT_debug_printf : enable
+
 #include "LinkedListHeader.glsl"
 #include "DepthHelper.glsl"
 
 uint colorList[MAX_NUM_FRAGS];
-uint depthList[MAX_NUM_FRAGS];
+float depthList[MAX_NUM_FRAGS];
+
+layout(binding = 4, scalar) readonly buffer TriangleIndicesBuffer {
+    uint triangleIndices[];
+};
+layout(binding = 5, scalar) readonly buffer VertexPositionBuffer {
+    vec3 vertexPositions[];
+};
+layout(binding = 6, scalar) readonly buffer VertexColorBuffer {
+    vec4 vertexColors[];
+};
 
 #include "LinkedListSort.glsl"
 

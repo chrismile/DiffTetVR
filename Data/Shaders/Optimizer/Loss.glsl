@@ -33,31 +33,30 @@
 layout(local_size_x = BLOCK_SIZE_X, local_size_y = BLOCK_SIZE_Y) in;
 
 layout(binding = 0) uniform UniformBuffer {
-    uint imageWidth, imageHeight, batchSize;
+    uint imageWidth, imageHeight;
 };
 
-layout(binding = 1, rgba32f) uniform readonly image2D colorImageGT[BATCH_SIZE];
-layout(binding = 2, rgba32f) uniform readonly image2D colorImageOpt[BATCH_SIZE];
-layout(binding = 3, rgba32f) uniform writeonly image2D adjointColors[BATCH_SIZE];
+layout(binding = 1, rgba32f) uniform readonly image2D colorImageGT;
+layout(binding = 2, rgba32f) uniform readonly image2D colorImageOpt;
+layout(binding = 3, rgba32f) uniform writeonly image2D adjointColors;
 
 void main() {
     const uvec2 imageIdx = gl_GlobalInvocationID.xy;
     if (imageIdx.x >= imageWidth || imageIdx.y >= imageHeight) {
         return;
     }
-    const float invN = 1.0 / float(imageWidth * imageHeight * batchSize);
-    for (uint batchIdx = 0; batchIdx < BATCH_SIZE; batchIdx++) {
-        vec4 colorDiff = imageLoad(colorImageOpt[batchIdx], imageIdx) - imageLoad(colorImageOpt[batchIdx], imageIdx);
+    const float invN = 1.0 / float(imageWidth * imageHeight);
 
-        vec4 adjointColor;
+    vec4 colorDiff = imageLoad(colorImageOpt, imageIdx) - imageLoad(colorImageOpt, imageIdx);
+
+    vec4 adjointColor;
 #if defined(L1_LOSS)
-        adjointColor = invN * (2.0 * vec4(greaterThanEqual(colorDiff, vec4(0.0))) - vec4(1.0));
+    adjointColor = invN * (2.0 * vec4(greaterThanEqual(colorDiff, vec4(0.0))) - vec4(1.0));
 #elif defined(L2_LOSS)
-        adjointColor = (invN * 2.0) * colorDiff;
+    adjointColor = (invN * 2.0) * colorDiff;
 #endif
 
-        imageStore(adjointColors[batchIdx], imageIdx, adjointColor);
-    }
+    imageStore(adjointColors, imageIdx, adjointColor);
 }
 
 

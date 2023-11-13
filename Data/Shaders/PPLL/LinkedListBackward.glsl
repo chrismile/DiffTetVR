@@ -30,26 +30,10 @@
 
 #version 450 core
 
-#extension GL_EXT_scalar_block_layout : require
-
-layout(binding = 4, scalar) readonly buffer TriangleIndicesBuffer {
-    uint triangleIndices[];
-};
-layout(binding = 5, scalar) readonly buffer VertexPositionBuffer {
-    vec3 vertexPositions[];
-};
-layout(binding = 6, scalar) readonly buffer FaceBoundaryBitBuffer {
-    uint faceBoundaryBitArray[];
-};
-
-layout(location = 0) flat out uint faceBits;
+layout(location = 0) in vec3 vertexPosition;
 
 void main() {
-    const uint faceIndex = gl_VertexIndex / 3u;
-    const uint vertexIndex = triangleIndices[gl_VertexIndex];
-    vec3 vertexPosition = vertexPositions[vertexIndex];
-    faceBits = (faceBoundaryBitArray[faceIndex] << 1u) | (faceIndex << 2u);
-    gl_Position = mvpMatrix * vec4(vertexPosition, 1.0);
+    gl_Position = vec4(vertexPosition, 1.0);
 }
 
 
@@ -57,9 +41,31 @@ void main() {
 
 #version 450 core
 
-#include "LinkedListHeader.glsl"
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_debug_printf : enable
 
-layout(location = 0) flat in uint faceBits;
+#include "LinkedListHeader.glsl"
+#include "DepthHelper.glsl"
+
+uint colorList[MAX_NUM_FRAGS];
+float depthList[MAX_NUM_FRAGS];
+
+layout(binding = 4, scalar) readonly buffer TriangleIndicesBuffer {
+    uint triangleIndices[];
+};
+layout(binding = 5, scalar) readonly buffer VertexPositionBuffer {
+    vec3 vertexPositions[];
+};
+layout(binding = 6, scalar) readonly buffer VertexColorBuffer {
+    vec4 vertexColors[];
+};
+
+#define BACKWARD_PASS
+#include "LinkedListSort.glsl"
+
+#ifdef USE_QUICKSORT
+#include "LinkedListQuicksort.glsl"
+#endif
 
 layout(location = 0) out vec4 fragColor;
 
@@ -68,16 +74,37 @@ void main() {
     int y = int(gl_FragCoord.y);
     uint pixelIndex = addrGen(uvec2(x,y));
 
-    LinkedListFragmentNode frag;
-    frag.color = faceBits | uint(gl_FrontFacing);
-    frag.depth = gl_FragCoord.z;
-    frag.next = -1;
+    // Get start offset from array
+    uint fragOffset = startOffset[pixelIndex];
 
-    uint insertIndex = atomicAdd(fragCounter, 1u);
-
-    if (insertIndex < linkedListSize) {
-        // Insert the fragment into the linked list
-        frag.next = atomicExchange(startOffset[pixelIndex], insertIndex);
-        fragmentBuffer[insertIndex] = frag;
+#ifdef INITIALIZE_ARRAY_POW2
+    for (int i = 0; i < MAX_NUM_FRAGS; i++) {
+        colorList[i] = 0;
+        depthList[i] = 0;
     }
+#endif
+
+    // Collect all fragments for this pixel
+    int numFrags = 0;
+    LinkedListFragmentNode fragment;
+    for (int i = 0; i < MAX_NUM_FRAGS; i++) {
+        if (fragOffset == -1) {
+            // End of list reached
+            break;
+        }
+
+        fragment = fragmentBuffer[fragOffset];
+        fragOffset = fragment.next;
+
+        colorList[i] = fragment.color;
+        depthList[i] = fragment.depth;
+
+        numFrags++;
+    }
+
+    if (numFrags == 0) {
+        discard;
+    }
+
+    fragColor = sortingAlgorithm(numFrags);
 }

@@ -123,16 +123,23 @@ private:
 
     // Uniform data buffer shared by all shaders.
     struct UniformData {
+        // Inverse of (projectionMatrix * viewMatrix).
+        glm::mat4 inverseViewProjectionMatrix;
+
         // Number of fragments we can store in total.
         uint32_t linkedListSize;
         // Size of the viewport in x direction (in pixels).
         int viewportW;
         // Camera near/far plane distance.
         float zNear, zFar;
+
         // Camera front vector.
         glm::vec3 cameraFront;
         // Volume attenuation.
         float attenuationCoefficient;
+
+        // Viewport size in x/y direction.
+        glm::uvec2 viewportSize;
     };
     UniformData uniformData = {};
     sgl::vk::BufferPtr uniformDataBuffer;
