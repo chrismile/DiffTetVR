@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
     sgl::AppSettings::get()->getSettings().addKeyValue("window-vSync", true);
     sgl::AppSettings::get()->getSettings().addKeyValue("window-resizable", true);
     sgl::AppSettings::get()->getSettings().addKeyValue("window-savePosition", true);
-    //sgl::AppSettings::get()->setVulkanDebugPrintfEnabled();
+    sgl::AppSettings::get()->setVulkanDebugPrintfEnabled();
 
     ImFontGlyphRangesBuilder builder;
     builder.AddChar(L'\u03BB'); // lambda

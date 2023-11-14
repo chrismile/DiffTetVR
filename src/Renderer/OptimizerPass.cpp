@@ -136,9 +136,10 @@ void OptimizerPass::createComputeData(
 }
 
 void OptimizerPass::_render() {
-    if (optimizerType == OptimizerType::ADAM) {
-        renderer->pushConstants(getComputePipeline(), VK_SHADER_STAGE_COMPUTE_BIT, 0, t);
-    }
     auto numParameters = uint32_t(parametersBuffer->getSizeInBytes() / 4);
+    renderer->pushConstants(getComputePipeline(), VK_SHADER_STAGE_COMPUTE_BIT, 0, numParameters);
+    if (optimizerType == OptimizerType::ADAM) {
+        renderer->pushConstants(getComputePipeline(), VK_SHADER_STAGE_COMPUTE_BIT, sizeof(uint32_t), t);
+    }
     renderer->dispatch(computeData, sgl::uiceil(numParameters, computeBlockSize), 1, 1);
 }

@@ -315,6 +315,56 @@ vec4 frontToBackPQ(uint fragsCount) {
                 dOut_dcf1, dOut_duf1, dOut_dvf1,
                 dOut_dpf10, dOut_dpf11, dOut_dpf12, dOut_dcf10, dOut_dcf11, dOut_dcf12);
 
+        if (isnan(dOut_dcf00.x) || isnan(dOut_dcf00.y) || isnan(dOut_dcf00.z) || isnan(dOut_dcf00.w) || dOut_dcf00.x != 0.0 || dOut_dcf00.y != 0.0 || dOut_dcf00.z != 0.0 || dOut_dcf00.w != 0.0) {
+            debugPrintfEXT("a %u %f %f %f %f", if00, dOut_dcf00.x, dOut_dcf00.y, dOut_dcf00.z, dOut_dcf00.w);
+            dOut_dcf00 = vec4(0.0);
+        }
+        if (isnan(dOut_dcf01.x) || isnan(dOut_dcf01.y) || isnan(dOut_dcf01.z) || isnan(dOut_dcf01.w) || dOut_dcf01.x != 0.0 || dOut_dcf01.y != 0.0 || dOut_dcf01.z != 0.0 || dOut_dcf01.w != 0.0) {
+            debugPrintfEXT("b %u %f %f %f %f", if01, dOut_dcf01.x, dOut_dcf01.y, dOut_dcf01.z, dOut_dcf01.w);
+            dOut_dcf01 = vec4(0.0);
+        }
+        if (isnan(dOut_dcf02.x) || isnan(dOut_dcf02.y) || isnan(dOut_dcf02.z) || isnan(dOut_dcf02.w) || dOut_dcf02.x != 0.0 || dOut_dcf02.y != 0.0 || dOut_dcf02.z != 0.0 || dOut_dcf02.w != 0.0) {
+            debugPrintfEXT("c %u %f %f %f %f", if02, dOut_dcf02.x, dOut_dcf02.y, dOut_dcf02.z, dOut_dcf02.w);
+            dOut_dcf02 = vec4(0.0);
+        }
+        if (isnan(dOut_dcf10.x) || isnan(dOut_dcf10.y) || isnan(dOut_dcf10.z) || isnan(dOut_dcf10.w) || dOut_dcf10.x != 0.0 || dOut_dcf10.y != 0.0 || dOut_dcf10.z != 0.0 || dOut_dcf10.w != 0.0) {
+            debugPrintfEXT("d %u %f %f %f %f", if10, dOut_dcf10.x, dOut_dcf10.y, dOut_dcf10.z, dOut_dcf10.w);
+            dOut_dcf10 = vec4(0.0);
+        }
+        if (isnan(dOut_dcf11.x) || isnan(dOut_dcf11.y) || isnan(dOut_dcf11.z) || isnan(dOut_dcf11.w) || dOut_dcf11.x != 0.0 || dOut_dcf11.y != 0.0 || dOut_dcf11.z != 0.0 || dOut_dcf11.w != 0.0) {
+            debugPrintfEXT("e %u %f %f %f %f", if11, dOut_dcf11.x, dOut_dcf11.y, dOut_dcf11.z, dOut_dcf11.w);
+            dOut_dcf11 = vec4(0.0);
+        }
+        if (isnan(dOut_dcf12.x) || isnan(dOut_dcf12.y) || isnan(dOut_dcf12.z) || isnan(dOut_dcf12.w) || dOut_dcf12.x != 0.0 || dOut_dcf12.y != 0.0 || dOut_dcf12.z != 0.0 || dOut_dcf12.w != 0.0) {
+            debugPrintfEXT("f %u %f %f %f %f", if12, dOut_dcf12.x, dOut_dcf12.y, dOut_dcf12.z, dOut_dcf12.w);
+            dOut_dcf12 = vec4(0.0);
+        }
+
+        if (isnan(dOut_dpf00.x) || isnan(dOut_dpf00.y) || isnan(dOut_dpf00.z) || dOut_dpf00.x != 0.0 || dOut_dpf00.y != 0.0 || dOut_dpf00.z != 0.0) {
+            debugPrintfEXT("g %u %f %f %f", if00, dOut_dpf00.x, dOut_dpf00.y, dOut_dpf00.z);
+            dOut_dpf00 = vec3(0.0);
+        }
+        if (isnan(dOut_dpf01.x) || isnan(dOut_dpf01.y) || isnan(dOut_dpf01.z) || dOut_dpf01.x != 0.0 || dOut_dpf01.y != 0.0 || dOut_dpf01.z != 0.0) {
+            debugPrintfEXT("h %u %f %f %f", if01, dOut_dpf01.x, dOut_dpf01.y, dOut_dpf01.z);
+            dOut_dpf01 = vec3(0.0);
+        }
+        if (isnan(dOut_dpf02.x) || isnan(dOut_dpf02.y) || isnan(dOut_dpf02.z) || dOut_dpf02.x != 0.0 || dOut_dpf02.y != 0.0 || dOut_dpf02.z != 0.0) {
+            debugPrintfEXT("i %u %f %f %f", if02, dOut_dpf02.x, dOut_dpf02.y, dOut_dpf02.z);
+            dOut_dpf02 = vec3(0.0);
+        }
+        if (isnan(dOut_dpf10.x) || isnan(dOut_dpf10.y) || isnan(dOut_dpf10.z) || dOut_dpf10.x != 0.0 || dOut_dpf10.y != 0.0 || dOut_dpf10.z != 0.0) {
+            debugPrintfEXT("j %u %f %f %f", if10, dOut_dpf10.x, dOut_dpf10.y, dOut_dpf10.z);
+            dOut_dpf10 = vec3(0.0);
+        }
+        if (isnan(dOut_dpf11.x) || isnan(dOut_dpf11.y) || isnan(dOut_dpf11.z) || dOut_dpf11.x != 0.0 || dOut_dpf11.y != 0.0 || dOut_dpf11.z != 0.0) {
+            debugPrintfEXT("k %u %f %f %f", if11, dOut_dpf11.x, dOut_dpf11.y, dOut_dpf11.z);
+            dOut_dpf11 = vec3(0.0);
+        }
+        if (isnan(dOut_dpf12.x) || isnan(dOut_dpf12.y) || isnan(dOut_dpf12.z) || dOut_dpf12.x != 0.0 || dOut_dpf12.y != 0.0 || dOut_dpf12.z != 0.0) {
+            debugPrintfEXT("l %u %f %f %f", if12, dOut_dpf12.x, dOut_dpf12.y, dOut_dpf12.z);
+            dOut_dpf12 = vec3(0.0);
+        }
+
         atomicAddGradCol(if00, dOut_dcf00);
         atomicAddGradCol(if01, dOut_dcf01);
         atomicAddGradCol(if02, dOut_dcf02);

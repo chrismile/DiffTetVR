@@ -42,7 +42,7 @@ void main() {
 #version 450 core
 
 #extension GL_EXT_scalar_block_layout : require
-//#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_debug_printf : enable
 
 #include "LinkedListHeader.glsl"
 #include "DepthHelper.glsl"

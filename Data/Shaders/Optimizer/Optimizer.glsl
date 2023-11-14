@@ -56,7 +56,7 @@ layout(binding = 2, std430) readonly buffer ParametersGradientBuffer {
 
 void main() {
     uint globalThreadIdx = gl_GlobalInvocationID.x;
-    if (globalThreadIdx >= numValues) {
+    if (globalThreadIdx >= numParameters) {
         return;
     }
 

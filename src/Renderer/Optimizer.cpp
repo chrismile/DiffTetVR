@@ -431,14 +431,14 @@ void TetMeshOptimizer::updateRequest() {
         vertexPositionGradientBuffer->fill(0, renderer->getVkCommandBuffer());
         renderer->insertBufferMemoryBarrier(
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 vertexPositionGradientBuffer);
     }
     if (settings.optimizeColors) {
         vertexColorGradientBuffer->fill(0, renderer->getVkCommandBuffer());
         renderer->insertBufferMemoryBarrier(
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 vertexColorGradientBuffer);
     }
 
