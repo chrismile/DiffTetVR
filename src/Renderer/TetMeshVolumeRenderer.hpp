@@ -53,6 +53,7 @@ typedef std::shared_ptr<TetMesh> TetMeshPtr;
 class GatherRasterPass;
 class ResolveRasterPass;
 class ClearRasterPass;
+class AdjointRasterPass;
 
 const int MESH_MODE_DEPTH_COMPLEXITIES_PPLL[2][2] = {
         {20, 100}, // avg and max depth complexity medium
@@ -78,14 +79,27 @@ public:
     void setClearColor(const sgl::Color& _clearColor);
     void setNewTilingMode(int newTileWidth, int newTileHeight, bool useMortonCode = false);
 
+    // Public interface, only for backward pass.
+    void setAdjointPassData(
+            sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer,
+            sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer);
+    void recreateSwapchainExternal(
+            uint32_t width, uint32_t height, size_t _fragmentBufferSize, sgl::vk::BufferPtr _fragmentBuffer,
+            sgl::vk::BufferPtr _startOffsetBuffer, sgl::vk::BufferPtr _fragmentCounterBuffer);
+
     void getVulkanShaderPreprocessorDefines(std::map<std::string, std::string>& preprocessorDefines);
     void setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData);
     void setFramebufferAttachments(sgl::vk::FramebufferPtr& framebuffer, VkAttachmentLoadOp loadOp);
     void render();
+    void renderAdjoint();
 
     [[nodiscard]] inline sgl::vk::Renderer* getRenderer() const { return renderer; }
     [[nodiscard]] inline const TetMeshPtr& getTetMesh() const { return tetMesh; }
     [[nodiscard]] inline const sgl::vk::ImageViewPtr& getOutputImageView() const { return outputImageView; }
+    [[nodiscard]] inline size_t getFragmentBufferSize() const { return fragmentBufferSize; }
+    [[nodiscard]] inline const sgl::vk::BufferPtr& getFragmentBuffer() const { return fragmentBuffer; }
+    [[nodiscard]] inline const sgl::vk::BufferPtr& getStartOffsetBuffer() const { return startOffsetBuffer; }
+    [[nodiscard]] inline const sgl::vk::BufferPtr& getFragmentCounterBuffer() const { return fragmentCounterBuffer; }
 
     /// Returns if the data needs to be re-rendered, but the visualization mapping is valid.
     bool needsReRender() { bool tmp = reRender; reRender = false; return tmp; }
@@ -111,16 +125,23 @@ private:
     std::shared_ptr<GatherRasterPass> gatherRasterPass;
     std::shared_ptr<ResolveRasterPass> resolveRasterPass;
     std::shared_ptr<ClearRasterPass> clearRasterPass;
-    std::shared_ptr<ClearRasterPass> backwardRasterPass; // only for optimization
+    std::shared_ptr<AdjointRasterPass> adjointRasterPass; // only for optimization
 
     // Sorting algorithm for PPLL.
     SortingAlgorithmMode sortingAlgorithmMode = SORTING_ALGORITHM_MODE_PRIORITY_QUEUE;
 
     // Per-pixel linked list data.
+    bool useExternalFragmentBuffer = false;
     size_t fragmentBufferSize = 0;
     sgl::vk::BufferPtr fragmentBuffer;
     sgl::vk::BufferPtr startOffsetBuffer;
     sgl::vk::BufferPtr fragmentCounterBuffer;
+
+    // For adjoint pass.
+    sgl::vk::ImageViewPtr colorAdjointImage;
+    sgl::vk::ImageViewPtr adjointPassBackbuffer;
+    sgl::vk::BufferPtr vertexPositionGradientBuffer;
+    sgl::vk::BufferPtr vertexColorGradientBuffer;
 
     // Uniform data buffer shared by all shaders.
     struct UniformData {

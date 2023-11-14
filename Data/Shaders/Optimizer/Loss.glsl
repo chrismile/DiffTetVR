@@ -41,7 +41,7 @@ layout(binding = 2, rgba32f) uniform readonly image2D colorImageOpt;
 layout(binding = 3, rgba32f) uniform writeonly image2D adjointColors;
 
 void main() {
-    const uvec2 imageIdx = gl_GlobalInvocationID.xy;
+    const ivec2 imageIdx = ivec2(gl_GlobalInvocationID.xy);
     if (imageIdx.x >= imageWidth || imageIdx.y >= imageHeight) {
         return;
     }

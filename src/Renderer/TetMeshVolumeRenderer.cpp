@@ -33,6 +33,7 @@
 #include <Graphics/Vulkan/Render/Renderer.hpp>
 #include <Graphics/Vulkan/Render/Passes/BlitRenderPass.hpp>
 #include <ImGui/Widgets/PropertyEditor.hpp>
+#include <utility>
 
 #include "Tet/TetMesh.hpp"
 #include "TetMeshVolumeRenderer.hpp"
@@ -51,6 +52,7 @@ public:
 
 protected:
     void loadShader() override {
+        sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
@@ -96,11 +98,11 @@ public:
 
 protected:
     void loadShader() override {
+        sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
         preprocessorDefines.insert(std::make_pair("PI_SQRT", std::to_string(std::sqrt(sgl::PI))));
         preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
-        preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(shaderIds, preprocessorDefines);
     }
@@ -129,6 +131,7 @@ public:
 
 protected:
     void loadShader() override {
+        sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
@@ -138,6 +141,44 @@ protected:
         rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
         rasterData->setIndexBuffer(indexBuffer);
         rasterData->setVertexBuffer(vertexBuffer, 0);
+        volumeRenderer->setRenderDataBindings(rasterData);
+    }
+
+private:
+    TetMeshVolumeRenderer* volumeRenderer;
+};
+
+class AdjointRasterPass : public sgl::vk::BlitRenderPass {
+public:
+    explicit AdjointRasterPass(TetMeshVolumeRenderer* volumeRenderer)
+            : BlitRenderPass(volumeRenderer->getRenderer(), { "LinkedListResolve.Vertex", "LinkedListResolve.Fragment" }),
+              volumeRenderer(volumeRenderer) {
+        this->setAttachmentLoadOp(VK_ATTACHMENT_LOAD_OP_CLEAR);
+    }
+
+protected:
+    void loadShader() override {
+        sgl::vk::ShaderManager->invalidateShaderCache();
+        std::map<std::string, std::string> preprocessorDefines;
+        preprocessorDefines.insert(std::make_pair("BACKWARD_PASS", ""));
+        preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
+        preprocessorDefines.insert(std::make_pair("PI_SQRT", std::to_string(std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
+        if (renderer->getDevice()->getPhysicalDeviceShaderAtomicFloatFeatures().shaderBufferFloat32AtomicAdd) {
+            preprocessorDefines.insert(std::make_pair("SUPPORT_BUFFER_FLOAT_ATOMIC_ADD", ""));
+            preprocessorDefines.insert(std::make_pair("__extensions", "GL_EXT_shader_atomic_float"));
+        }
+        volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
+        shaderStages = sgl::vk::ShaderManager->getShaderStages(shaderIds, preprocessorDefines);
+    }
+    void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) {
+        rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
+        rasterData->setIndexBuffer(indexBuffer);
+        rasterData->setVertexBuffer(vertexBuffer, 0);
+        const auto& tetMesh = volumeRenderer->getTetMesh();
+        rasterData->setStaticBuffer(tetMesh->getTriangleIndexBuffer(), "TriangleIndicesBuffer");
+        rasterData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "VertexPositionBuffer");
+        rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "VertexColorBuffer");
         volumeRenderer->setRenderDataBindings(rasterData);
     }
 
@@ -180,7 +221,7 @@ void TetMeshVolumeRenderer::updateLargeMeshMode() {
     if (tetMesh->getNumCells() > size_t(1e6)) { // > 1m line cells
         newMeshLargeMeshMode = MESH_SIZE_LARGE;
     }
-    if (newMeshLargeMeshMode != largeMeshMode) {
+    if (newMeshLargeMeshMode != largeMeshMode && !useExternalFragmentBuffer) {
         renderer->getDevice()->waitIdle();
         largeMeshMode = newMeshLargeMeshMode;
         expectedAvgDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[int(largeMeshMode)][0];
@@ -205,9 +246,28 @@ void TetMeshVolumeRenderer::setOutputImage(sgl::vk::ImageViewPtr& colorImage) {
     outputImageView = colorImage;
 }
 
+void TetMeshVolumeRenderer::setAdjointPassData(
+        sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer,
+        sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer) {
+    if (!adjointRasterPass) {
+        adjointRasterPass = std::make_shared<AdjointRasterPass>(this);
+        adjointRasterPass->setColorWriteEnabled(false);
+        adjointRasterPass->setAttachmentLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE);
+        adjointRasterPass->setAttachmentStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE);
+        adjointRasterPass->setOutputImageInitialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
+        adjointRasterPass->setOutputImageFinalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        adjointRasterPass->setBlendMode(sgl::vk::BlendMode::OVERWRITE);
+    }
+    colorAdjointImage = std::move(_colorAdjointImage);
+    adjointPassBackbuffer = std::move(_adjointPassBackbuffer);
+    vertexPositionGradientBuffer = std::move(_vertexPositionGradientBuffer);
+    vertexColorGradientBuffer = std::move(_vertexColorGradientBuffer);
+}
+
 void TetMeshVolumeRenderer::recreateSwapchain(uint32_t width, uint32_t height) {
     paddedWindowWidth = int(width), paddedWindowHeight = int(height);
     getScreenSizeWithTiling(paddedWindowWidth, paddedWindowHeight);
+    useExternalFragmentBuffer = false;
 
     reallocateFragmentBuffer();
 
@@ -230,6 +290,37 @@ void TetMeshVolumeRenderer::recreateSwapchain(uint32_t width, uint32_t height) {
 
     clearRasterPass->setOutputImage(outputImageView);
     clearRasterPass->recreateSwapchain(width, height);
+
+    if (adjointRasterPass) {
+        adjointRasterPass->setOutputImage(adjointPassBackbuffer);
+        adjointRasterPass->recreateSwapchain(width, height);
+    }
+}
+
+void TetMeshVolumeRenderer::recreateSwapchainExternal(
+        uint32_t width, uint32_t height, size_t _fragmentBufferSize, sgl::vk::BufferPtr _fragmentBuffer,
+        sgl::vk::BufferPtr _startOffsetBuffer, sgl::vk::BufferPtr _fragmentCounterBuffer) {
+    paddedWindowWidth = int(width), paddedWindowHeight = int(height);
+    getScreenSizeWithTiling(paddedWindowWidth, paddedWindowHeight);
+    useExternalFragmentBuffer = true;
+
+    fragmentBufferSize = _fragmentBufferSize;
+    fragmentBuffer = std::move(_fragmentBuffer);
+    startOffsetBuffer = std::move(_startOffsetBuffer);
+    fragmentCounterBuffer = std::move(_fragmentCounterBuffer);
+
+    gatherRasterPass->recreateSwapchain(width, height);
+
+    resolveRasterPass->setOutputImage(outputImageView);
+    resolveRasterPass->recreateSwapchain(width, height);
+
+    clearRasterPass->setOutputImage(outputImageView);
+    clearRasterPass->recreateSwapchain(width, height);
+
+    if (adjointRasterPass) {
+        adjointRasterPass->setOutputImage(adjointPassBackbuffer);
+        adjointRasterPass->recreateSwapchain(width, height);
+    }
 }
 
 void TetMeshVolumeRenderer::setUseLinearRGB(bool _useLinearRGB) {
@@ -282,6 +373,12 @@ void TetMeshVolumeRenderer::setRenderDataBindings(const sgl::vk::RenderDataPtr& 
     renderData->setStaticBuffer(startOffsetBuffer, "StartOffsetBuffer");
     renderData->setStaticBufferOptional(fragmentCounterBuffer, "FragCounterBuffer");
     renderData->setStaticBufferOptional(uniformDataBuffer, "UniformDataBuffer");
+
+    // For resolve pass.
+    renderData->setStaticBufferOptional(vertexPositionGradientBuffer, "VertexPositionGradientBuffer");
+    renderData->setStaticBufferOptional(vertexColorGradientBuffer, "VertexColorGradientBuffer");
+    renderData->setStaticImageViewOptional(outputImageView, "colorImageOpt");
+    renderData->setStaticImageViewOptional(colorAdjointImage, "adjointColors");
 }
 
 void TetMeshVolumeRenderer::setFramebufferAttachments(sgl::vk::FramebufferPtr& framebuffer, VkAttachmentLoadOp loadOp) {
@@ -343,6 +440,10 @@ void TetMeshVolumeRenderer::render() {
     clear();
     gather();
     resolve();
+}
+
+void TetMeshVolumeRenderer::renderAdjoint() {
+    adjointRasterPass->render();
 }
 
 void TetMeshVolumeRenderer::clear() {

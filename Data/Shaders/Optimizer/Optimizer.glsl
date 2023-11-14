@@ -46,11 +46,11 @@ layout(binding = 0) uniform OptimizerSettingsBuffer {
     float alpha; ///< Learning rate.
 };
 
-layout(binding = 1, std430) buffer ParameterBuffer {
+layout(binding = 1, std430) buffer ParametersBuffer {
     float parameters[];
 };
 
-layout(binding = 2, std430) readonly buffer ParameterGradientBuffer {
+layout(binding = 2, std430) readonly buffer ParametersGradientBuffer {
     float g[];
 };
 
@@ -91,11 +91,11 @@ layout(binding = 0) uniform OptimizerSettingsBuffer {
     float epsilon; ///< Small epsilon value used to avoid division by zero.
 };
 
-layout(binding = 1, std430) buffer ParameterBuffer {
+layout(binding = 1, std430) buffer ParametersBuffer {
     float parameters[];
 };
 
-layout(binding = 2, std430) readonly buffer ParameterGradientBuffer {
+layout(binding = 2, std430) readonly buffer ParametersGradientBuffer {
     float g[];
 };
 

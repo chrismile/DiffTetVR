@@ -1,19 +1,19 @@
-layout(binding = 7, scalar) readonly buffer VertexPositionGradientBuffer {
+layout(binding = 7, scalar) coherent buffer VertexPositionGradientBuffer {
 #ifdef SUPPORT_BUFFER_FLOAT_ATOMIC_ADD
     float vertexPositionGradients[]; // stride: vec3
 #else
     uint vertexPositionGradients[]; // stride: vec3
 #endif
 };
-layout(binding = 8, scalar) readonly buffer VertexColorGradientBuffer {
+layout(binding = 8, scalar) coherent buffer VertexColorGradientBuffer {
 #ifdef SUPPORT_BUFFER_FLOAT_ATOMIC_ADD
     float vertexColorGradients[]; // stride: vec4
 #else
     uint vertexColorGradients[]; // stride: vec4
 #endif
 };
-layout(binding = 7, rgba32f) uniform readonly image2D colorImageOpt;
-layout(binding = 8, rgba32f) uniform readonly image2D adjointColors;
+layout(binding = 9, rgba32f) uniform readonly image2D colorImageOpt;
+layout(binding = 10, rgba32f) uniform readonly image2D adjointColors;
 
 void atomicAddGradCol(uint idx, vec4 value) {
     const uint stride = idx * 4;
@@ -54,7 +54,7 @@ void atomicAddGradPos(uint idx, vec3 value) {
 #endif
 }
 
-vec4 accumulateLinearConst(float t, vec3 c0, vec3 c1, float a, out A) {
+vec4 accumulateLinearConst(float t, vec3 c0, vec3 c1, float a, out float A) {
     A = exp(-a * t);
     return vec4((1.0 - A) * c0 + ((t + 1.0 / a) * A - 1.0 / a) * (c0 - c1), 1.0 - A);
 }
@@ -73,8 +73,8 @@ void accumulateLinearConstAdjoint(
 
 void getNextFragment(
         in uint i, in uint fragsCount, out vec4 color, out float depthLinear, out bool boundary, out bool frontFace,
-        out uint i0, out uint i1, out uint i2, out vec3 p0, out vec3 p1, out vec3 p2, out vec4 c0, out vec4 c1,
-        out vec4 c2, out float u, out float v) {
+        out uint i0, out uint i1, out uint i2, out vec3 p, out vec3 p0, out vec3 p1, out vec3 p2,
+        out vec4 c0, out vec4 c1, out vec4 c2, out float u, out float v) {
     minHeapSink4(0, fragsCount - i);
     uint faceBits = colorList[0];
     float depthBufferValue = depthList[0];
@@ -92,24 +92,24 @@ void getNextFragment(
 #endif
     vec4 fragPosNdc = vec4(2.0 * gl_FragCoord.xy / vec2(viewportSize) - vec2(1.0), depthBufferValue, 1.0);
     vec4 fragPosWorld = inverseViewProjectionMatrix * fragPosNdc;
-    vec3 fragmentPositionWorld = fragPosWorld.xyz / fragPosWorld.w;
+    p = fragPosWorld.xyz / fragPosWorld.w;
 
-    uint i0 = triangleIndices[faceIndex];
-    uint i1 = triangleIndices[faceIndex + 1];
-    uint i2 = triangleIndices[faceIndex + 2];
-    vec3 p0 = vertexPositions[i0];
-    vec3 p1 = vertexPositions[i1];
-    vec3 p2 = vertexPositions[i2];
-    vec4 c0 = vertexColors[i0];
-    vec4 c1 = vertexColors[i1];
-    vec4 c2 = vertexColors[i2];
+    i0 = triangleIndices[faceIndex];
+    i1 = triangleIndices[faceIndex + 1];
+    i2 = triangleIndices[faceIndex + 2];
+    p0 = vertexPositions[i0];
+    p1 = vertexPositions[i1];
+    p2 = vertexPositions[i2];
+    c0 = vertexColors[i0];
+    c1 = vertexColors[i1];
+    c2 = vertexColors[i2];
 
     // Barycentric interpolation.
     vec3 d20 = p2 - p0;
     vec3 d21 = p2 - p1;
     float totalArea = length(cross(d20, d21));
-    float u = length(cross(d21, fragmentPositionWorld - p1)) / totalArea;
-    float v = length(cross(fragmentPositionWorld - p0, d20)) / totalArea;
+    u = length(cross(d21, p - p1)) / totalArea;
+    v = length(cross(p - p0, d20)) / totalArea;
     const vec3 barycentricCoordinates = vec3(u, v, 1.0 - u - v);
     color = c0 * barycentricCoordinates.x + c1 * barycentricCoordinates.y + c2 * barycentricCoordinates.z;
 }
@@ -119,7 +119,7 @@ float pow2(float x) {
 }
 
 void segmentLengthAdjoint(
-        vec3 pf00, vec3 pf01, vec3 pf02, vec3 pf00, vec3 pf01, vec3 pf02, float uf0, float vf0, float uf1, float vf1,
+        vec3 pf00, vec3 pf01, vec3 pf02, vec3 pf10, vec3 pf11, vec3 pf12, float uf0, float vf0, float uf1, float vf1,
         float dOut_dt, out float dOut_duf0, out float dOut_dvf0, out float dOut_duf1, out float dOut_dvf1,
         out vec3 dOut_dpf00, out vec3 dOut_dpf01, out vec3 dOut_dpf02,
         out vec3 dOut_dpf10, out vec3 dOut_dpf11, out vec3 dOut_dpf12) {
@@ -159,7 +159,7 @@ void segmentLengthAdjoint(
 }
 
 void baryAdjoint(
-        vec3 p0, vec3 p1, vec3 p2, vec4 c0, vec4 c1, vec4 c2, float u, float v,
+        vec3 p, vec3 p0, vec3 p1, vec3 p2, vec4 c0, vec4 c1, vec4 c2, float u, float v,
         vec4 dOut_dc, float dOut_du, float dOut_dv, // forwarded from segmentLengthAdjoint
         inout vec3 dOut_dp0, inout vec3 dOut_dp1, inout vec3 dOut_dp2,
         out vec4 dOut_dc0, out vec4 dOut_dc1, out vec4 dOut_dc2) {
@@ -208,15 +208,16 @@ vec4 frontToBackPQ(uint fragsCount) {
     bool fragment0Boundary, fragment1Boundary;
     bool fragment0FrontFace, fragment1FrontFace;
     uint if00, if01, if02, if10, if11, if12;
-    vec3 pf00, pf01, pf02, pf10, pf11, pf12;
+    vec3 pf0, pf00, pf01, pf02, pf1, pf10, pf11, pf12;
     vec4 cf00, cf01, cf02, cf10, cf11, cf12;
     float uf0, vf0, uf1, vf1;
     getNextFragment(
             0, fragsCount, fragment0Color, fragment0Depth, fragment0Boundary, fragment0FrontFace,
-            if00, if01, if02, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0);
+            if00, if01, if02, pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0);
 
-    vec4 colorRayOut = colorImageOpt[workIdx];
-    vec4 dOut_dColorRayOut = adjointColors[workIdx];
+    ivec2 workIdx = ivec2(gl_FragCoord.xy);
+    vec4 colorRayOut = imageLoad(colorImageOpt, workIdx);
+    vec4 dOut_dColorRayOut = imageLoad(adjointColors, workIdx);
 
     // Start with transparent Ray
     vec4 colorAcc;
@@ -231,6 +232,7 @@ vec4 frontToBackPQ(uint fragsCount) {
         if10 = if00;
         if11 = if01;
         if12 = if02;
+        pf1 = pf0;
         pf10 = pf00;
         pf11 = pf01;
         pf12 = pf02;
@@ -241,7 +243,7 @@ vec4 frontToBackPQ(uint fragsCount) {
         vf1 = vf0;
         getNextFragment(
                 i, fragsCount, fragment0Color, fragment0Depth, fragment0Boundary, fragment0FrontFace,
-                if00, if01, if02, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0);
+                if00, if01, if02, pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0);
 
         // Skip if the closest fragment is a boundary face.
         if ((fragment0Boundary && !fragment0FrontFace) && (fragment1Boundary && fragment1FrontFace)) {
@@ -305,11 +307,11 @@ vec4 frontToBackPQ(uint fragsCount) {
                 dOut_duf0, dOut_dvf0, dOut_duf1, dOut_dvf1,
                 dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12);
         baryAdjoint(
-                pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0,
+                pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0,
                 dOut_dcf0, dOut_duf0, dOut_dvf0,
                 dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dcf00, dOut_dcf01, dOut_dcf02);
         baryAdjoint(
-                pf10, pf11, pf12, cf10, cf11, cf12, uf1, vf1,
+                pf1, pf10, pf11, pf12, cf10, cf11, cf12, uf1, vf1,
                 dOut_dcf1, dOut_duf1, dOut_dvf1,
                 dOut_dpf10, dOut_dpf11, dOut_dpf12, dOut_dcf10, dOut_dcf11, dOut_dcf12);
 
@@ -330,6 +332,5 @@ vec4 frontToBackPQ(uint fragsCount) {
         atomicAddGradPos(if12, dOut_dpf12);
     }
 
-    rayColor.rgb = rayColor.rgb / rayColor.a; // Correct rgb with alpha
-    return rayColor;
+    return vec4(0.0);
 }

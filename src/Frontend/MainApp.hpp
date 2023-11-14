@@ -79,6 +79,7 @@ private:
 
     // Dock space mode.
     void renderGuiMenuBar();
+    int renderGuiDataSetSelectionMenu();
     void renderGuiPropertyEditorBegin() override;
     void renderGuiPropertyEditorCustomNodes() override;
     bool scheduledDockSpaceModeChange = false;

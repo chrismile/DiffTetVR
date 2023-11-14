@@ -50,6 +50,7 @@
 
 #include "Tet/TetMesh.hpp"
 #include "Tet/Loaders/DataSetList.hpp"
+#include "Renderer/Optimizer.hpp"
 #include "Renderer/TetMeshVolumeRenderer.hpp"
 #include "DataView.hpp"
 #include "MainApp.hpp"
@@ -159,6 +160,17 @@ MainApp::MainApp()
         updateCameraNavigationMode();
     }
 
+    tetMeshOptimizer = new TetMeshOptimizer(
+            rendererVk, [this](const TetMeshPtr& _tetMesh) { return tetMesh = _tetMesh; },
+            dataSetNames.size() > 1, [this]() -> std::string {
+                int i = this->renderGuiDataSetSelectionMenu();
+                if (i >= 0) {
+                    return dataSetInformationList.at(i - NUM_MANUAL_LOADERS)->filenames.front();
+                } else {
+                    return "";
+                }
+            });
+
 #ifdef __linux__
     signal(SIGSEGV, signalHandler);
 #endif
@@ -167,6 +179,7 @@ MainApp::MainApp()
 MainApp::~MainApp() {
     device->waitIdle();
 
+    delete tetMeshOptimizer;
     tetMeshVolumeRenderer = {};
     dataView = {};
 
@@ -635,6 +648,41 @@ void MainApp::openSaveTetMeshFileDialog() {
             ImGuiFileDialogFlags_ConfirmOverwrite);
 }
 
+int MainApp::renderGuiDataSetSelectionMenu() {
+    int selectedDataSetIndexLocal = -1;
+    if (dataSetInformationRoot) {
+        std::stack<std::pair<DataSetInformationPtr, size_t>> dataSetInformationStack;
+        dataSetInformationStack.emplace(dataSetInformationRoot, 0);
+        while (!dataSetInformationStack.empty()) {
+            std::pair<DataSetInformationPtr, size_t> dataSetIdxPair = dataSetInformationStack.top();
+            DataSetInformationPtr dataSetInformationParent = dataSetIdxPair.first;
+            size_t idx = dataSetIdxPair.second;
+            dataSetInformationStack.pop();
+            while (idx < dataSetInformationParent->children.size()) {
+                DataSetInformationPtr dataSetInformationChild =
+                        dataSetInformationParent->children.at(idx);
+                if (dataSetInformationChild->type == DataSetType::NODE) {
+                    if (ImGui::BeginMenu(dataSetInformationChild->name.c_str())) {
+                        dataSetInformationStack.emplace(dataSetInformationRoot, idx + 1);
+                        dataSetInformationStack.emplace(dataSetInformationChild, 0);
+                        break;
+                    }
+                } else {
+                    if (ImGui::MenuItem(dataSetInformationChild->name.c_str())) {
+                        selectedDataSetIndexLocal = int(dataSetInformationChild->sequentialIndex);
+                    }
+                }
+                idx++;
+            }
+
+            if (idx == dataSetInformationParent->children.size() && !dataSetInformationStack.empty()) {
+                ImGui::EndMenu();
+            }
+        }
+    }
+    return selectedDataSetIndexLocal;
+}
+
 void MainApp::renderGuiMenuBar() {
     bool openOptimizerDialog = false;
     if (ImGui::BeginMainMenuBar()) {
@@ -654,36 +702,10 @@ void MainApp::renderGuiMenuBar() {
                     }
                 }
 
-                if (dataSetInformationRoot) {
-                    std::stack<std::pair<DataSetInformationPtr, size_t>> dataSetInformationStack;
-                    dataSetInformationStack.push(std::make_pair(dataSetInformationRoot, 0));
-                    while (!dataSetInformationStack.empty()) {
-                        std::pair<DataSetInformationPtr, size_t> dataSetIdxPair = dataSetInformationStack.top();
-                        DataSetInformationPtr dataSetInformationParent = dataSetIdxPair.first;
-                        size_t idx = dataSetIdxPair.second;
-                        dataSetInformationStack.pop();
-                        while (idx < dataSetInformationParent->children.size()) {
-                            DataSetInformationPtr dataSetInformationChild =
-                                    dataSetInformationParent->children.at(idx);
-                            if (dataSetInformationChild->type == DataSetType::NODE) {
-                                if (ImGui::BeginMenu(dataSetInformationChild->name.c_str())) {
-                                    dataSetInformationStack.push(std::make_pair(dataSetInformationRoot, idx + 1));
-                                    dataSetInformationStack.push(std::make_pair(dataSetInformationChild, 0));
-                                    break;
-                                }
-                            } else {
-                                if (ImGui::MenuItem(dataSetInformationChild->name.c_str())) {
-                                    selectedDataSetIndex = int(dataSetInformationChild->sequentialIndex);
-                                    loadTetMeshDataSet(getSelectedDataSetFilename());
-                                }
-                            }
-                            idx++;
-                        }
-
-                        if (idx == dataSetInformationParent->children.size() && !dataSetInformationStack.empty()) {
-                            ImGui::EndMenu();
-                        }
-                    }
+                int selectedDataSetIndexLocal = renderGuiDataSetSelectionMenu();
+                if (selectedDataSetIndexLocal >= 0) {
+                    selectedDataSetIndex = selectedDataSetIndexLocal;
+                    loadTetMeshDataSet(getSelectedDataSetFilename());
                 }
 
                 ImGui::EndMenu();
@@ -740,14 +762,13 @@ void MainApp::renderGuiMenuBar() {
         ImGui::EndMainMenuBar();
     }
 
-    // TODO
-    /*if (openOptimizerDialog) {
+    if (openOptimizerDialog) {
         tetMeshOptimizer->openDialog();
     }
     tetMeshOptimizer->renderGuiDialog();
     if (tetMeshOptimizer->getNeedsReRender()) {
         reRender = true;
-    }*/
+    }
 }
 
 void MainApp::renderGuiPropertyEditorBegin() {

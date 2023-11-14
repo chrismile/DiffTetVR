@@ -29,10 +29,100 @@
 #ifndef DIFFTETVR_OPTIMIZER_HPP
 #define DIFFTETVR_OPTIMIZER_HPP
 
+#include <Graphics/Vulkan/Render/Renderer.hpp>
 
-class Optimizer {
+#include "OptimizerDefines.hpp"
 
+namespace sgl {
+class Camera;
+typedef std::shared_ptr<Camera> CameraPtr;
+}
+
+class TetMesh;
+typedef std::shared_ptr<TetMesh> TetMeshPtr;
+class TetMeshVolumeRenderer;
+class LossPass;
+class OptimizerPass;
+
+class ImGuiVulkanImage {
+public:
+    ImGuiVulkanImage() = default;
+    ImGuiVulkanImage(sgl::vk::Renderer* renderer, sgl::vk::TexturePtr texture);
+    ~ImGuiVulkanImage();
+    ImTextureID getImGuiTextureId();
+    ImVec2 getTextureSizeImVec2();
+
+private:
+    sgl::vk::Renderer* renderer{};
+    sgl::vk::TexturePtr texture{};
+    VkDescriptorSet descriptorSetImGui{};
 };
 
+class TetMeshOptimizer {
+public:
+    TetMeshOptimizer(
+            sgl::vk::Renderer* renderer, std::function<void(const TetMeshPtr&)> setTetMeshCallback,
+            bool hasDataSets, std::function<std::string()> renderGuiDataSetSelectionMenuCallback);
+
+    void openDialog();
+    void renderGuiDialog();
+    inline bool getNeedsReRender() { bool tmp = needsReRender; needsReRender = false; return tmp; }
+
+    float getProgress();
+    void startRequest();
+    bool getHasResult();
+    void updateRequest();
+
+private:
+    void sampleCameraPoses();
+    uint32_t cachedViewportWidth = 0;
+    uint32_t cachedViewportHeight = 0;
+
+    sgl::vk::Renderer* renderer = nullptr;
+    bool needsReRender = false;
+    bool isOptimizationSettingsDialogOpen = false;
+    bool isOptimizationProgressDialogOpen = false;
+
+    // Settings.
+    OptimizationSettings settings{};
+    TetMeshPtr tetMeshGT, tetMeshOpt;
+    std::function<void(const TetMeshPtr&)> setTetMeshCallback;
+    bool hasDataSets = false;
+    std::function<std::string()> renderGuiDataSetSelectionMenuCallback;
+    bool hasRequest = false;
+
+    bool usePreviewCached = false;
+    uint32_t viewportWidth = 0;
+    uint32_t viewportHeight = 0;
+    int currentEpoch = 0;
+    sgl::CameraPtr camera;
+
+    // Image data & adjoint image data.
+    sgl::vk::TexturePtr colorImageGT, colorImageOpt;
+    sgl::vk::TexturePtr colorAdjointTexture;
+    sgl::vk::ImageViewPtr adjointPassBackbuffer;
+    // Gradient data for tetMeshOpt.
+    sgl::vk::BufferPtr vertexPositionGradientBuffer;
+    sgl::vk::BufferPtr vertexColorGradientBuffer;
+    // Per-pixel linked list.
+    size_t fragmentBufferSize = 0;
+    sgl::vk::BufferPtr fragmentBuffer;
+    sgl::vk::BufferPtr startOffsetBuffer;
+    sgl::vk::BufferPtr fragmentCounterBuffer;
+
+    bool showPreview = true;
+    std::shared_ptr<ImGuiVulkanImage> colorImageGTImGui, colorImageOptImGui;
+
+    // For Adam.
+    sgl::vk::BufferPtr firstMomentEstimateBuffer;
+    sgl::vk::BufferPtr secondMomentEstimateBuffer;
+
+    // Compute passes.
+    std::shared_ptr<TetMeshVolumeRenderer> tetMeshVolumeRendererGT;
+    std::shared_ptr<TetMeshVolumeRenderer> tetMeshVolumeRendererOpt;
+    std::shared_ptr<LossPass> lossPass;
+    std::shared_ptr<OptimizerPass> optimizerPassPositions;
+    std::shared_ptr<OptimizerPass> optimizerPassColors;
+};
 
 #endif //DIFFTETVR_OPTIMIZER_HPP
