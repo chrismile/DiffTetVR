@@ -219,6 +219,12 @@ vec4 frontToBackPQ(uint fragsCount) {
     vec4 colorRayOut = imageLoad(colorImageOpt, workIdx);
     vec4 dOut_dColorRayOut = imageLoad(adjointColors, workIdx);
 
+    /*if (isnan(dOut_dColorRayOut.x) || isnan(dOut_dColorRayOut.y) || isnan(dOut_dColorRayOut.z) || isnan(dOut_dColorRayOut.w)
+            || dOut_dColorRayOut.x != 0.0 || dOut_dColorRayOut.y != 0.0 || dOut_dColorRayOut.z != 0.0 || dOut_dColorRayOut.w != 0.0) {
+        debugPrintfEXT("n %i %i %f %f %f %f", workIdx.x, workIdx.y, dOut_dColorRayOut.x, dOut_dColorRayOut.y, dOut_dColorRayOut.z, dOut_dColorRayOut.w);
+        dOut_dColorRayOut = vec4(0.0);
+    }*/
+
     // Start with transparent Ray
     vec4 colorAcc;
     float A;
@@ -284,6 +290,12 @@ vec4 frontToBackPQ(uint fragsCount) {
             dOut_dColorRayOut.a = alphaNewAdjoint;
             colorRayOut = vec4(colorRayIn, alphaRayIn);
 
+            /*if (isnan(dOut_dColorRayOut.x) || isnan(dOut_dColorRayOut.y) || isnan(dOut_dColorRayOut.z) || isnan(dOut_dColorRayOut.w)
+                    || dOut_dColorRayOut.x != 0.0 || dOut_dColorRayOut.y != 0.0 || dOut_dColorRayOut.z != 0.0 || dOut_dColorRayOut.w != 0.0) {
+                debugPrintfEXT("a %i %f %f %f %f", s, dOut_dColorRayOut.x, dOut_dColorRayOut.y, dOut_dColorRayOut.z, dOut_dColorRayOut.w);
+                dOut_dColorRayOut = vec4(0.0);
+            }*/
+
             // Compute adjoint for the pre-accumulation colors and opacity.
             vec3 dOut_dc0;
             vec3 dOut_dc1;
@@ -297,6 +309,15 @@ vec4 frontToBackPQ(uint fragsCount) {
             // dc0_dcf0 = (1.0 - fbegin), dc1_dcf0 = (1.0 - fend), dc0_dcf1 = fbegin, dc1_dcf1 = fend.
             dOut_dcf0 += vec4((1.0 - fbegin) * dOut_dc0 + (1.0 - fend) * dOut_dc1, (1.0 - fmid) * dOut_da);
             dOut_dcf1 += vec4(fbegin * dOut_dc0 + fend * dOut_dc1, fmid * dOut_da);
+
+            /*if (isnan(dOut_dcf0.x) || isnan(dOut_dcf0.y) || isnan(dOut_dcf0.z) || isnan(dOut_dcf0.w) || dOut_dcf0.x != 0.0 || dOut_dcf0.y != 0.0 || dOut_dcf0.z != 0.0 || dOut_dcf0.w != 0.0) {
+                debugPrintfEXT("a %u %f %f %f %f", if00, dOut_dcf0.x, dOut_dcf0.y, dOut_dcf0.z, dOut_dcf0.w);
+                dOut_dcf0 = vec4(0.0);
+            }
+            if (isnan(dOut_dcf1.x) || isnan(dOut_dcf1.y) || isnan(dOut_dcf1.z) || isnan(dOut_dcf1.w) || dOut_dcf1.x != 0.0 || dOut_dcf1.y != 0.0 || dOut_dcf1.z != 0.0 || dOut_dcf1.w != 0.0) {
+                debugPrintfEXT("a %u %f %f %f %f", if00, dOut_dcf1.x, dOut_dcf1.y, dOut_dcf1.z, dOut_dcf1.w);
+                dOut_dcf1 = vec4(0.0);
+            }*/
         }
 
         vec3 dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12;
@@ -315,7 +336,7 @@ vec4 frontToBackPQ(uint fragsCount) {
                 dOut_dcf1, dOut_duf1, dOut_dvf1,
                 dOut_dpf10, dOut_dpf11, dOut_dpf12, dOut_dcf10, dOut_dcf11, dOut_dcf12);
 
-        if (isnan(dOut_dcf00.x) || isnan(dOut_dcf00.y) || isnan(dOut_dcf00.z) || isnan(dOut_dcf00.w) || dOut_dcf00.x != 0.0 || dOut_dcf00.y != 0.0 || dOut_dcf00.z != 0.0 || dOut_dcf00.w != 0.0) {
+        /*if (isnan(dOut_dcf00.x) || isnan(dOut_dcf00.y) || isnan(dOut_dcf00.z) || isnan(dOut_dcf00.w) || dOut_dcf00.x != 0.0 || dOut_dcf00.y != 0.0 || dOut_dcf00.z != 0.0 || dOut_dcf00.w != 0.0) {
             debugPrintfEXT("a %u %f %f %f %f", if00, dOut_dcf00.x, dOut_dcf00.y, dOut_dcf00.z, dOut_dcf00.w);
             dOut_dcf00 = vec4(0.0);
         }
@@ -363,7 +384,7 @@ vec4 frontToBackPQ(uint fragsCount) {
         if (isnan(dOut_dpf12.x) || isnan(dOut_dpf12.y) || isnan(dOut_dpf12.z) || dOut_dpf12.x != 0.0 || dOut_dpf12.y != 0.0 || dOut_dpf12.z != 0.0) {
             debugPrintfEXT("l %u %f %f %f", if12, dOut_dpf12.x, dOut_dpf12.y, dOut_dpf12.z);
             dOut_dpf12 = vec3(0.0);
-        }
+        }*/
 
         atomicAddGradCol(if00, dOut_dcf00);
         atomicAddGradCol(if01, dOut_dcf01);
