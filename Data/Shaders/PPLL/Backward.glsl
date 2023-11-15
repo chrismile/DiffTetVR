@@ -336,7 +336,7 @@ vec4 frontToBackPQ(uint fragsCount) {
                 dOut_dcf1, dOut_duf1, dOut_dvf1,
                 dOut_dpf10, dOut_dpf11, dOut_dpf12, dOut_dcf10, dOut_dcf11, dOut_dcf12);
 
-        /*if (isnan(dOut_dcf00.x) || isnan(dOut_dcf00.y) || isnan(dOut_dcf00.z) || isnan(dOut_dcf00.w) || dOut_dcf00.x != 0.0 || dOut_dcf00.y != 0.0 || dOut_dcf00.z != 0.0 || dOut_dcf00.w != 0.0) {
+        if (isnan(dOut_dcf00.x) || isnan(dOut_dcf00.y) || isnan(dOut_dcf00.z) || isnan(dOut_dcf00.w) || dOut_dcf00.x != 0.0 || dOut_dcf00.y != 0.0 || dOut_dcf00.z != 0.0 || dOut_dcf00.w != 0.0) {
             debugPrintfEXT("a %u %f %f %f %f", if00, dOut_dcf00.x, dOut_dcf00.y, dOut_dcf00.z, dOut_dcf00.w);
             dOut_dcf00 = vec4(0.0);
         }
@@ -384,7 +384,7 @@ vec4 frontToBackPQ(uint fragsCount) {
         if (isnan(dOut_dpf12.x) || isnan(dOut_dpf12.y) || isnan(dOut_dpf12.z) || dOut_dpf12.x != 0.0 || dOut_dpf12.y != 0.0 || dOut_dpf12.z != 0.0) {
             debugPrintfEXT("l %u %f %f %f", if12, dOut_dpf12.x, dOut_dpf12.y, dOut_dpf12.z);
             dOut_dpf12 = vec3(0.0);
-        }*/
+        }
 
         atomicAddGradCol(if00, dOut_dcf00);
         atomicAddGradCol(if01, dOut_dcf01);

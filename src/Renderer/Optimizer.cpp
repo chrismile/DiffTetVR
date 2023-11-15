@@ -251,7 +251,6 @@ void TetMeshOptimizer::startRequest() {
     camera->setRenderTarget(renderTarget, false);
     camera->onResolutionChanged({});
 
-    lossPass->setSettings(settings.lossType, settings.imageWidth, settings.imageHeight);
     optimizerPassPositions->setOptimizerType(settings.optimizerType);
     optimizerPassPositions->setSettings(
             settings.lossType, settings.optimizerSettingsPositions.learningRate,
@@ -262,6 +261,11 @@ void TetMeshOptimizer::startRequest() {
             settings.lossType, settings.optimizerSettingsColors.learningRate,
             settings.optimizerSettingsColors.beta1, settings.optimizerSettingsColors.beta2,
             settings.optimizerSettingsColors.epsilon);
+    lossPass->setSettings(settings.lossType, settings.imageWidth, settings.imageHeight);
+    lossPass->updateUniformBuffer();
+    renderer->insertMemoryBarrier(
+            VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
     if (viewportWidth != settings.imageWidth || viewportHeight != settings.imageHeight) {
         colorImageGT = {};
