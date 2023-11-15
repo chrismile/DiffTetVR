@@ -221,7 +221,7 @@ vec4 frontToBackPQ(uint fragsCount) {
 
     if (isnan(dOut_dColorRayOut.x) || isnan(dOut_dColorRayOut.y) || isnan(dOut_dColorRayOut.z) || isnan(dOut_dColorRayOut.w)
             || dOut_dColorRayOut.x != 0.0 || dOut_dColorRayOut.y != 0.0 || dOut_dColorRayOut.z != 0.0 || dOut_dColorRayOut.w != 0.0) {
-        debugPrintfEXT("n %i %i %f %f %f %f", workIdx.x, workIdx.y, dOut_dColorRayOut.x, dOut_dColorRayOut.y, dOut_dColorRayOut.z, dOut_dColorRayOut.w);
+        //debugPrintfEXT("n %i %i %f %f %f %f", workIdx.x, workIdx.y, dOut_dColorRayOut.x, dOut_dColorRayOut.y, dOut_dColorRayOut.z, dOut_dColorRayOut.w);
         dOut_dColorRayOut = vec4(0.0);
     }
 

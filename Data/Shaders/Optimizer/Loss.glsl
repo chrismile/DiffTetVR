@@ -30,6 +30,8 @@
 
 #version 450 core
 
+#extension GL_EXT_debug_printf : enable
+
 layout(local_size_x = BLOCK_SIZE_X, local_size_y = BLOCK_SIZE_Y) in;
 
 layout(binding = 0) uniform UniformBuffer {
@@ -47,7 +49,7 @@ void main() {
     }
     const float invN = 1.0 / float(imageWidth * imageHeight);
 
-    vec4 colorDiff = imageLoad(colorImageOpt, imageIdx) - imageLoad(colorImageOpt, imageIdx);
+    vec4 colorDiff = imageLoad(colorImageOpt, imageIdx) - imageLoad(colorImageGT, imageIdx);
 
     vec4 adjointColor;
 #if defined(L1_LOSS)
@@ -55,6 +57,14 @@ void main() {
 #elif defined(L2_LOSS)
     adjointColor = (invN * 2.0) * colorDiff;
 #endif
+
+    if (isnan(adjointColor.x) || isnan(adjointColor.y) || isnan(adjointColor.z) || isnan(adjointColor.w)
+            || adjointColor.x != 0.0 || adjointColor.y != 0.0 || adjointColor.z != 0.0 || adjointColor.w != 0.0) {
+        //debugPrintfEXT("w %i %i %f %f %f %f", imageIdx.x, imageIdx.y, adjointColor.x, adjointColor.y, adjointColor.z, adjointColor.w);
+        vec4 c = imageLoad(colorImageGT, imageIdx);
+        debugPrintfEXT("w %i %i %f %f %f %f", imageIdx.x, imageIdx.y, c.x, c.y, c.z, c.w);
+        adjointColor = vec4(0.0);
+    }
 
     imageStore(adjointColors, imageIdx, adjointColor);
 }
