@@ -155,10 +155,16 @@ void TetMesh::loadTestData(TestCase testCase) {
                 {0.8f, 0.8f, 0.8f, 0.4f},
                 {0.0f, 0.0f, 0.8f, 0.4f},
         };*/
-        std::vector<glm::vec4> _vertexColors = {
+        /*std::vector<glm::vec4> _vertexColors = {
                 {1.0f, 1.0f, 1.0f, 0.1f},
                 {1.0f, 1.0f, 1.0f, 0.1f},
                 {0.0f, 1.0f, 0.0f, 0.1f},
+                {1.0f, 1.0f, 1.0f, 0.8f},
+        };*/
+        std::vector<glm::vec4> _vertexColors = {
+                {1.0f, 1.0f, 1.0f, 0.1f},
+                {1.0f, 1.0f, 1.0f, 0.1f},
+                {1.0f, 1.0f, 1.0f, 0.1f},
                 {1.0f, 1.0f, 1.0f, 0.8f},
         };
         setTetMeshData(_cellIndices, _vertexPositions, _vertexColors);
