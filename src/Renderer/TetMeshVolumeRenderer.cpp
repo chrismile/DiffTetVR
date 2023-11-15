@@ -166,7 +166,10 @@ protected:
         preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
         if (renderer->getDevice()->getPhysicalDeviceShaderAtomicFloatFeatures().shaderBufferFloat32AtomicAdd) {
             preprocessorDefines.insert(std::make_pair("SUPPORT_BUFFER_FLOAT_ATOMIC_ADD", ""));
-            preprocessorDefines.insert(std::make_pair("__extensions", "GL_EXT_shader_atomic_float"));
+            preprocessorDefines.insert(std::make_pair(
+                    "__extensions", "GL_EXT_shader_atomic_float;GL_EXT_control_flow_attributes"));
+        } else {
+            preprocessorDefines.insert(std::make_pair("__extensions", "GL_EXT_control_flow_attributes"));
         }
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(shaderIds, preprocessorDefines);
