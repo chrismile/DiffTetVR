@@ -153,7 +153,7 @@ public:
     explicit AdjointRasterPass(TetMeshVolumeRenderer* volumeRenderer)
             : BlitRenderPass(volumeRenderer->getRenderer(), { "LinkedListResolve.Vertex", "LinkedListResolve.Fragment" }),
               volumeRenderer(volumeRenderer) {
-        this->setAttachmentLoadOp(VK_ATTACHMENT_LOAD_OP_CLEAR);
+        this->setAttachmentLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE);
     }
 
 protected:
@@ -203,7 +203,7 @@ TetMeshVolumeRenderer::TetMeshVolumeRenderer(sgl::vk::Renderer* renderer, sgl::C
 
     resolveRasterPass = std::make_shared<ResolveRasterPass>(this);
     resolveRasterPass->setOutputImageFinalLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    resolveRasterPass->setBlendMode(sgl::vk::BlendMode::BACK_TO_FRONT_STRAIGHT_ALPHA);
+    resolveRasterPass->setBlendMode(sgl::vk::BlendMode::BACK_TO_FRONT_PREMUL_ALPHA);
 
     clearRasterPass = std::make_shared<ClearRasterPass>(this);
     clearRasterPass->setColorWriteEnabled(false);

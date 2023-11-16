@@ -29,6 +29,7 @@
 #include <iostream>
 #include <random>
 #include <utility>
+#include <thread>
 
 #include <Math/Math.hpp>
 #include <Utils/File/Logfile.hpp>
@@ -130,6 +131,10 @@ void TetMeshOptimizer::renderGuiDialog() {
                 "Optimizer", (int*)&settings.optimizerType, OPTIMIZER_TYPE_NAMES, IM_ARRAYSIZE(OPTIMIZER_TYPE_NAMES));
         ImGui::Combo("Loss", (int*)&settings.lossType, LOSS_TYPE_NAMES, IM_ARRAYSIZE(LOSS_TYPE_NAMES));
         ImGui::SliderInt("Epochs", &settings.maxNumEpochs, 1, 1000);
+        if (showPreview) {
+            ImGui::SliderInt("Delay (ms)", &previewDelay, 0, 1000);
+        }
+        ImGui::SameLine();
         ImGui::Checkbox("Show Preview", &showPreview);
 
         const char* const PARAMETER_NAMES[] = { "Positions", "Colors" };
@@ -144,10 +149,13 @@ void TetMeshOptimizer::renderGuiDialog() {
                     i == 0 ? settings.optimizerSettingsPositions : settings.optimizerSettingsColors;
             std::string name = std::string() + "Optimizer Settings (" + PARAMETER_NAMES[i] + ")";
             if (ImGui::CollapsingHeader(name.c_str(), nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::SliderFloat("alpha", &optSettings.learningRate, 0.0f, 1.0f);
+                std::string alphaId = std::string("alpha##alpha-") + PARAMETER_NAMES[i];
+                ImGui::SliderFloat(alphaId.c_str(), &optSettings.learningRate, 0.0f, 1.0f);
                 if (settings.optimizerType == OptimizerType::ADAM) {
-                    ImGui::SliderFloat("beta1", &optSettings.beta1, 0.0f, 1.0f);
-                    ImGui::SliderFloat("beta2", &optSettings.beta2, 0.0f, 1.0f);
+                    std::string beta1Id = std::string("beta1##beta1-") + PARAMETER_NAMES[i];
+                    std::string beta2Id = std::string("beta2##beta2-") + PARAMETER_NAMES[i];
+                    ImGui::SliderFloat(beta1Id.c_str(), &optSettings.beta1, 0.0f, 1.0f);
+                    ImGui::SliderFloat(beta2Id.c_str(), &optSettings.beta2, 0.0f, 1.0f);
                 }
             }
         }
@@ -197,6 +205,9 @@ void TetMeshOptimizer::renderGuiDialog() {
             }
             hasResult = getHasResult();
             if (showPreview && settings.maxNumEpochs > 0) {
+                if (previewDelay > 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(int(previewDelay)));
+                }
                 renderer->insertImageMemoryBarriers(
                         std::vector<sgl::vk::ImagePtr>{ colorImageGT->getImage(), colorImageOpt->getImage() },
                         VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -255,12 +266,12 @@ void TetMeshOptimizer::startRequest() {
     optimizerPassPositions->setSettings(
             settings.lossType, settings.optimizerSettingsPositions.learningRate,
             settings.optimizerSettingsPositions.beta1, settings.optimizerSettingsPositions.beta2,
-            settings.optimizerSettingsPositions.epsilon);
+            settings.optimizerSettingsPositions.epsilon, false);
     optimizerPassColors->setOptimizerType(settings.optimizerType);
     optimizerPassColors->setSettings(
             settings.lossType, settings.optimizerSettingsColors.learningRate,
             settings.optimizerSettingsColors.beta1, settings.optimizerSettingsColors.beta2,
-            settings.optimizerSettingsColors.epsilon);
+            settings.optimizerSettingsColors.epsilon, true);
     lossPass->setSettings(settings.lossType, settings.imageWidth, settings.imageHeight);
     lossPass->updateUniformBuffer();
     renderer->insertMemoryBarrier(

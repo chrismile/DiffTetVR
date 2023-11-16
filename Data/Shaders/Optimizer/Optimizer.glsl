@@ -61,7 +61,16 @@ void main() {
     }
 
     // Update the parameters.
-    parameters[globalThreadIdx] -= alpha * g[globalThreadIdx];
+    //parameters[globalThreadIdx] -= alpha * g[globalThreadIdx];
+    float newVal = parameters[globalThreadIdx] - alpha * g[globalThreadIdx];
+#ifdef COLOR_OPTIMIZATION
+    if (globalThreadIdx % 4u == 3u) {
+        newVal = max(newVal, 0.0);
+    } else {
+        newVal = clamp(newVal, 0.0, 1.0);
+    }
+#endif
+    parameters[globalThreadIdx] = newVal;
 }
 
 
@@ -125,5 +134,18 @@ void main() {
     float vht = vt / (1.0 - pow(beta2, t));
 
     // Update the parameters.
-    parameters[globalThreadIdx] -= alpha * mht / (sqrt(vht) + epsilon);
+    //parameters[globalThreadIdx] -= alpha * mht / (sqrt(vht) + epsilon);
+    float newVal = parameters[globalThreadIdx] - alpha * mht / (sqrt(vht) + epsilon);
+#ifdef COLOR_OPTIMIZATION
+    if (globalThreadIdx % 4u == 3u) {
+        newVal = max(newVal, 0.0);
+    } else {
+        newVal = clamp(newVal, 0.0, 1.0);
+    }
+#else
+    //if (globalThreadIdx != 7u) {
+    //    newVal = parameters[globalThreadIdx];
+    //}
+#endif
+    parameters[globalThreadIdx] = newVal;
 }

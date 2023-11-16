@@ -40,7 +40,7 @@ public:
     void setBuffers(
             const sgl::vk::BufferPtr& _tfOptBuffer,
             const sgl::vk::BufferPtr& _tfOptGradientBuffer);
-    void setSettings(LossType _lossType, float alpha, float beta1, float beta2, float epsilon);
+    void setSettings(LossType _lossType, float alpha, float beta1, float beta2, float epsilon, bool _isColor);
     void setEpochIndex(int epochIdx);
 
 protected:
@@ -61,6 +61,7 @@ private:
     float t = 1.0f; ///< Time step.
     UniformData uniformData{};
     sgl::vk::BufferPtr uniformBuffer;
+    bool isColor = false;
 
     sgl::vk::BufferPtr parametersBuffer, parametersGradientBuffer;
     sgl::vk::BufferPtr firstMomentEstimateBuffer, secondMomentEstimateBuffer;

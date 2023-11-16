@@ -110,6 +110,7 @@ private:
     sgl::vk::BufferPtr startOffsetBuffer;
     sgl::vk::BufferPtr fragmentCounterBuffer;
 
+    int previewDelay = 0;
     bool showPreview = true;
     std::shared_ptr<ImGuiVulkanImage> colorImageGTImGui, colorImageOptImGui;
 

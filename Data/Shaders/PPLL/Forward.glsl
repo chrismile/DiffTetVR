@@ -99,7 +99,7 @@ void getNextFragment(in uint i, in uint fragsCount, out vec4 color, out float de
     // Barycentric interpolation.
     vec3 d20 = p2 - p0;
     vec3 d21 = p2 - p1;
-    float totalArea = length(cross(d20, d21));
+    float totalArea = max(length(cross(d20, d21)), 1e-5);
     float u = length(cross(d21, fragmentPositionWorld - p1)) / totalArea;
     float v = length(cross(fragmentPositionWorld - p0, d20)) / totalArea;
     const vec3 barycentricCoordinates = vec3(u, v, 1.0 - u - v);
@@ -143,10 +143,11 @@ vec4 frontToBackPQ(uint fragsCount) {
 
 #ifdef USE_SUBDIVS
         tSeg = t / float(NUM_SUBDIVS);
+        const float INV_N_SUB = 1.0 / float(NUM_SUBDIVS);
         for (int s = 0; s < NUM_SUBDIVS; s++) {
-            float fbegin = (float(s)) * tSeg / t;
-            float fmid = (float(s) + 0.5) * tSeg / t;
-            float fend = (float(s) + 1.0) * tSeg / t;
+            float fbegin = (float(s)) * INV_N_SUB;
+            float fmid = (float(s) + 0.5) * INV_N_SUB;
+            float fend = (float(s) + 1.0) * INV_N_SUB;
             vec3 c0 = mix(fragment1Color.rgb, fragment2Color.rgb, fbegin);
             vec3 c1 = mix(fragment1Color.rgb, fragment2Color.rgb, fend);
             float alpha = mix(fragment1Color.a, fragment2Color.a, fmid);
@@ -156,13 +157,13 @@ vec4 frontToBackPQ(uint fragsCount) {
         }
 #else
         currentColor = accumulateLinear(
-        t, fragment1Color.rgb, fragment2Color.rgb,
-        fragment1Color.a * attenuationCoefficient, fragment2Color.a * attenuationCoefficient);
+                t, fragment1Color.rgb, fragment2Color.rgb,
+                fragment1Color.a * attenuationCoefficient, fragment2Color.a * attenuationCoefficient);
         rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
         rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
 #endif
     }
 
-    rayColor.rgb = rayColor.rgb / rayColor.a; // Correct rgb with alpha
+    //rayColor.rgb = rayColor.rgb / rayColor.a; // Correct rgb with alpha
     return rayColor;
 }

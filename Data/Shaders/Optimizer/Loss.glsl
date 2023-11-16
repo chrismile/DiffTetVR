@@ -58,13 +58,18 @@ void main() {
     adjointColor = (invN * 2.0) * colorDiff;
 #endif
 
-    if (isnan(adjointColor.x) || isnan(adjointColor.y) || isnan(adjointColor.z) || isnan(adjointColor.w)
-            || adjointColor.x != 0.0 || adjointColor.y != 0.0 || adjointColor.z != 0.0 || adjointColor.w != 0.0) {
+    /*if (isnan(adjointColor.x) || isnan(adjointColor.y) || isnan(adjointColor.z) || isnan(adjointColor.w)
+            //|| adjointColor.x != 0.0 || adjointColor.y != 0.0 || adjointColor.z != 0.0 || adjointColor.w != 0.0
+    ) {
         //debugPrintfEXT("w %i %i %f %f %f %f", imageIdx.x, imageIdx.y, adjointColor.x, adjointColor.y, adjointColor.z, adjointColor.w);
-        vec4 c = imageLoad(colorImageGT, imageIdx);
+        vec4 c = colorDiff;
+        vec4 c1 = imageLoad(colorImageOpt, imageIdx);
+        vec4 c2 = imageLoad(colorImageGT, imageIdx);
         debugPrintfEXT("w %i %i %f %f %f %f", imageIdx.x, imageIdx.y, c.x, c.y, c.z, c.w);
+        debugPrintfEXT("w %i %i %f %f %f %f", imageIdx.x, imageIdx.y, c1.x, c1.y, c1.z, c1.w);
+        debugPrintfEXT("w %i %i %f %f %f %f", imageIdx.x, imageIdx.y, c2.x, c2.y, c2.z, c2.w);
         adjointColor = vec4(0.0);
-    }
+    }*/
 
     imageStore(adjointColors, imageIdx, adjointColor);
 }

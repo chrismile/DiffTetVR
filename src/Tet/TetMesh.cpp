@@ -137,12 +137,19 @@ void TetMesh::uploadDataToDevice() {
 void TetMesh::loadTestData(TestCase testCase) {
     if (testCase == TestCase::SINGLE_TETRAHEDRON) {
         std::vector<uint32_t> _cellIndices = { 0, 1, 2, 3 };
-        std::vector<glm::vec3> _vertexPositions = {
+        /*std::vector<glm::vec3> _vertexPositions = {
                 {-0.1f, -0.1f,  0.1f},
                 { 0.1f, -0.1f,  0.1f},
                 { 0.0f,  0.1f,  0.0f},
                 { 0.1f, -0.1f, -0.1f},
+        };*/
+        std::vector<glm::vec3> _vertexPositions = {
+                {-0.1f, -0.1f,  0.1f},
+                { 0.1f, -0.1f,  0.1f},
+                { 0.0f,  0.3f,  0.0f},
+                { 0.1f, -0.1f, -0.1f},
         };
+
         /*std::vector<glm::vec4> _vertexColors = {
                 {0.8f, 0.0f, 0.0f, 0.2f},
                 {0.0f, 0.8f, 0.0f, 0.4f},
@@ -155,18 +162,20 @@ void TetMesh::loadTestData(TestCase testCase) {
                 {0.8f, 0.8f, 0.8f, 0.4f},
                 {0.0f, 0.0f, 0.8f, 0.4f},
         };*/
-        /*std::vector<glm::vec4> _vertexColors = {
+        // GW.
+        std::vector<glm::vec4> _vertexColors = {
                 {1.0f, 1.0f, 1.0f, 0.1f},
                 {1.0f, 1.0f, 1.0f, 0.1f},
                 {0.0f, 1.0f, 0.0f, 0.1f},
                 {1.0f, 1.0f, 1.0f, 0.8f},
-        };*/
-        std::vector<glm::vec4> _vertexColors = {
+        };
+        // BW.
+        /*std::vector<glm::vec4> _vertexColors = {
                 {1.0f, 1.0f, 1.0f, 0.1f},
                 {1.0f, 1.0f, 1.0f, 0.1f},
                 {1.0f, 1.0f, 1.0f, 0.1f},
                 {1.0f, 1.0f, 1.0f, 0.8f},
-        };
+        };*/
         setTetMeshData(_cellIndices, _vertexPositions, _vertexColors);
     }
 }

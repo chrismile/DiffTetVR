@@ -107,7 +107,7 @@ void getNextFragment(
     // Barycentric interpolation.
     vec3 d20 = p2 - p0;
     vec3 d21 = p2 - p1;
-    float totalArea = length(cross(d20, d21));
+    float totalArea = max(length(cross(d20, d21)), 1e-5);
     u = length(cross(d21, p - p1)) / totalArea;
     v = length(cross(p - p0, d20)) / totalArea;
     const vec3 barycentricCoordinates = vec3(u, v, 1.0 - u - v);
@@ -123,28 +123,30 @@ void segmentLengthAdjoint(
         float dOut_dt, out float dOut_duf0, out float dOut_dvf0, out float dOut_duf1, out float dOut_dvf1,
         out vec3 dOut_dpf00, out vec3 dOut_dpf01, out vec3 dOut_dpf02,
         out vec3 dOut_dpf10, out vec3 dOut_dpf11, out vec3 dOut_dpf12) {
-    float dt_duf0 = ((pf00.x - pf02.x) * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + (pf00.y - pf02.y) * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0))))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dvf0 = ((pf01.x - pf02.x) * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + (pf01.y - pf02.y) * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0))))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_duf1 = ((-(pf10.x - pf12.x) * (uf0 * pf00.x + ((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x)) - (pf10.y - pf12.y) * (uf0 * pf00.y + ((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y))) - (pf10.z - pf12.z) * (uf0 * pf00.z + ((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dvf1 = ((-(pf11.x - pf12.x) * (uf0 * pf00.x + ((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x)) - (pf11.y - pf12.y) * (uf0 * pf00.y + ((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y))) - (pf11.z - pf12.z) * (uf0 * pf00.z + ((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf00x = uf0 * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf00y = uf0 * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf00z = uf0 * (uf0 * pf00.z + (((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z) - pf02.z * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf01x = vf0 * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf01y = vf0 * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf01z = vf0 * (uf0 * pf00.z + (((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z) - pf02.z * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf02x = -(uf0 + (vf0 - 1.0)) * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf02y = -(uf0 + (vf0 - 1.0)) * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf02z = -(uf0 + (vf0 - 1.0)) * (uf0 * pf00.z + (((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z) - pf02.z * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf10x = -uf1 * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf10y = -uf1 * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf10z = -uf1 * (uf0 * pf00.z + (((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z) - pf02.z * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf11x = -vf1 * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf11y = -vf1 * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf11z = -vf1 * (uf0 * pf00.z + (((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z) - pf02.z * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf12x = (uf1 + (vf1 - 1.0)) * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf12y = (uf1 + (vf1 - 1.0)) * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
-    float dt_dpf12z = (uf1 + (vf1 - 1.0)) * (uf0 * pf00.z + (((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z) - pf02.z * (uf0 + (vf0 - 1.0)))) / sqrt(pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))));
+    float denomSq = pow2(uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + pow2(uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0))));
+    float invDenom = 1.0 / sqrt(max(denomSq, 1e-5));
+    float dt_duf0 = ((pf00.x - pf02.x) * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + (pf00.y - pf02.y) * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0))))) * invDenom;
+    float dt_dvf0 = ((pf01.x - pf02.x) * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) + (pf01.y - pf02.y) * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0))))) * invDenom;
+    float dt_duf1 = ((-(pf10.x - pf12.x) * (uf0 * pf00.x + ((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x)) - (pf10.y - pf12.y) * (uf0 * pf00.y + ((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y))) - (pf10.z - pf12.z) * (uf0 * pf00.z + ((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z))) * invDenom;
+    float dt_dvf1 = ((-(pf11.x - pf12.x) * (uf0 * pf00.x + ((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x)) - (pf11.y - pf12.y) * (uf0 * pf00.y + ((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y))) - (pf11.z - pf12.z) * (uf0 * pf00.z + ((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z))) * invDenom;
+    float dt_dpf00x = uf0 * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf00y = uf0 * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf00z = uf0 * (uf0 * pf00.z + (((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z) - pf02.z * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf01x = vf0 * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf01y = vf0 * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf01z = vf0 * (uf0 * pf00.z + (((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z) - pf02.z * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf02x = -(uf0 + (vf0 - 1.0)) * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf02y = -(uf0 + (vf0 - 1.0)) * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf02z = -(uf0 + (vf0 - 1.0)) * (uf0 * pf00.z + (((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z) - pf02.z * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf10x = -uf1 * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf10y = -uf1 * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf10z = -uf1 * (uf0 * pf00.z + (((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z) - pf02.z * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf11x = -vf1 * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf11y = -vf1 * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf11z = -vf1 * (uf0 * pf00.z + (((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z) - pf02.z * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf12x = (uf1 + (vf1 - 1.0)) * (uf0 * pf00.x + (((vf0 * pf01.x - uf1 * pf10.x) - vf1 * pf11.x) - pf02.x * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf12y = (uf1 + (vf1 - 1.0)) * (uf0 * pf00.y + (((vf0 * pf01.y - uf1 * pf10.y) - vf1 * pf11.y) - pf02.y * (uf0 + (vf0 - 1.0)))) * invDenom;
+    float dt_dpf12z = (uf1 + (vf1 - 1.0)) * (uf0 * pf00.z + (((vf0 * pf01.z - uf1 * pf10.z) - vf1 * pf11.z) - pf02.z * (uf0 + (vf0 - 1.0)))) * invDenom;
 
     dOut_duf0 = dOut_dt * dt_duf0;
     dOut_dvf0 = dOut_dt * dt_dvf0;
@@ -163,24 +165,27 @@ void baryAdjoint(
         vec4 dOut_dc, float dOut_du, float dOut_dv, // forwarded from segmentLengthAdjoint
         inout vec3 dOut_dp0, inout vec3 dOut_dp1, inout vec3 dOut_dp2,
         out vec4 dOut_dc0, out vec4 dOut_dc1, out vec4 dOut_dc2) {
-    float du_dp0x = (-(p1.y - p2.y) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) + (p1.z - p2.z) * (-(p0.x - p2.x) * (p1.z - p2.z) + (p0.z - p2.z) * (p1.x - p2.x))) * sqrt(pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)))) / pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float du_dp0y = ((p1.x - p2.x) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) - (p1.z - p2.z) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * sqrt(pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)))) / pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float du_dp0z = (-(p1.x - p2.x) * (-(p0.x - p2.x) * (p1.z - p2.z) + (p0.z - p2.z) * (p1.x - p2.x)) + (p1.y - p2.y) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * sqrt(pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)))) / pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float du_dp1x = (-((p.y - p2.y) * ((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x)) + (p.z - p2.z) * ((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p0.y - p2.y) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) + (p0.z - p2.z) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))) * (pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))))) / sqrt(pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)))) * pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float du_dp1y = (((p.x - p2.x) * ((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x)) - (p.z - p2.z) * ((p.y - p1.y) * (p1.z - p2.z) - (p.z - p1.z) * (p1.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) - ((p0.x - p2.x) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) - (p0.z - p2.z) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))))) / sqrt(pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)))) * pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float du_dp1z = (((p.x - p2.x) * ((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)) + (p.y - p2.y) * ((p.y - p1.y) * (p1.z - p2.z) - (p.z - p1.z) * (p1.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) - ((p0.x - p2.x) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)) + (p0.y - p2.y) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))))) / sqrt(pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)))) * pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float du_dp2x = (((p.y - p1.y) * ((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x)) + (p.z - p1.z) * ((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) - ((p0.y - p1.y) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) + (p0.z - p1.z) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))) * (pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))))) / sqrt(pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)))) * pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float du_dp2y = ((-(p.x - p1.x) * ((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x)) + (p.z - p1.z) * ((p.y - p1.y) * (p1.z - p2.z) - (p.z - p1.z) * (p1.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p0.x - p1.x) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) - (p0.z - p1.z) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))))) / sqrt(pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)))) * pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float du_dp2z = (-((p.x - p1.x) * ((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)) + (p.y - p1.y) * ((p.y - p1.y) * (p1.z - p2.z) - (p.z - p1.z) * (p1.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p0.x - p1.x) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)) + (p0.y - p1.y) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))))) / sqrt(pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)))) * pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float dv_dp0x = ((-(p.y - p2.y) * ((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x)) - (p.z - p2.z) * ((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) - ((p1.y - p2.y) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) + (p1.z - p2.z) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))) * (pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))))) / sqrt(pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)))) * pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float dv_dp0y = (((p.x - p2.x) * ((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x)) - (p.z - p2.z) * ((p.y - p0.y) * (p0.z - p2.z) - (p.z - p0.z) * (p0.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p1.x - p2.x) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) - (p1.z - p2.z) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))))) / sqrt(pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)))) * pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float dv_dp0z = (((p.x - p2.x) * ((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)) + (p.y - p2.y) * ((p.y - p0.y) * (p0.z - p2.z) - (p.z - p0.z) * (p0.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p1.x - p2.x) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)) + (p1.y - p2.y) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))))) / sqrt(pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)))) * pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float dv_dp1x = ((p0.y - p2.y) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) - (p0.z - p2.z) * (-(p0.x - p2.x) * (p1.z - p2.z) + (p0.z - p2.z) * (p1.x - p2.x))) * sqrt(pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)))) / pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float dv_dp1y = (-(p0.x - p2.x) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) + (p0.z - p2.z) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * sqrt(pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)))) / pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float dv_dp1z = ((p0.x - p2.x) * (-(p0.x - p2.x) * (p1.z - p2.z) + (p0.z - p2.z) * (p1.x - p2.x)) - (p0.y - p2.y) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * sqrt(pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)))) / pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float dv_dp2x = (((p.y - p0.y) * ((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x)) + (p.z - p0.z) * ((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) - ((p0.y - p1.y) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) + (p0.z - p1.z) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))) * (pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))))) / sqrt(pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)))) * pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float dv_dp2y = ((-(p.x - p0.x) * ((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x)) + (p.z - p0.z) * ((p.y - p0.y) * (p0.z - p2.z) - (p.z - p0.z) * (p0.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p0.x - p1.x) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) - (p0.z - p1.z) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))))) / sqrt(pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)))) * pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
-    float dv_dp2z = (-((p.x - p0.x) * ((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)) + (p.y - p0.y) * ((p.y - p0.y) * (p0.z - p2.z) - (p.z - p0.z) * (p0.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p0.x - p1.x) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)) + (p0.y - p1.y) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))))) / sqrt(pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)))) * pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0);
+    float denom0 = max(pow(pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))), 3.0 / 2.0), 1e-5);
+    float denom1 = max(sqrt(pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)))), 1e-5);
+    float denom2 = max(sqrt(pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)))), 1e-5);
+    float du_dp0x = (-(p1.y - p2.y) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) + (p1.z - p2.z) * (-(p0.x - p2.x) * (p1.z - p2.z) + (p0.z - p2.z) * (p1.x - p2.x))) * denom1 / denom0;
+    float du_dp0y = ((p1.x - p2.x) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) - (p1.z - p2.z) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * denom1 / denom0;
+    float du_dp0z = (-(p1.x - p2.x) * (-(p0.x - p2.x) * (p1.z - p2.z) + (p0.z - p2.z) * (p1.x - p2.x)) + (p1.y - p2.y) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * denom1 / denom0;
+    float du_dp1x = (-((p.y - p2.y) * ((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x)) + (p.z - p2.z) * ((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p0.y - p2.y) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) + (p0.z - p2.z) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))) * (pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))))) / denom1 * denom0;
+    float du_dp1y = (((p.x - p2.x) * ((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x)) - (p.z - p2.z) * ((p.y - p1.y) * (p1.z - p2.z) - (p.z - p1.z) * (p1.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) - ((p0.x - p2.x) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) - (p0.z - p2.z) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))))) / denom1 * denom0;
+    float du_dp1z = (((p.x - p2.x) * ((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)) + (p.y - p2.y) * ((p.y - p1.y) * (p1.z - p2.z) - (p.z - p1.z) * (p1.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) - ((p0.x - p2.x) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)) + (p0.y - p2.y) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))))) / denom1 * denom0;
+    float du_dp2x = (((p.y - p1.y) * ((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x)) + (p.z - p1.z) * ((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) - ((p0.y - p1.y) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) + (p0.z - p1.z) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))) * (pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))))) / denom1 * denom0;
+    float du_dp2y = ((-(p.x - p1.x) * ((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x)) + (p.z - p1.z) * ((p.y - p1.y) * (p1.z - p2.z) - (p.z - p1.z) * (p1.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p0.x - p1.x) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) - (p0.z - p1.z) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))))) / denom1 * denom0;
+    float du_dp2z = (-((p.x - p1.x) * ((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x)) + (p.y - p1.y) * ((p.y - p1.y) * (p1.z - p2.z) - (p.z - p1.z) * (p1.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p0.x - p1.x) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)) + (p0.y - p1.y) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p1.x) * (p1.y - p2.y) - (p.y - p1.y) * (p1.x - p2.x))) + pow2(((p.x - p1.x) * (p1.z - p2.z) - (p.z - p1.z) * (p1.x - p2.x))))) / denom1 * denom0;
+    float dv_dp0x = ((-(p.y - p2.y) * ((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x)) - (p.z - p2.z) * ((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) - ((p1.y - p2.y) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) + (p1.z - p2.z) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))) * (pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))))) / denom2 * denom0;
+    float dv_dp0y = (((p.x - p2.x) * ((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x)) - (p.z - p2.z) * ((p.y - p0.y) * (p0.z - p2.z) - (p.z - p0.z) * (p0.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p1.x - p2.x) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) - (p1.z - p2.z) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))))) / denom2 * denom0;
+    float dv_dp0z = (((p.x - p2.x) * ((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)) + (p.y - p2.y) * ((p.y - p0.y) * (p0.z - p2.z) - (p.z - p0.z) * (p0.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p1.x - p2.x) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)) + (p1.y - p2.y) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))))) / denom2 * denom0;
+    float dv_dp1x = ((p0.y - p2.y) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) - (p0.z - p2.z) * (-(p0.x - p2.x) * (p1.z - p2.z) + (p0.z - p2.z) * (p1.x - p2.x))) * denom2 / denom0;
+    float dv_dp1y = (-(p0.x - p2.x) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) + (p0.z - p2.z) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * denom2 / denom0;
+    float dv_dp1z = ((p0.x - p2.x) * (-(p0.x - p2.x) * (p1.z - p2.z) + (p0.z - p2.z) * (p1.x - p2.x)) - (p0.y - p2.y) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * denom2 / denom0;
+    float dv_dp2x = (((p.y - p0.y) * ((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x)) + (p.z - p0.z) * ((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) - ((p0.y - p1.y) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) + (p0.z - p1.z) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x))) * (pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))))) / denom2 * denom0;
+    float dv_dp2y = ((-(p.x - p0.x) * ((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x)) + (p.z - p0.z) * ((p.y - p0.y) * (p0.z - p2.z) - (p.z - p0.z) * (p0.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p0.x - p1.x) * ((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x)) - (p0.z - p1.z) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))))) / denom2 * denom0;
+    float dv_dp2z = (-((p.x - p0.x) * ((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x)) + (p.y - p0.y) * ((p.y - p0.y) * (p0.z - p2.z) - (p.z - p0.z) * (p0.y - p2.y))) * (pow2(((p0.x - p2.x) * (p1.y - p2.y) - (p0.y - p2.y) * (p1.x - p2.x))) + pow2(((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)))) + ((p0.x - p1.x) * ((p0.x - p2.x) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.x - p2.x)) + (p0.y - p1.y) * ((p0.y - p2.y) * (p1.z - p2.z) - (p0.z - p2.z) * (p1.y - p2.y))) * (pow2(((p.x - p0.x) * (p0.y - p2.y) - (p.y - p0.y) * (p0.x - p2.x))) + pow2(((p.x - p0.x) * (p0.z - p2.z) - (p.z - p0.z) * (p0.x - p2.x))))) / denom2 * denom0;
 
     // c = u * c0 + v * c1 + (1 - u - v) * c2;
     // p = u * p0 + v * p1 + (1 - u - v) * p2;
@@ -189,9 +194,9 @@ void baryAdjoint(
     dOut_dc0 = dOut_dc * u /* dc_c0 */;
     dOut_dc1 = dOut_dc * v /* dc_c1 */;
     dOut_dc2 = dOut_dc * (1.0 - u - v) /* dc_c2 */;
-    dOut_dp0 = dOut_du * vec3(du_dp0x, du_dp0y, du_dp0z) + dOut_dv * vec3(dv_dp0x, dv_dp0y, dv_dp0z);
-    dOut_dp1 = dOut_du * vec3(du_dp1x, du_dp1y, du_dp1z) + dOut_dv * vec3(dv_dp1x, dv_dp1y, dv_dp1z);
-    dOut_dp2 = dOut_du * vec3(du_dp2x, du_dp2y, du_dp2z) + dOut_dv * vec3(dv_dp2x, dv_dp2y, dv_dp2z);
+    dOut_dp0 += dOut_du * vec3(du_dp0x, du_dp0y, du_dp0z) + dOut_dv * vec3(dv_dp0x, dv_dp0y, dv_dp0z);
+    dOut_dp1 += dOut_du * vec3(du_dp1x, du_dp1y, du_dp1z) + dOut_dv * vec3(dv_dp1x, dv_dp1y, dv_dp1z);
+    dOut_dp2 += dOut_du * vec3(du_dp2x, du_dp2y, du_dp2z) + dOut_dv * vec3(dv_dp2x, dv_dp2y, dv_dp2z);
 }
 
 vec4 frontToBackPQ(uint fragsCount) {
@@ -219,11 +224,12 @@ vec4 frontToBackPQ(uint fragsCount) {
     vec4 colorRayOut = imageLoad(colorImageOpt, workIdx);
     vec4 dOut_dColorRayOut = imageLoad(adjointColors, workIdx);
 
-    if (isnan(dOut_dColorRayOut.x) || isnan(dOut_dColorRayOut.y) || isnan(dOut_dColorRayOut.z) || isnan(dOut_dColorRayOut.w)
-            || dOut_dColorRayOut.x != 0.0 || dOut_dColorRayOut.y != 0.0 || dOut_dColorRayOut.z != 0.0 || dOut_dColorRayOut.w != 0.0) {
-        //debugPrintfEXT("n %i %i %f %f %f %f", workIdx.x, workIdx.y, dOut_dColorRayOut.x, dOut_dColorRayOut.y, dOut_dColorRayOut.z, dOut_dColorRayOut.w);
+    /*if (isnan(dOut_dColorRayOut.x) || isnan(dOut_dColorRayOut.y) || isnan(dOut_dColorRayOut.z) || isnan(dOut_dColorRayOut.w)
+            //|| dOut_dColorRayOut.x != 0.0 || dOut_dColorRayOut.y != 0.0 || dOut_dColorRayOut.z != 0.0 || dOut_dColorRayOut.w != 0.0
+    ) {
+        debugPrintfEXT("n %i %i %f %f %f %f", workIdx.x, workIdx.y, dOut_dColorRayOut.x, dOut_dColorRayOut.y, dOut_dColorRayOut.z, dOut_dColorRayOut.w);
         dOut_dColorRayOut = vec4(0.0);
-    }
+    }*/
 
     // Start with transparent Ray
     vec4 colorAcc;
@@ -290,18 +296,19 @@ vec4 frontToBackPQ(uint fragsCount) {
             dOut_dColorRayOut.a = alphaNewAdjoint;
             colorRayOut = vec4(colorRayIn, alphaRayIn);
 
-            if (isnan(dOut_dColorRayOut.x) || isnan(dOut_dColorRayOut.y) || isnan(dOut_dColorRayOut.z) || isnan(dOut_dColorRayOut.w)
-                    || dOut_dColorRayOut.x != 0.0 || dOut_dColorRayOut.y != 0.0 || dOut_dColorRayOut.z != 0.0 || dOut_dColorRayOut.w != 0.0) {
+            /*if (isnan(dOut_dColorRayOut.x) || isnan(dOut_dColorRayOut.y) || isnan(dOut_dColorRayOut.z) || isnan(dOut_dColorRayOut.w)
+                    //|| dOut_dColorRayOut.x != 0.0 || dOut_dColorRayOut.y != 0.0 || dOut_dColorRayOut.z != 0.0 || dOut_dColorRayOut.w != 0.0
+            ) {
                 debugPrintfEXT("k %i %f %f %f %f", s, dOut_dColorRayOut.x, dOut_dColorRayOut.y, dOut_dColorRayOut.z, dOut_dColorRayOut.w);
                 dOut_dColorRayOut = vec4(0.0);
-            }
+            }*/
 
             // Compute adjoint for the pre-accumulation colors and opacity.
             vec3 dOut_dc0;
             vec3 dOut_dc1;
             float dOut_da;
             accumulateLinearConstAdjoint(
-                    tSeg, INV_N_SUB,  c0, c1, alpha * attenuationCoefficient, A, dOut_dColorAcc,
+                    tSeg, INV_N_SUB, c0, c1, alpha * attenuationCoefficient, A, dOut_dColorAcc,
                     dOut_dt, dOut_dc0, dOut_dc1, dOut_da);
             dOut_da *= attenuationCoefficient;
 
@@ -310,14 +317,18 @@ vec4 frontToBackPQ(uint fragsCount) {
             dOut_dcf0 += vec4((1.0 - fbegin) * dOut_dc0 + (1.0 - fend) * dOut_dc1, (1.0 - fmid) * dOut_da);
             dOut_dcf1 += vec4(fbegin * dOut_dc0 + fend * dOut_dc1, fmid * dOut_da);
 
-            if (isnan(dOut_dcf0.x) || isnan(dOut_dcf0.y) || isnan(dOut_dcf0.z) || isnan(dOut_dcf0.w) || dOut_dcf0.x != 0.0 || dOut_dcf0.y != 0.0 || dOut_dcf0.z != 0.0 || dOut_dcf0.w != 0.0) {
+            /*if (isnan(dOut_dcf0.x) || isnan(dOut_dcf0.y) || isnan(dOut_dcf0.z) || isnan(dOut_dcf0.w)
+                    //|| dOut_dcf0.x != 0.0 || dOut_dcf0.y != 0.0 || dOut_dcf0.z != 0.0 || dOut_dcf0.w != 0.0
+            ) {
                 debugPrintfEXT("p %u %f %f %f %f", if00, dOut_dcf0.x, dOut_dcf0.y, dOut_dcf0.z, dOut_dcf0.w);
                 dOut_dcf0 = vec4(0.0);
             }
-            if (isnan(dOut_dcf1.x) || isnan(dOut_dcf1.y) || isnan(dOut_dcf1.z) || isnan(dOut_dcf1.w) || dOut_dcf1.x != 0.0 || dOut_dcf1.y != 0.0 || dOut_dcf1.z != 0.0 || dOut_dcf1.w != 0.0) {
+            if (isnan(dOut_dcf1.x) || isnan(dOut_dcf1.y) || isnan(dOut_dcf1.z) || isnan(dOut_dcf1.w)
+                    //|| dOut_dcf1.x != 0.0 || dOut_dcf1.y != 0.0 || dOut_dcf1.z != 0.0 || dOut_dcf1.w != 0.0
+            ) {
                 debugPrintfEXT("q %u %f %f %f %f", if00, dOut_dcf1.x, dOut_dcf1.y, dOut_dcf1.z, dOut_dcf1.w);
                 dOut_dcf1 = vec4(0.0);
-            }
+            }*/
         }
 
         vec3 dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12;
@@ -327,6 +338,9 @@ vec4 frontToBackPQ(uint fragsCount) {
                 pf00, pf01, pf02, pf00, pf01, pf02, uf0, vf0, uf1, vf1, dOut_dt,
                 dOut_duf0, dOut_dvf0, dOut_duf1, dOut_dvf1,
                 dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12);
+        /*vec3 dOut_dpf00 = vec3(0.0), dOut_dpf01 = vec3(0.0), dOut_dpf02 = vec3(0.0), dOut_dpf10 = vec3(0.0), dOut_dpf11 = vec3(0.0), dOut_dpf12 = vec3(0.0);
+        vec4 dOut_dcf00, dOut_dcf01, dOut_dcf02, dOut_dcf10, dOut_dcf11, dOut_dcf12;
+        float dOut_duf0 = 0.0, dOut_dvf0 = 0.0, dOut_duf1 = 0.0, dOut_dvf1 = 0.0;*/
         baryAdjoint(
                 pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0,
                 dOut_dcf0, dOut_duf0, dOut_dvf0,
@@ -336,57 +350,81 @@ vec4 frontToBackPQ(uint fragsCount) {
                 dOut_dcf1, dOut_duf1, dOut_dvf1,
                 dOut_dpf10, dOut_dpf11, dOut_dpf12, dOut_dcf10, dOut_dcf11, dOut_dcf12);
 
-        if (isnan(dOut_dcf00.x) || isnan(dOut_dcf00.y) || isnan(dOut_dcf00.z) || isnan(dOut_dcf00.w) || dOut_dcf00.x != 0.0 || dOut_dcf00.y != 0.0 || dOut_dcf00.z != 0.0 || dOut_dcf00.w != 0.0) {
+        /*if (isnan(dOut_dcf00.x) || isnan(dOut_dcf00.y) || isnan(dOut_dcf00.z) || isnan(dOut_dcf00.w)
+                //|| dOut_dcf00.x != 0.0 || dOut_dcf00.y != 0.0 || dOut_dcf00.z != 0.0 || dOut_dcf00.w != 0.0
+        ) {
             debugPrintfEXT("a %u %f %f %f %f", if00, dOut_dcf00.x, dOut_dcf00.y, dOut_dcf00.z, dOut_dcf00.w);
             dOut_dcf00 = vec4(0.0);
         }
-        if (isnan(dOut_dcf01.x) || isnan(dOut_dcf01.y) || isnan(dOut_dcf01.z) || isnan(dOut_dcf01.w) || dOut_dcf01.x != 0.0 || dOut_dcf01.y != 0.0 || dOut_dcf01.z != 0.0 || dOut_dcf01.w != 0.0) {
+        if (isnan(dOut_dcf01.x) || isnan(dOut_dcf01.y) || isnan(dOut_dcf01.z) || isnan(dOut_dcf01.w)
+                //|| dOut_dcf01.x != 0.0 || dOut_dcf01.y != 0.0 || dOut_dcf01.z != 0.0 || dOut_dcf01.w != 0.0
+        ) {
             debugPrintfEXT("b %u %f %f %f %f", if01, dOut_dcf01.x, dOut_dcf01.y, dOut_dcf01.z, dOut_dcf01.w);
             dOut_dcf01 = vec4(0.0);
         }
-        if (isnan(dOut_dcf02.x) || isnan(dOut_dcf02.y) || isnan(dOut_dcf02.z) || isnan(dOut_dcf02.w) || dOut_dcf02.x != 0.0 || dOut_dcf02.y != 0.0 || dOut_dcf02.z != 0.0 || dOut_dcf02.w != 0.0) {
+        if (isnan(dOut_dcf02.x) || isnan(dOut_dcf02.y) || isnan(dOut_dcf02.z) || isnan(dOut_dcf02.w)
+        //|| dOut_dcf02.x != 0.0 || dOut_dcf02.y != 0.0 || dOut_dcf02.z != 0.0 || dOut_dcf02.w != 0.0
+        ) {
             debugPrintfEXT("c %u %f %f %f %f", if02, dOut_dcf02.x, dOut_dcf02.y, dOut_dcf02.z, dOut_dcf02.w);
             dOut_dcf02 = vec4(0.0);
         }
-        if (isnan(dOut_dcf10.x) || isnan(dOut_dcf10.y) || isnan(dOut_dcf10.z) || isnan(dOut_dcf10.w) || dOut_dcf10.x != 0.0 || dOut_dcf10.y != 0.0 || dOut_dcf10.z != 0.0 || dOut_dcf10.w != 0.0) {
+        if (isnan(dOut_dcf10.x) || isnan(dOut_dcf10.y) || isnan(dOut_dcf10.z) || isnan(dOut_dcf10.w)
+        //|| dOut_dcf10.x != 0.0 || dOut_dcf10.y != 0.0 || dOut_dcf10.z != 0.0 || dOut_dcf10.w != 0.0
+        ) {
             debugPrintfEXT("d %u %f %f %f %f", if10, dOut_dcf10.x, dOut_dcf10.y, dOut_dcf10.z, dOut_dcf10.w);
             dOut_dcf10 = vec4(0.0);
         }
-        if (isnan(dOut_dcf11.x) || isnan(dOut_dcf11.y) || isnan(dOut_dcf11.z) || isnan(dOut_dcf11.w) || dOut_dcf11.x != 0.0 || dOut_dcf11.y != 0.0 || dOut_dcf11.z != 0.0 || dOut_dcf11.w != 0.0) {
+        if (isnan(dOut_dcf11.x) || isnan(dOut_dcf11.y) || isnan(dOut_dcf11.z) || isnan(dOut_dcf11.w)
+        //|| dOut_dcf11.x != 0.0 || dOut_dcf11.y != 0.0 || dOut_dcf11.z != 0.0 || dOut_dcf11.w != 0.0
+        ) {
             debugPrintfEXT("e %u %f %f %f %f", if11, dOut_dcf11.x, dOut_dcf11.y, dOut_dcf11.z, dOut_dcf11.w);
             dOut_dcf11 = vec4(0.0);
         }
-        if (isnan(dOut_dcf12.x) || isnan(dOut_dcf12.y) || isnan(dOut_dcf12.z) || isnan(dOut_dcf12.w) || dOut_dcf12.x != 0.0 || dOut_dcf12.y != 0.0 || dOut_dcf12.z != 0.0 || dOut_dcf12.w != 0.0) {
+        if (isnan(dOut_dcf12.x) || isnan(dOut_dcf12.y) || isnan(dOut_dcf12.z) || isnan(dOut_dcf12.w)
+        //|| dOut_dcf12.x != 0.0 || dOut_dcf12.y != 0.0 || dOut_dcf12.z != 0.0 || dOut_dcf12.w != 0.0
+        ) {
             debugPrintfEXT("f %u %f %f %f %f", if12, dOut_dcf12.x, dOut_dcf12.y, dOut_dcf12.z, dOut_dcf12.w);
             dOut_dcf12 = vec4(0.0);
         }
 
-        if (isnan(dOut_dpf00.x) || isnan(dOut_dpf00.y) || isnan(dOut_dpf00.z) || dOut_dpf00.x != 0.0 || dOut_dpf00.y != 0.0 || dOut_dpf00.z != 0.0) {
+        if (isnan(dOut_dpf00.x) || isnan(dOut_dpf00.y) || isnan(dOut_dpf00.z)
+        //|| dOut_dpf00.x != 0.0 || dOut_dpf00.y != 0.0 || dOut_dpf00.z != 0.0
+        ) {
             debugPrintfEXT("g %u %f %f %f", if00, dOut_dpf00.x, dOut_dpf00.y, dOut_dpf00.z);
             dOut_dpf00 = vec3(0.0);
         }
-        if (isnan(dOut_dpf01.x) || isnan(dOut_dpf01.y) || isnan(dOut_dpf01.z) || dOut_dpf01.x != 0.0 || dOut_dpf01.y != 0.0 || dOut_dpf01.z != 0.0) {
+        if (isnan(dOut_dpf01.x) || isnan(dOut_dpf01.y) || isnan(dOut_dpf01.z)
+        //|| dOut_dpf01.x != 0.0 || dOut_dpf01.y != 0.0 || dOut_dpf01.z != 0.0
+        ) {
             debugPrintfEXT("h %u %f %f %f", if01, dOut_dpf01.x, dOut_dpf01.y, dOut_dpf01.z);
             dOut_dpf01 = vec3(0.0);
         }
-        if (isnan(dOut_dpf02.x) || isnan(dOut_dpf02.y) || isnan(dOut_dpf02.z) || dOut_dpf02.x != 0.0 || dOut_dpf02.y != 0.0 || dOut_dpf02.z != 0.0) {
+        if (isnan(dOut_dpf02.x) || isnan(dOut_dpf02.y) || isnan(dOut_dpf02.z)
+        //|| dOut_dpf02.x != 0.0 || dOut_dpf02.y != 0.0 || dOut_dpf02.z != 0.0
+        ) {
             debugPrintfEXT("i %u %f %f %f", if02, dOut_dpf02.x, dOut_dpf02.y, dOut_dpf02.z);
             dOut_dpf02 = vec3(0.0);
         }
-        if (isnan(dOut_dpf10.x) || isnan(dOut_dpf10.y) || isnan(dOut_dpf10.z) || dOut_dpf10.x != 0.0 || dOut_dpf10.y != 0.0 || dOut_dpf10.z != 0.0) {
+        if (isnan(dOut_dpf10.x) || isnan(dOut_dpf10.y) || isnan(dOut_dpf10.z)
+        //|| dOut_dpf10.x != 0.0 || dOut_dpf10.y != 0.0 || dOut_dpf10.z != 0.0
+        ) {
             debugPrintfEXT("j %u %f %f %f", if10, dOut_dpf10.x, dOut_dpf10.y, dOut_dpf10.z);
             dOut_dpf10 = vec3(0.0);
         }
-        if (isnan(dOut_dpf11.x) || isnan(dOut_dpf11.y) || isnan(dOut_dpf11.z) || dOut_dpf11.x != 0.0 || dOut_dpf11.y != 0.0 || dOut_dpf11.z != 0.0) {
+        if (isnan(dOut_dpf11.x) || isnan(dOut_dpf11.y) || isnan(dOut_dpf11.z)
+        //|| dOut_dpf11.x != 0.0 || dOut_dpf11.y != 0.0 || dOut_dpf11.z != 0.0
+        ) {
             debugPrintfEXT("k %u %f %f %f", if11, dOut_dpf11.x, dOut_dpf11.y, dOut_dpf11.z);
             dOut_dpf11 = vec3(0.0);
         }
-        if (isnan(dOut_dpf12.x) || isnan(dOut_dpf12.y) || isnan(dOut_dpf12.z) || dOut_dpf12.x != 0.0 || dOut_dpf12.y != 0.0 || dOut_dpf12.z != 0.0) {
+        if (isnan(dOut_dpf12.x) || isnan(dOut_dpf12.y) || isnan(dOut_dpf12.z)
+        //|| dOut_dpf12.x != 0.0 || dOut_dpf12.y != 0.0 || dOut_dpf12.z != 0.0
+        ) {
             debugPrintfEXT("l %u %f %f %f", if12, dOut_dpf12.x, dOut_dpf12.y, dOut_dpf12.z);
             dOut_dpf12 = vec3(0.0);
-        }
+        }*/
 
-        /*atomicAddGradCol(if00, dOut_dcf00);
+        atomicAddGradCol(if00, dOut_dcf00);
         atomicAddGradCol(if01, dOut_dcf01);
         atomicAddGradCol(if02, dOut_dcf02);
 
@@ -400,7 +438,7 @@ vec4 frontToBackPQ(uint fragsCount) {
 
         atomicAddGradPos(if10, dOut_dpf10);
         atomicAddGradPos(if11, dOut_dpf11);
-        atomicAddGradPos(if12, dOut_dpf12);*/
+        atomicAddGradPos(if12, dOut_dpf12);
     }
 
     return vec4(0.0);

@@ -76,9 +76,13 @@ void OptimizerPass::setOptimizerType(OptimizerType _optimizerType) {
 }
 
 void OptimizerPass::setSettings(
-        LossType _lossType, float alpha, float beta1, float beta2, float epsilon) {
+        LossType _lossType, float alpha, float beta1, float beta2, float epsilon, bool _isColor) {
     if (lossType != _lossType) {
         lossType = _lossType;
+        setShaderDirty();
+    }
+    if (isColor != _isColor) {
+        isColor = _isColor;
         setShaderDirty();
     }
     if (uniformData.alpha != alpha || uniformData.beta1 != beta1 || uniformData.beta2 != beta2
@@ -113,6 +117,9 @@ void OptimizerPass::loadShader() {
         preprocessorDefines.insert(std::make_pair("L1_LOSS", ""));
     } else if (lossType == LossType::L2) {
         preprocessorDefines.insert(std::make_pair("L2_LOSS", ""));
+    }
+    if (isColor) {
+        preprocessorDefines.insert(std::make_pair("COLOR_OPTIMIZATION", ""));
     }
     std::string shaderName;
     if (optimizerType == OptimizerType::SGD) {

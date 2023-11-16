@@ -161,7 +161,10 @@ MainApp::MainApp()
     }
 
     tetMeshOptimizer = new TetMeshOptimizer(
-            rendererVk, [this](const TetMeshPtr& _tetMesh) { return tetMesh = _tetMesh; },
+            rendererVk, [this](const TetMeshPtr& _tetMesh) {
+                tetMesh = _tetMesh;
+                tetMeshVolumeRenderer->setTetMeshData(tetMesh);
+            },
             dataSetNames.size() > 1, [this]() -> std::string {
                 int i = this->renderGuiDataSetSelectionMenu();
                 if (i >= 0) {
