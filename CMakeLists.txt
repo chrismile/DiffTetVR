@@ -290,13 +290,17 @@ endif()
 #find_package(Python3 COMPONENTS Development REQUIRED)
 #target_link_libraries(DiffTetVR PRIVATE Python3::Python)
 
-if(VCPKG_TOOLCHAIN)
-    find_package(CURL CONFIG REQUIRED)
-else()
-    find_package(CURL REQUIRED)
-endif()
-target_link_libraries(DiffTetVR PUBLIC ${CURL_LIBRARIES})  # CURL::libcurl, since CMake 3.12
-target_include_directories(DiffTetVR PUBLIC ${CURL_INCLUDES} ${CURL_INCLUDE_DIRS})
+#if(VCPKG_TOOLCHAIN)
+#    find_package(CURL CONFIG REQUIRED)
+#else()
+#    find_package(CURL REQUIRED)
+#endif()
+#target_link_libraries(DiffTetVR PUBLIC ${CURL_LIBRARIES})  # CURL::libcurl, since CMake 3.12
+#target_include_directories(DiffTetVR PUBLIC ${CURL_INCLUDES} ${CURL_INCLUDE_DIRS})
+
+add_subdirectory(third_party/OpenVolumeMesh)
+target_link_libraries(DiffTetVR PRIVATE OpenVolumeMesh::OpenVolumeMesh)
+target_compile_definitions(DiffTetVR PRIVATE USE_OPEN_VOLUME_MESH)
 
 
 if (${USE_TBB})

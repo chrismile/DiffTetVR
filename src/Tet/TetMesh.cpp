@@ -35,6 +35,41 @@
 #include "Loaders/BinTetLoader.hpp"
 #include "TetMesh.hpp"
 
+#ifdef USE_OPEN_VOLUME_MESH
+#include <OpenVolumeMesh/Geometry/VectorT.hh>
+#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
+
+void testOpenVolumeMesh() {
+    // https://www.graphics.rwth-aachen.de/media/openvolumemesh_static/Documentation/OpenVolumeMesh-Doc-Latest/ovm_tutorial_01.html
+    OpenVolumeMesh::GeometricTetrahedralMeshV3f ovmMesh;
+    auto v0Handle = ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(0.0f, 0.0f, 0.0f));
+    auto v1Handle = ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(0.0f, 0.0f, 0.0f));
+    auto v2Handle = ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(0.0f, 0.0f, 0.0f));
+    //auto v3Handle = ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(0.0f, 0.0f, 0.0f));
+
+    std::vector<OpenVolumeMesh::VertexHandle> vertices(3);
+    vertices.at(0) = v0Handle;
+    vertices.at(1) = v1Handle;
+    vertices.at(2) = v2Handle;
+    OpenVolumeMesh::FaceHandle f0Handle = ovmMesh.add_face(vertices);
+
+    std::vector<OpenVolumeMesh::HalfFaceHandle> halfFaces(4);
+    halfFaces.at(0) = OpenVolumeMesh::GeometricTetrahedralMeshV3f::halfface_handle(f0Handle, 0);
+    // ...
+    ovmMesh.add_cell(halfFaces);
+
+    // https://www.graphics.rwth-aachen.de/media/openvolumemesh_static/Documentation/OpenVolumeMesh-Doc-Latest/ovm_tutorial_02.html
+    // https://www.graphics.rwth-aachen.de/media/openvolumemesh_static/Documentation/OpenVolumeMesh-Doc-Latest/iterators_and_circulators.html
+    /*for (OpenVolumeMesh::FaceIter f_it = ovmMesh.faces_begin(); f_it != ovmMesh.faces_end(); f_it++) {
+        auto fh = *f_it;
+        for(OpenVolumeMesh::FaceEdgeIter he_it = ovmMesh.fe_iter(fh); he_it.valid(); ++he_it) {
+            ;
+        }
+        f_it->idx();
+    }*/
+}
+#endif
+
 template <typename T>
 static std::pair<std::vector<std::string>, std::function<TetMeshLoader*()>> registerTetMeshLoader() {
     return { T::getSupportedExtensions(), []() { return new T{}; }};
