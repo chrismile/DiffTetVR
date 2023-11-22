@@ -162,12 +162,10 @@ void TetMeshOptimizer::renderGuiDialog() {
 
         if (ImGui::CollapsingHeader(
                 "DVR Settings", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::SliderIntPowerOfTwo(
-                    "Image Width", (int*)&settings.imageWidth, 16, 4096);
-            ImGui::SliderIntPowerOfTwo(
-                    "Image Height", (int*)&settings.imageHeight, 16, 4096);
-            ImGui::SliderFloat(
-                    "Attenuation", &settings.attenuationCoefficient, 0.0f, 200.0f);
+            ImGui::SliderIntPowerOfTwo("Image Width", (int*)&settings.imageWidth, 16, 4096);
+            ImGui::SliderIntPowerOfTwo("Image Height", (int*)&settings.imageHeight, 16, 4096);
+            ImGui::SliderFloat("Attenuation", &settings.attenuationCoefficient, 0.0f, 200.0f);
+            ImGui::Checkbox("Sample Random View", &settings.sampleRandomView);
         }
 
         if (ImGui::Button("OK", ImVec2(120, 0))) {
@@ -369,12 +367,19 @@ bool TetMeshOptimizer::getHasResult() {
 
 void TetMeshOptimizer::sampleCameraPoses() {
     const glm::vec3 globalUp(0.0f, 1.0f, 0.0f);
-    std::random_device rd;
-    std::mt19937 generator(rd());
-    std::uniform_real_distribution<float> dist(0, 1);
     //for (uint32_t batchIdx = 0; batchIdx < batchSize; batchIdx++) {
-    float theta = sgl::TWO_PI * dist(generator);
-    float phi = std::acos(1.0f - 2.0f * dist(generator));
+    float theta;
+    float phi;
+    if (settings.sampleRandomView) {
+        std::random_device rd;
+        std::mt19937 generator(rd());
+        std::uniform_real_distribution<float> dist(0, 1);
+        theta = sgl::TWO_PI * dist(generator);
+        phi = std::acos(1.0f - 2.0f * dist(generator));
+    } else {
+        theta = 0.0f;
+        phi = 0.0f;
+    }
     glm::vec3 cameraPosition(std::sin(phi) * std::cos(theta), std::sin(phi) * std::sin(theta), std::cos(phi));
     glm::vec3 cameraForward = glm::normalize(cameraPosition);
     glm::vec3 cameraRight = glm::normalize(glm::cross(globalUp, cameraForward));

@@ -331,16 +331,16 @@ vec4 frontToBackPQ(uint fragsCount) {
             }*/
         }
 
-        vec3 dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12;
+        /*vec3 dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12;
         vec4 dOut_dcf00, dOut_dcf01, dOut_dcf02, dOut_dcf10, dOut_dcf11, dOut_dcf12;
         float dOut_duf0, dOut_dvf0, dOut_duf1, dOut_dvf1;
         segmentLengthAdjoint(
                 pf00, pf01, pf02, pf00, pf01, pf02, uf0, vf0, uf1, vf1, dOut_dt,
                 dOut_duf0, dOut_dvf0, dOut_duf1, dOut_dvf1,
-                dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12);
-        /*vec3 dOut_dpf00 = vec3(0.0), dOut_dpf01 = vec3(0.0), dOut_dpf02 = vec3(0.0), dOut_dpf10 = vec3(0.0), dOut_dpf11 = vec3(0.0), dOut_dpf12 = vec3(0.0);
+                dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12);*/
+        vec3 dOut_dpf00 = vec3(0.0), dOut_dpf01 = vec3(0.0), dOut_dpf02 = vec3(0.0), dOut_dpf10 = vec3(0.0), dOut_dpf11 = vec3(0.0), dOut_dpf12 = vec3(0.0);
         vec4 dOut_dcf00, dOut_dcf01, dOut_dcf02, dOut_dcf10, dOut_dcf11, dOut_dcf12;
-        float dOut_duf0 = 0.0, dOut_dvf0 = 0.0, dOut_duf1 = 0.0, dOut_dvf1 = 0.0;*/
+        float dOut_duf0 = 0.0, dOut_dvf0 = 0.0, dOut_duf1 = 0.0, dOut_dvf1 = 0.0;
         baryAdjoint(
                 pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0,
                 dOut_dcf0, dOut_duf0, dOut_dvf0,

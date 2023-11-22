@@ -49,7 +49,12 @@ void main() {
     }
     const float invN = 1.0 / float(imageWidth * imageHeight);
 
-    vec4 colorDiff = imageLoad(colorImageOpt, imageIdx) - imageLoad(colorImageGT, imageIdx);
+    vec4 colorOpt = imageLoad(colorImageOpt, imageIdx);
+    vec4 colorGT = imageLoad(colorImageGT, imageIdx);
+    vec4 colorDiff = colorOpt - colorGT;
+    if (colorOpt.a < 1e-5 || colorGT.a < 1e-5) {
+        colorDiff = vec4(0.0);
+    }
 
     vec4 adjointColor;
 #if defined(L1_LOSS)

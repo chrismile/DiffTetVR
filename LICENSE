@@ -8,6 +8,8 @@ The LGPL license demands that either recombination or relinking of the combined 
 This is fulfilled by providing the complete source code of DiffTetVR with build instructions.
 Please note that when you create a work derived from DiffTetVR which uses OpenVolumeMesh,
 you yourself are responsible for still fulfilling the demands of the LGPL license.
+If you obtained a binary version of DiffTetVR without the source code of dependencies under the LGPL,
+please find the source code under: https://github.com/chrismile/DiffTetVR/tree/main/third_party
 
 ----------------------------------------------------------------------------
 

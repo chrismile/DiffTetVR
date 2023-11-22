@@ -65,9 +65,15 @@ enum class TestCase {
     SINGLE_TETRAHEDRON
 };
 
+enum class TetMeshRepresentationType {
+    SLIM, OPEN_VOLUME_MESH
+};
+struct OvmRepresentationData;
+
 class TetMesh {
 public:
     explicit TetMesh(sgl::vk::Device* device);
+    ~TetMesh();
     void setTetMeshData(
             const std::vector<uint32_t>& _cellIndices, const std::vector<glm::vec3>& _vertexPositions,
             const std::vector<glm::vec4>& _vertexColors);
@@ -106,11 +112,17 @@ private:
     std::vector<glm::vec4> vertexColors;
     sgl::AABB3 boundingBox;
     bool dirty = false;
+    TetMeshRepresentationType representationType = TetMeshRepresentationType::SLIM;
 
     void rebuildInternalRepresentationIfNecessary_Slim();
     std::vector<VertexSlim> verticesSlim;
     std::vector<FaceSlim> facesSlim;
     std::vector<uint32_t> facesBoundarySlim;
+
+#ifdef USE_OPEN_VOLUME_MESH
+    void rebuildInternalRepresentationIfNecessary_Ovm();
+    OvmRepresentationData* ovmRepresentationData = nullptr;
+#endif
 
     // GPU data.
     void uploadDataToDevice();

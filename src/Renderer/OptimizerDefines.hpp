@@ -66,6 +66,7 @@ struct OptimizationSettings {
     uint32_t imageWidth = 512;
     uint32_t imageHeight = 512;
     float attenuationCoefficient = 1.0f;
+    bool sampleRandomView = true;
     // Selected file name.
     std::string dataSetFileNameGT, dataSetFileNameOpt;
 };
