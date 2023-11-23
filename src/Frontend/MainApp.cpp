@@ -351,8 +351,12 @@ void MainApp::renderGui() {
             std::string filenameLower = boost::to_lower_copy(filename);
 
             if (boost::ends_with(filenameLower, ".bintet")
-                    || boost::ends_with(filenameLower, ".txt")
-                    || boost::ends_with(filenameLower, ".ovm")) {
+#ifdef USE_OPEN_VOLUME_MESH
+                    || boost::ends_with(filenameLower, ".ovm")
+                    || boost::ends_with(filenameLower, ".ovmb")
+                    || boost::ends_with(filenameLower, ".vtk")
+#endif
+                    || boost::ends_with(filenameLower, ".txt")) {
                 selectedDataSetIndex = 0;
                 customDataSetFileName = filename;
                 loadTetMeshDataSet(getSelectedDataSetFilename());
@@ -406,8 +410,11 @@ void MainApp::renderGui() {
 
             std::string filenameLower = boost::to_lower_copy(filename);
             if (boost::ends_with(filenameLower, ".bintet")
-                    || boost::ends_with(filenameLower, ".txt")
-                    || boost::ends_with(filenameLower, ".ovm")) {
+#ifdef USE_OPEN_VOLUME_MESH
+                    || boost::ends_with(filenameLower, ".ovm")
+                    || boost::ends_with(filenameLower, ".ovmb")
+#endif
+                    || boost::ends_with(filenameLower, ".txt")) {
                 tetMesh->saveToFile(filename);
             } else {
                 sgl::Logfile::get()->writeError(
@@ -633,7 +640,11 @@ void MainApp::openFileDialog() {
     IGFD_OpenModal(
             fileDialogInstance,
             "ChooseDataSetFile", "Choose a File",
-            ".*,.bintet,.txt,.ovm",
+#ifdef USE_OPEN_VOLUME_MESH
+            ".*,.bintet,.txt,.ovm,.ovmb,.vtk",
+#else
+           ".*,.bintet,.txt",
+#endif
             fileDialogDirectory.c_str(),
             "", 1, nullptr,
             ImGuiFileDialogFlags_None);
@@ -649,7 +660,11 @@ void MainApp::openSaveTetMeshFileDialog() {
     IGFD_OpenModal(
             fileDialogInstance,
             "ChooseSaveFile", "Choose a File",
-            ".*,.bintet,.txt,.ovm",
+#ifdef USE_OPEN_VOLUME_MESH
+            ".*,.bintet,.txt,.ovm,.ovmb",
+#else
+            ".*,.bintet,.txt",
+#endif
             saveTestMeshFileDialogDirectory.c_str(),
             "", 1, nullptr,
             ImGuiFileDialogFlags_ConfirmOverwrite);

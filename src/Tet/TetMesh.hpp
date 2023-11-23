@@ -51,14 +51,10 @@ class TetMeshLoader;
 class TetMeshWriter;
 
 /**
- * Slim data representation for very large meshes.
- * Use only functions/renderers containing "Slim" functions in this case!
+ * Slim data representation is used only for rendering.
  */
 struct FaceSlim {
     uint32_t vs[3]; ///< vertex indices
-};
-struct VertexSlim {
-    std::vector<uint32_t> hs; ///< cell indices
 };
 
 enum class TestCase {
@@ -80,7 +76,8 @@ public:
     void loadTestData(TestCase testCase);
     bool loadFromFile(const std::string& filePath);
     bool saveToFile(const std::string& filePath);
-    [[nodiscard]] inline bool isDirty() const { return dirty; }
+    [[nodiscard]] inline bool isDirty() const { return isVisualRepresentationDirty; }
+    inline void resetDirty() { isVisualRepresentationDirty = false; }
     [[nodiscard]] inline const sgl::AABB3& getBoundingBox() { return boundingBox; }
 
     sgl::vk::BufferPtr getTriangleIndexBuffer() { return triangleIndexBuffer; }
@@ -111,11 +108,14 @@ private:
     std::vector<glm::vec3> vertexPositions;
     std::vector<glm::vec4> vertexColors;
     sgl::AABB3 boundingBox;
-    bool dirty = false;
-    TetMeshRepresentationType representationType = TetMeshRepresentationType::SLIM;
+    bool newData = false;
+    bool verticesDirty = false;
+    bool facesDirty = false;
+    bool cellsDirty = false;
+    bool isVisualRepresentationDirty = false;
+    //TetMeshRepresentationType representationType = TetMeshRepresentationType::SLIM;
 
     void rebuildInternalRepresentationIfNecessary_Slim();
-    std::vector<VertexSlim> verticesSlim;
     std::vector<FaceSlim> facesSlim;
     std::vector<uint32_t> facesBoundarySlim;
 
@@ -123,6 +123,10 @@ private:
     void rebuildInternalRepresentationIfNecessary_Ovm();
     OvmRepresentationData* ovmRepresentationData = nullptr;
 #endif
+
+    void updateVerticesIfNecessary();
+    void updateFacesIfNecessary();
+    void updateCellIndicesIfNecessary();
 
     // GPU data.
     void uploadDataToDevice();

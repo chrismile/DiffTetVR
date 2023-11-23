@@ -26,50 +26,33 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DIFFTETVR_TETMESHLOADER_HPP
-#define DIFFTETVR_TETMESHLOADER_HPP
+#ifndef DIFFTETVR_OVMLOADER_HPP
+#define DIFFTETVR_OVMLOADER_HPP
 
-#include <vector>
-#include <string>
-#include <cstdint>
+#include "TetMeshLoader.hpp"
 
-#include <glm/vec3.hpp>
-#include <glm/vec4.hpp>
-
-#ifdef USE_OPEN_VOLUME_MESH
-#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
-#endif
-
-#include "DataSetList.hpp"
-
-class TetMeshLoader {
+class OvmLoader : public TetMeshLoader {
 public:
-    virtual ~TetMeshLoader() = default;
-    virtual bool loadFromFile(
+    static std::vector<std::string> getSupportedExtensions() { return { "ovm", "ovmb", "vtk" }; }
+    ~OvmLoader() override = default;
+    bool getNeedsOpenVolumeMeshSupport() override { return true; }
+    bool loadFromFile(
             const std::string& filePath, std::vector<uint32_t>& cellIndices,
-            std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors) = 0;
-
-#ifdef USE_OPEN_VOLUME_MESH
-    // For formats relying on Open Volume Mesh support.
-    virtual bool getNeedsOpenVolumeMeshSupport() { return false; }
-    virtual bool loadFromFileOvm(
-            const std::string& filePath, OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh) { return false; }
-#endif
+            std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors) override { return false; }
+    bool loadFromFileOvm(
+            const std::string& filePath, OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh) override;
 };
 
-class TetMeshWriter {
+class OvmWriter : public TetMeshWriter {
 public:
-    virtual ~TetMeshWriter() = default;
-    virtual bool saveToFile(
+    static std::vector<std::string> getSupportedExtensions() { return { "ovm", "ovmb" }; }
+    ~OvmWriter() override = default;
+    bool getNeedsOpenVolumeMeshSupport() override { return true; }
+    bool saveToFile(
             const std::string& filePath, const std::vector<uint32_t>& cellIndices,
-            const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors) = 0;
-
-#ifdef USE_OPEN_VOLUME_MESH
-    // For formats relying on Open Volume Mesh support.
-    virtual bool getNeedsOpenVolumeMeshSupport() { return false; }
-    virtual bool saveToFileOvm(
-            const std::string& filePath, const OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh) { return false; }
-#endif
+            const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors) override { return false; }
+    bool saveToFileOvm(
+            const std::string& filePath, const OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh) override;
 };
 
-#endif //DIFFTETVR_TETMESHLOADER_HPP
+#endif //DIFFTETVR_OVMLOADER_HPP

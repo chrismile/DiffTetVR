@@ -28,24 +28,24 @@
 
 #include <algorithm>
 
-#ifdef USE_OPEN_VOLUME_MESH
-#include <OpenVolumeMesh/Geometry/VectorT.hh>
-#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
-#endif
-
 #include <Utils/File/Logfile.hpp>
 #include <Utils/File/FileUtils.hpp>
 #include <Graphics/Vulkan/Buffers/Buffer.hpp>
 
+#ifdef USE_OPEN_VOLUME_MESH
+#include <OpenVolumeMesh/Geometry/VectorT.hh>
+#include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
+#include "Loaders/OvmLoader.hpp"
+#endif
+
 #include "Loaders/BinTetLoader.hpp"
 #include "Loaders/TxtTetLoader.hpp"
 #include "TetMesh.hpp"
-#include "OpenVolumeMesh/FileManager/FileManager.hh"
 
 #ifdef USE_OPEN_VOLUME_MESH
 struct OvmRepresentationData {
     OpenVolumeMesh::GeometricTetrahedralMeshV3f ovmMesh;
-    OpenVolumeMesh::VertexPropertyT<glm::vec4> vertexColorProp;
+    OpenVolumeMesh::VertexPropertyPtr<OpenVolumeMesh::Vec4f> vertexColorProp;
 
 };
 #endif
@@ -90,6 +90,9 @@ TetMesh::TetMesh(sgl::vk::Device* device) : device(device) {
     std::map<std::vector<std::string>, std::function<TetMeshLoader*()>> factoriesLoaderMap = {
             registerTetMeshLoader<BinTetLoader>(),
             registerTetMeshLoader<TxtTetLoader>(),
+#ifdef USE_OPEN_VOLUME_MESH
+            registerTetMeshLoader<OvmLoader>(),
+#endif
     };
     for (auto& factory : factoriesLoaderMap) {
         for (const std::string& extension : factory.first) {
@@ -101,6 +104,9 @@ TetMesh::TetMesh(sgl::vk::Device* device) : device(device) {
     std::map<std::vector<std::string>, std::function<TetMeshWriter*()>> factoriesWriterMap = {
             registerTetMeshWriter<BinTetWriter>(),
             registerTetMeshWriter<TxtTetWriter>(),
+#ifdef USE_OPEN_VOLUME_MESH
+            registerTetMeshWriter<OvmWriter>(),
+#endif
     };
     for (auto& factory : factoriesWriterMap) {
         for (const std::string& extension : factory.first) {
@@ -122,7 +128,19 @@ void TetMesh::setTetMeshData(
     cellIndices = _cellIndices;
     vertexPositions = _vertexPositions;
     vertexColors = _vertexColors;
+#ifdef USE_OPEN_VOLUME_MESH
+    if (ovmRepresentationData) {
+        delete ovmRepresentationData;
+    }
+    ovmRepresentationData = new OvmRepresentationData;
+    newData = true;
+    verticesDirty = false;
+    facesDirty = true;
+    cellsDirty = false;
+    rebuildInternalRepresentationIfNecessary_Ovm();
+#else
     rebuildInternalRepresentationIfNecessary_Slim();
+#endif
     uploadDataToDevice();
 
     boundingBox = {};
@@ -132,6 +150,10 @@ void TetMesh::setTetMeshData(
 }
 
 void TetMesh::uploadDataToDevice() {
+    updateVerticesIfNecessary();
+    updateFacesIfNecessary();
+    isVisualRepresentationDirty = true;
+
     std::vector<uint32_t> triangleIndices;
     triangleIndices.reserve(facesSlim.size() * 3);
     for (auto& f : facesSlim) {
@@ -139,6 +161,11 @@ void TetMesh::uploadDataToDevice() {
             triangleIndices.push_back(v_idx);
         }
     }
+
+    triangleIndexBuffer = {};
+    vertexPositionBuffer = {};
+    vertexColorBuffer = {};
+    faceBoundaryBitBuffer = {};
 
     triangleIndexBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(uint32_t) * triangleIndices.size(), triangleIndices.data(),
@@ -220,10 +247,32 @@ bool TetMesh::loadFromFile(const std::string& filePath) {
     std::vector<uint32_t> _cellIndices;
     std::vector<glm::vec3> _vertexPositions;
     std::vector<glm::vec4> _vertexColors;
-    bool retVal = tetMeshLoader->loadFromFile(filePath, _cellIndices, _vertexPositions, _vertexColors);
-    if (retVal) {
-        setTetMeshData(_cellIndices, _vertexPositions, _vertexColors);
+    bool retVal;
+#ifdef USE_OPEN_VOLUME_MESH
+    if (tetMeshLoader->getNeedsOpenVolumeMeshSupport()) {
+        if (ovmRepresentationData) {
+            delete ovmRepresentationData;
+        }
+        ovmRepresentationData = new OvmRepresentationData;
+
+        retVal = tetMeshLoader->loadFromFileOvm(filePath, ovmRepresentationData->ovmMesh);
+        ovmRepresentationData->vertexColorProp =
+                ovmRepresentationData->ovmMesh.request_vertex_property<OpenVolumeMesh::Vec4f>("vertexColors");
+
+        newData = false;
+        verticesDirty = true;
+        facesDirty = true;
+        cellsDirty = true;
+        uploadDataToDevice();
+    } else {
+#endif
+        retVal = tetMeshLoader->loadFromFile(filePath, _cellIndices, _vertexPositions, _vertexColors);
+        if (retVal) {
+            setTetMeshData(_cellIndices, _vertexPositions, _vertexColors);
+        }
+#ifdef USE_OPEN_VOLUME_MESH
     }
+#endif
     delete tetMeshLoader;
     return retVal;
 }
@@ -234,22 +283,20 @@ bool TetMesh::saveToFile(const std::string& filePath) {
     if (!tetMeshWriter) {
         return false;
     }
-    bool retVal = tetMeshWriter->saveToFile(filePath, cellIndices, vertexPositions, vertexColors);
+    updateVerticesIfNecessary();
+    updateCellIndicesIfNecessary();
+    bool retVal;
+#ifdef USE_OPEN_VOLUME_MESH
+    if (tetMeshWriter->getNeedsOpenVolumeMeshSupport()) {
+        retVal = tetMeshWriter->saveToFileOvm(filePath, ovmRepresentationData->ovmMesh);
+    } else {
+#endif
+        retVal = tetMeshWriter->saveToFile(filePath, cellIndices, vertexPositions, vertexColors);
+#ifdef USE_OPEN_VOLUME_MESH
+    }
+#endif
     delete tetMeshWriter;
     return retVal;
-}
-
-void buildVerticesSlim(
-        const std::vector<glm::vec3>& vertices, const std::vector<uint32_t>& cellIndices,
-        std::vector<VertexSlim>& verticesSlim) {
-    verticesSlim.resize(vertices.size());
-    const uint32_t numTets = cellIndices.size() / 4;
-    for (uint32_t h_id = 0; h_id < numTets; h_id++) {
-        for (uint32_t v_internal_id = 0; v_internal_id < 4; v_internal_id++) {
-            uint32_t v_id = cellIndices.at(h_id * 4 + v_internal_id);
-            verticesSlim.at(v_id).hs.push_back(h_id);
-        }
-    }
 }
 
 const int tetFaceTable[4][3] = {
@@ -333,65 +380,112 @@ void buildFacesSlim(
 }
 
 void TetMesh::rebuildInternalRepresentationIfNecessary_Slim() {
-    if (verticesSlim.empty()) {
-        buildVerticesSlim(vertexPositions, cellIndices, verticesSlim);
-        buildFacesSlim(vertexPositions, cellIndices, facesSlim, facesBoundarySlim);
-    }
-
-    if (dirty) {
-        //updateMeshTriangleIntersectionDataStructure_Slim();
-        dirty = false;
-    }
+    buildFacesSlim(vertexPositions, cellIndices, facesSlim, facesBoundarySlim);
+    isVisualRepresentationDirty = true;
 }
 
 #ifdef USE_OPEN_VOLUME_MESH
 void TetMesh::rebuildInternalRepresentationIfNecessary_Ovm() {
-    // https://www.graphics.rwth-aachen.de/media/openvolumemesh_static/Documentation/OpenVolumeMesh-Doc-Latest/ovm_tutorial_01.html
-    OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
-    std::vector<OpenVolumeMesh::VertexHandle> ovmVertices;
-    for (const glm::vec3& v : vertexPositions) {
-        ovmVertices.emplace_back(ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(v.x, v.y, v.z)));
-    }
+    if (newData) {
+        // https://www.graphics.rwth-aachen.de/media/openvolumemesh_static/Documentation/OpenVolumeMesh-Doc-Latest/ovm_tutorial_01.html
+        OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
+        std::vector<OpenVolumeMesh::VertexHandle> ovmVertices;
+        ovmVertices.reserve(vertexPositions.size());
+        for (const glm::vec3& v : vertexPositions) {
+            ovmVertices.emplace_back(ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(v.x, v.y, v.z)));
+        }
 
-    const uint32_t numTets = cellIndices.size() / 4;
-    std::vector<FaceSlim> totalFaces(numTets * 4);
-    std::vector<TempFace> tempFaces(numTets * 4);
-
-    std::vector<OpenVolumeMesh::VertexHandle> ovmCellVertices(4);
-    for (uint32_t cellId = 0; cellId < numTets; ++cellId) {
-        for (uint32_t faceIdx = 0; faceIdx < 4; faceIdx++){
-            ovmCellVertices.at(faceIdx) = ovmVertices.at(cellIndices.at(cellId * 4 + faceIdx));
+        const uint32_t numTets = cellIndices.size() / 4;
+        std::vector<OpenVolumeMesh::VertexHandle> ovmCellVertices(4);
+        for (uint32_t cellId = 0; cellId < numTets; ++cellId) {
+            for (uint32_t faceIdx = 0; faceIdx < 4; faceIdx++){
+                ovmCellVertices.at(faceIdx) = ovmVertices.at(cellIndices.at(cellId * 4 + faceIdx));
+            }
             ovmMesh.add_cell(ovmCellVertices);
         }
-    }
 
-    ovmRepresentationData->vertexColorProp = ovmMesh.request_vertex_property<glm::vec4>("vertexColors");
-    OpenVolumeMesh::VertexPropertyT<glm::vec4>& vertexColorProp = ovmRepresentationData->vertexColorProp;
-    for(OpenVolumeMesh::VertexIter v_it = ovmMesh.vertices_begin(); v_it != ovmMesh.vertices_end(); ++v_it) {
-        vertexColorProp[*v_it] = vertexColors.at(v_it->idx());
-    }
-
-    // Update facesBoundarySlim array.
-    facesBoundarySlim.resize(ovmMesh.n_faces());
-    for (OpenVolumeMesh::FaceIter f_it = ovmMesh.faces_begin(); f_it != ovmMesh.faces_end(); f_it++) {
-        f_it->halfface_handle(0).is_valid();
-        facesBoundarySlim.at(f_it->idx()) =
-                !f_it->halfface_handle(0).is_valid() || !f_it->halfface_handle(1).is_valid();
-    }
-
-    // https://www.graphics.rwth-aachen.de/media/openvolumemesh_static/Documentation/OpenVolumeMesh-Doc-Latest/ovm_tutorial_02.html
-    // https://www.graphics.rwth-aachen.de/media/openvolumemesh_static/Documentation/OpenVolumeMesh-Doc-Latest/iterators_and_circulators.html
-    /*for (OpenVolumeMesh::FaceIter f_it = ovmMesh.faces_begin(); f_it != ovmMesh.faces_end(); f_it++) {
-        auto fh = *f_it;
-        auto faceCells = ovmMesh.face_cells(fh);
-        for(OpenVolumeMesh::FaceEdgeIter he_it = ovmMesh.fe_iter(fh); he_it.valid(); ++he_it) {
-            ;
+        ovmRepresentationData->vertexColorProp =
+                *ovmMesh.create_persistent_vertex_property<OpenVolumeMesh::Vec4f>("vertexColors");
+        auto& vertexColorProp = ovmRepresentationData->vertexColorProp;
+        for(OpenVolumeMesh::VertexIter v_it = ovmMesh.vertices_begin(); v_it != ovmMesh.vertices_end(); ++v_it) {
+            auto vh = *v_it;
+            const auto& vertexColor = vertexColors.at(vh.idx());
+            vertexColorProp[vh] = OpenVolumeMesh::Vec4f(vertexColor.x, vertexColor.y, vertexColor.z, vertexColor.w);
         }
-        f_it->idx();
-    }*/
 
-    //OpenVolumeMesh::IO::FileManager fileManager;
-    //fileManager.writeFile("MeshFile.ovm", ovmMesh);
-    //fileManager.readFile("MeshFile.ovm", ovmMesh);
+        newData = false;
+    }
+}
+
+void TetMesh::updateVerticesIfNecessary() {
+    if (verticesDirty) {
+        // Update vertex data.
+        OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
+        auto& vertexColorProp = ovmRepresentationData->vertexColorProp;
+        vertexPositions.resize(ovmMesh.n_vertices());
+        vertexColors.resize(ovmMesh.n_vertices());
+        for (OpenVolumeMesh::VertexIter v_it = ovmMesh.vertices_begin(); v_it != ovmMesh.vertices_end(); v_it++) {
+            auto vh = *v_it;
+            const auto& vertexPosition = ovmMesh.vertex(vh);
+            const auto& vertexColor = vertexColorProp[vh];
+            vertexPositions.at(vh.idx()) = glm::vec3(vertexPosition[0], vertexPosition[1], vertexPosition[2]);
+            vertexColors.at(vh.idx()) = glm::vec4(vertexColor[0], vertexColor[1], vertexColor[2], vertexColor[3]);
+        }
+
+        boundingBox = {};
+        for (const glm::vec3& pt : vertexPositions) {
+            boundingBox.combine(pt);
+        }
+    }
+}
+
+void TetMesh::updateFacesIfNecessary() {
+    if (facesDirty) {
+        // Update face data.
+        OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
+        facesSlim.resize(ovmMesh.n_faces());
+        facesBoundarySlim.resize(ovmMesh.n_faces());
+        FaceSlim faceSlim{};
+        for (OpenVolumeMesh::FaceIter f_it = ovmMesh.faces_begin(); f_it != ovmMesh.faces_end(); f_it++) {
+            auto fh = *f_it;
+            facesBoundarySlim.at(fh.idx()) = !fh.halfface_handle(0).is_valid() || !fh.halfface_handle(1).is_valid();
+            int vidx = 0;
+            for (auto fv_it = ovmMesh.fv_iter(fh); fv_it.valid(); fv_it++) {
+                assert(vidx < 3);
+                faceSlim.vs[vidx] = fv_it->idx();
+                vidx++;
+            }
+            facesSlim.at(fh.idx()) = faceSlim;
+        }
+    }
+}
+
+void TetMesh::updateCellIndicesIfNecessary() {
+    if (cellsDirty) {
+        // Update cell indices.
+        OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
+        cellIndices.resize(4 * ovmMesh.n_cells());
+        for (OpenVolumeMesh::CellIter c_it = ovmMesh.cells_begin(); c_it != ovmMesh.cells_end(); c_it++) {
+            auto ch = *c_it;
+            int vidx = 0;
+            for (auto cv_it = ovmMesh.cv_iter(ch); cv_it.valid(); cv_it++) {
+                assert(vidx < 4);
+                cellIndices.at(ch.idx() * 4 + vidx) = cv_it->uidx();
+                vidx++;
+            }
+        }
+    }
+}
+#else
+void TetMesh::updateVerticesIfNecessary() {
+    ;
+}
+
+void TetMesh::updateFacesIfNecessary() {
+    ;
+}
+
+void TetMesh::updateCellIndicesIfNecessary() {
+    ;
 }
 #endif

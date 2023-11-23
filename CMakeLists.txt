@@ -21,7 +21,6 @@ file(GLOB_RECURSE SHADER_FILES Data/Shaders/*.glsl)
 file(GLOB_RECURSE CUDA_MODULES Data/Shaders/*.cu)
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/Data/Shaders" PREFIX "Shaders" FILES ${SHADER_FILES})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/Data/Shaders" PREFIX "CUDA Modules" FILES ${CUDA_MODULES})
-list(REMOVE_ITEM CUDA_MODULES ${CMAKE_CURRENT_SOURCE_DIR}/Data/Shaders/Correlation/MutualInformationKraskov.cu)
 
 if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:__cplusplus")
@@ -61,8 +60,8 @@ endif()
 option(USE_STATIC_STD_LIBRARIES "Link with standard libraries statically (only supported on Linux for now)." OFF)
 option(USE_GLIBCXX_DEBUG "Use the -D_GLIBCXX_DEBUG flag when compiling with GCC." OFF)
 option(USE_TBB "Build with TBB threading support instead of using OpenMP." ${DEFAULT_USE_TBB})
-option(USE_ZINK "Use the Zink OpenGL wrapper if available." OFF)
-option(SUPPORT_PYTORCH "Build the PyTorch correlation calculator module." ON)
+option(USE_OVM "Use OpenVolumeMesh for the internal representation." ON)
+option(SUPPORT_PYTORCH "Build the PyTorch module." ON)
 
 set(DATA_PATH "${CMAKE_SOURCE_DIR}/Data" CACHE PATH "Location of folder 'Data'")
 add_definitions(-DDATA_PATH=\"${DATA_PATH}\")
@@ -74,8 +73,6 @@ endif()
 # CUDA nvcc does not support MSYS/MinGW.
 if (MSYS)
     set(SUPPORT_PYTORCH OFF)
-    set(SUPPORT_TINY_CUDA_NN OFF)
-    set(SUPPORT_QUICK_MLP OFF)
 endif()
 
 
@@ -119,10 +116,6 @@ endif()
 if (${SUPPORT_PYTORCH} AND NOT Torch_FOUND)
     MESSAGE(STATUS "PyTorch support was enabled, but PyTorch couldn't be found. Disabling PyTorch support.")
 endif()
-if (NOT ${SUPPORT_PYTORCH} OR NOT Torch_FOUND)
-    list(REMOVE_ITEM SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Calculators/PyTorchCorrelationCalculator.hpp)
-    list(REMOVE_ITEM SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Calculators/PyTorchCorrelationCalculator.cpp)
-endif()
 
 if ("SUPPORT_CUDA_INTEROP" IN_LIST SGL_INTERFACE_COMPILE_DEFINITIONS)
     if(${CMAKE_VERSION} VERSION_LESS "3.18.0")
@@ -143,6 +136,11 @@ if ("SUPPORT_CUDA_INTEROP" IN_LIST SGL_INTERFACE_COMPILE_DEFINITIONS)
     endif()
 else()
     MESSAGE(FATAL_ERROR "sgl was not built with CUDA interoperability support.")
+endif()
+
+if (NOT ${USE_OVM})
+    list(REMOVE_ITEM SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Tet/Loaders/OvmLoader.hpp)
+    list(REMOVE_ITEM SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Tet/Loaders/OvmLoader.cpp)
 endif()
 
 
@@ -298,10 +296,11 @@ endif()
 #target_link_libraries(DiffTetVR PUBLIC ${CURL_LIBRARIES})  # CURL::libcurl, since CMake 3.12
 #target_include_directories(DiffTetVR PUBLIC ${CURL_INCLUDES} ${CURL_INCLUDE_DIRS})
 
-add_subdirectory(third_party/OpenVolumeMesh)
-target_link_libraries(DiffTetVR PRIVATE OpenVolumeMesh::OpenVolumeMesh)
-target_compile_definitions(DiffTetVR PRIVATE USE_OPEN_VOLUME_MESH)
-
+if (${USE_OVM})
+    add_subdirectory(third_party/OpenVolumeMesh)
+    target_link_libraries(DiffTetVR PRIVATE OpenVolumeMesh::OpenVolumeMesh)
+    target_compile_definitions(DiffTetVR PRIVATE USE_OPEN_VOLUME_MESH)
+endif()
 
 if (${USE_TBB})
     find_package(TBB REQUIRED)
