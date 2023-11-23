@@ -350,7 +350,9 @@ void MainApp::renderGui() {
 
             std::string filenameLower = boost::to_lower_copy(filename);
 
-            if (boost::ends_with(filenameLower, ".bintet")) {
+            if (boost::ends_with(filenameLower, ".bintet")
+                    || boost::ends_with(filenameLower, ".txt")
+                    || boost::ends_with(filenameLower, ".ovm")) {
                 selectedDataSetIndex = 0;
                 customDataSetFileName = filename;
                 loadTetMeshDataSet(getSelectedDataSetFilename());
@@ -403,7 +405,9 @@ void MainApp::renderGui() {
             saveTestMeshFileDialogDirectory = sgl::FileUtils::get()->getPathToFile(filename);
 
             std::string filenameLower = boost::to_lower_copy(filename);
-            if (boost::ends_with(filenameLower, ".bintet")) {
+            if (boost::ends_with(filenameLower, ".bintet")
+                    || boost::ends_with(filenameLower, ".txt")
+                    || boost::ends_with(filenameLower, ".ovm")) {
                 tetMesh->saveToFile(filename);
             } else {
                 sgl::Logfile::get()->writeError(
@@ -629,7 +633,7 @@ void MainApp::openFileDialog() {
     IGFD_OpenModal(
             fileDialogInstance,
             "ChooseDataSetFile", "Choose a File",
-            ".*,.bintet",
+            ".*,.bintet,.txt,.ovm",
             fileDialogDirectory.c_str(),
             "", 1, nullptr,
             ImGuiFileDialogFlags_None);
@@ -645,7 +649,7 @@ void MainApp::openSaveTetMeshFileDialog() {
     IGFD_OpenModal(
             fileDialogInstance,
             "ChooseSaveFile", "Choose a File",
-            ".*,.bintet",
+            ".*,.bintet,.txt,.ovm",
             saveTestMeshFileDialogDirectory.c_str(),
             "", 1, nullptr,
             ImGuiFileDialogFlags_ConfirmOverwrite);

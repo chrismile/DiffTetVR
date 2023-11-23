@@ -38,13 +38,14 @@
 #include <Graphics/Vulkan/Buffers/Buffer.hpp>
 
 #include "Loaders/BinTetLoader.hpp"
+#include "Loaders/TxtTetLoader.hpp"
 #include "TetMesh.hpp"
 #include "OpenVolumeMesh/FileManager/FileManager.hh"
 
 #ifdef USE_OPEN_VOLUME_MESH
 struct OvmRepresentationData {
     OpenVolumeMesh::GeometricTetrahedralMeshV3f ovmMesh;
-    OpenVolumeMesh::VertexPropertyT<float> vertexColorProp;
+    OpenVolumeMesh::VertexPropertyT<glm::vec4> vertexColorProp;
 
 };
 #endif
@@ -88,6 +89,7 @@ TetMesh::TetMesh(sgl::vk::Device* device) : device(device) {
     // Create the list of tet mesh loaders.
     std::map<std::vector<std::string>, std::function<TetMeshLoader*()>> factoriesLoaderMap = {
             registerTetMeshLoader<BinTetLoader>(),
+            registerTetMeshLoader<TxtTetLoader>(),
     };
     for (auto& factory : factoriesLoaderMap) {
         for (const std::string& extension : factory.first) {
@@ -98,6 +100,7 @@ TetMesh::TetMesh(sgl::vk::Device* device) : device(device) {
     // Create the list of tet mesh writers.
     std::map<std::vector<std::string>, std::function<TetMeshWriter*()>> factoriesWriterMap = {
             registerTetMeshWriter<BinTetWriter>(),
+            registerTetMeshWriter<TxtTetWriter>(),
     };
     for (auto& factory : factoriesWriterMap) {
         for (const std::string& extension : factory.first) {
@@ -354,69 +357,41 @@ void TetMesh::rebuildInternalRepresentationIfNecessary_Ovm() {
     std::vector<FaceSlim> totalFaces(numTets * 4);
     std::vector<TempFace> tempFaces(numTets * 4);
 
-    FaceSlim face{};
+    std::vector<OpenVolumeMesh::VertexHandle> ovmCellVertices(4);
     for (uint32_t cellId = 0; cellId < numTets; ++cellId) {
         for (uint32_t faceIdx = 0; faceIdx < 4; faceIdx++){
-            for (uint32_t vertexIdx = 0; vertexIdx < 3; vertexIdx++) {
-                face.vs[vertexIdx] = cellIndices.at(cellId * 4 + tetFaceTable[faceIdx][vertexIdx]);
-            }
-
-            uint32_t faceId = 4 * cellId + faceIdx;
-            totalFaces[faceId] = face;
-            std::sort(face.vs, face.vs + 3);
-            tempFaces[faceId] = TempFace{
-                    { face.vs[0], face.vs[1], face.vs[2] }, faceId
-            };
-        }
-    }
-    std::sort(tempFaces.begin(), tempFaces.end());
-
-    /*std::vector<OpenVolumeMesh::VertexHandle> ovmFaceVertices(3);
-    OpenVolumeMesh::FaceHandle ovmLastFaceHandle;
-    facesSlim.reserve(tempFaces.size() / 2);
-    uint32_t numFaces = 0;
-    for (uint32_t i = 0; i < tempFaces.size(); ++i) {
-        if (i == 0 || tempFaces[i] != tempFaces[i - 1]) {
-            ovmFaceVertices.at(0) = v0Handle;
-            ovmFaceVertices.at(1) = v1Handle;
-            ovmFaceVertices.at(2) = v2Handle;
-            ovmLastFaceHandle = ovmMesh.add_face(ovmFaceVertices);
-            face = totalFaces[tempFaces[i].faceId];
-            facesSlim.push_back(face);
-            isBoundaryFace.push_back(true);
-            numFaces++;
-        } else {
-            isBoundaryFace[numFaces - 1] = false;
+            ovmCellVertices.at(faceIdx) = ovmVertices.at(cellIndices.at(cellId * 4 + faceIdx));
+            ovmMesh.add_cell(ovmCellVertices);
         }
     }
 
-    OpenVolumeMesh::FaceHandle f0Handle = ovmMesh.add_face(ovmFaceVertices);
-
-    std::vector<OpenVolumeMesh::HalfFaceHandle> halfFaces(4);
-    halfFaces.at(0) = OpenVolumeMesh::GeometricTetrahedralMeshV3f::halfface_handle(f0Handle, 0);
-    // ...
-    ovmMesh.add_cell(halfFaces);*/
-
-    //ovmMesh.delete_cell();
-
-    ovmRepresentationData->vertexColorProp = ovmMesh.request_vertex_property<float>("vertexColors");
-    OpenVolumeMesh::VertexPropertyT<float>& vertexColorProp = ovmRepresentationData->vertexColorProp;
+    ovmRepresentationData->vertexColorProp = ovmMesh.request_vertex_property<glm::vec4>("vertexColors");
+    OpenVolumeMesh::VertexPropertyT<glm::vec4>& vertexColorProp = ovmRepresentationData->vertexColorProp;
     for(OpenVolumeMesh::VertexIter v_it = ovmMesh.vertices_begin(); v_it != ovmMesh.vertices_end(); ++v_it) {
-        vertexColorProp[*v_it] = 0.0f;
+        vertexColorProp[*v_it] = vertexColors.at(v_it->idx());
+    }
+
+    // Update facesBoundarySlim array.
+    facesBoundarySlim.resize(ovmMesh.n_faces());
+    for (OpenVolumeMesh::FaceIter f_it = ovmMesh.faces_begin(); f_it != ovmMesh.faces_end(); f_it++) {
+        f_it->halfface_handle(0).is_valid();
+        facesBoundarySlim.at(f_it->idx()) =
+                !f_it->halfface_handle(0).is_valid() || !f_it->halfface_handle(1).is_valid();
     }
 
     // https://www.graphics.rwth-aachen.de/media/openvolumemesh_static/Documentation/OpenVolumeMesh-Doc-Latest/ovm_tutorial_02.html
     // https://www.graphics.rwth-aachen.de/media/openvolumemesh_static/Documentation/OpenVolumeMesh-Doc-Latest/iterators_and_circulators.html
     /*for (OpenVolumeMesh::FaceIter f_it = ovmMesh.faces_begin(); f_it != ovmMesh.faces_end(); f_it++) {
         auto fh = *f_it;
+        auto faceCells = ovmMesh.face_cells(fh);
         for(OpenVolumeMesh::FaceEdgeIter he_it = ovmMesh.fe_iter(fh); he_it.valid(); ++he_it) {
             ;
         }
         f_it->idx();
     }*/
 
-    OpenVolumeMesh::IO::FileManager fileManager;
-    fileManager.writeFile("MeshFile.ovm", ovmMesh);
-    fileManager.readFile("MeshFile.ovm", ovmMesh);
+    //OpenVolumeMesh::IO::FileManager fileManager;
+    //fileManager.writeFile("MeshFile.ovm", ovmMesh);
+    //fileManager.readFile("MeshFile.ovm", ovmMesh);
 }
 #endif
