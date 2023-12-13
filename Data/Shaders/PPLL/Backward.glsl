@@ -63,7 +63,7 @@ void accumulateLinearConstAdjoint(
         float t, float tf, vec3 c0, vec3 c1, float a, float A, vec4 dOut_dC,
         inout float dOut_dt, out vec3 dOut_dc0, out vec3 dOut_dc1, out float dOut_da) {
     const float inva = 1.0 / a;
-    dOut_dt += tf * dot(dOut_dC.rgb, (a * c0 + (a * c1 - a * c0) * t) * A);
+    dOut_dt += tf * (dot(dOut_dC.rgb, (a * c0 + (a * c1 - a * c0) * t) * A) + dOut_dC.a * a * A);
     dOut_dc0 = ((1.0 - A) + ((t + inva) * A - inva)) * dOut_dC.rgb;
     dOut_dc1 = -((t + inva) * A - inva) * dOut_dC.rgb;
     dOut_da =
@@ -378,16 +378,16 @@ vec4 frontToBackPQ(uint fragsCount) {
             }*/
         }
 
-        /*vec3 dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12;
+        vec3 dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12;
         vec4 dOut_dcf00, dOut_dcf01, dOut_dcf02, dOut_dcf10, dOut_dcf11, dOut_dcf12;
         float dOut_duf0, dOut_dvf0, dOut_duf1, dOut_dvf1;
         segmentLengthAdjoint(
                 pf00, pf01, pf02, pf00, pf01, pf02, uf0, vf0, uf1, vf1, dOut_dt,
                 dOut_duf0, dOut_dvf0, dOut_duf1, dOut_dvf1,
-                dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12);*/
-        vec3 dOut_dpf00 = vec3(0.0), dOut_dpf01 = vec3(0.0), dOut_dpf02 = vec3(0.0), dOut_dpf10 = vec3(0.0), dOut_dpf11 = vec3(0.0), dOut_dpf12 = vec3(0.0);
-        vec4 dOut_dcf00, dOut_dcf01, dOut_dcf02, dOut_dcf10, dOut_dcf11, dOut_dcf12;
-        float dOut_duf0 = 0.0, dOut_dvf0 = 0.0, dOut_duf1 = 0.0, dOut_dvf1 = 0.0;
+                dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12);
+        //vec3 dOut_dpf00 = vec3(0.0), dOut_dpf01 = vec3(0.0), dOut_dpf02 = vec3(0.0), dOut_dpf10 = vec3(0.0), dOut_dpf11 = vec3(0.0), dOut_dpf12 = vec3(0.0);
+        //vec4 dOut_dcf00, dOut_dcf01, dOut_dcf02, dOut_dcf10, dOut_dcf11, dOut_dcf12;
+        //float dOut_duf0 = 0.0, dOut_dvf0 = 0.0, dOut_duf1 = 0.0, dOut_dvf1 = 0.0;
         baryAdjoint(
                 pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0,
                 dOut_dcf0, dOut_duf0, dOut_dvf0,
