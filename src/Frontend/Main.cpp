@@ -42,7 +42,7 @@
 
 int main(int argc, char *argv[]) {
     // Initialize the filesystem utilities.
-    sgl::FileUtils::get()->initialize("Correrender", argc, argv);
+    sgl::FileUtils::get()->initialize("DiffTetVR", argc, argv);
 
 #ifdef DATA_PATH
     if (!sgl::FileUtils::get()->directoryExists("Data") && !sgl::FileUtils::get()->directoryExists("../Data")) {

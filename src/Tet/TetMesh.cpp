@@ -128,6 +128,8 @@ void TetMesh::setTetMeshData(
     cellIndices = _cellIndices;
     vertexPositions = _vertexPositions;
     vertexColors = _vertexColors;
+    meshNumCells = _cellIndices.size() / 4;
+    meshNumVertices = _vertexPositions.size();
 #ifdef USE_OPEN_VOLUME_MESH
     if (ovmRepresentationData) {
         delete ovmRepresentationData;
@@ -137,7 +139,11 @@ void TetMesh::setTetMeshData(
     verticesDirty = false;
     facesDirty = true;
     cellsDirty = false;
-    rebuildInternalRepresentationIfNecessary_Ovm();
+    if (useOvmRepresentation) {
+        rebuildInternalRepresentationIfNecessary_Ovm();
+    } else {
+        rebuildInternalRepresentationIfNecessary_Slim();
+    }
 #else
     rebuildInternalRepresentationIfNecessary_Slim();
 #endif
@@ -254,6 +260,7 @@ bool TetMesh::loadFromFile(const std::string& filePath) {
             delete ovmRepresentationData;
         }
         ovmRepresentationData = new OvmRepresentationData;
+        useOvmRepresentation = true;
 
         retVal = tetMeshLoader->loadFromFileOvm(filePath, ovmRepresentationData->ovmMesh);
         ovmRepresentationData->vertexColorProp =
@@ -268,6 +275,7 @@ bool TetMesh::loadFromFile(const std::string& filePath) {
 #endif
         retVal = tetMeshLoader->loadFromFile(filePath, _cellIndices, _vertexPositions, _vertexColors);
         if (retVal) {
+            useOvmRepresentation = false;
             setTetMeshData(_cellIndices, _vertexPositions, _vertexColors);
         }
 #ifdef USE_OPEN_VOLUME_MESH
@@ -418,7 +426,7 @@ void TetMesh::rebuildInternalRepresentationIfNecessary_Ovm() {
 }
 
 void TetMesh::updateVerticesIfNecessary() {
-    if (verticesDirty) {
+    if (useOvmRepresentation && verticesDirty) {
         // Update vertex data.
         OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
         auto& vertexColorProp = ovmRepresentationData->vertexColorProp;
@@ -436,11 +444,12 @@ void TetMesh::updateVerticesIfNecessary() {
         for (const glm::vec3& pt : vertexPositions) {
             boundingBox.combine(pt);
         }
+        meshNumVertices = vertexPositions.size();
     }
 }
 
 void TetMesh::updateFacesIfNecessary() {
-    if (facesDirty) {
+    if (useOvmRepresentation && facesDirty) {
         // Update face data.
         OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
         facesSlim.resize(ovmMesh.n_faces());
@@ -461,7 +470,7 @@ void TetMesh::updateFacesIfNecessary() {
 }
 
 void TetMesh::updateCellIndicesIfNecessary() {
-    if (cellsDirty) {
+    if (useOvmRepresentation && cellsDirty) {
         // Update cell indices.
         OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
         cellIndices.resize(4 * ovmMesh.n_cells());
@@ -474,6 +483,7 @@ void TetMesh::updateCellIndicesIfNecessary() {
                 vidx++;
             }
         }
+        meshNumCells = cellIndices.size() / 4;
     }
 }
 #else

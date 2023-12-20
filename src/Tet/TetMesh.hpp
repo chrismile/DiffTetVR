@@ -113,6 +113,7 @@ private:
     bool facesDirty = false;
     bool cellsDirty = false;
     bool isVisualRepresentationDirty = false;
+    bool useOvmRepresentation = false;
     //TetMeshRepresentationType representationType = TetMeshRepresentationType::SLIM;
 
     void rebuildInternalRepresentationIfNecessary_Slim();

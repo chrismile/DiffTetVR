@@ -474,13 +474,14 @@ void MainApp::renderGui() {
                     sizeContent = ImVec2(float(fixedViewportSize.x), float(fixedViewportSize.y));
                 }
                 if (int(sizeContent.x) != int(dataView->viewportWidth)
-                    || int(sizeContent.y) != int(dataView->viewportHeight)) {
+                        || int(sizeContent.y) != int(dataView->viewportHeight)) {
                     dataView->resize(int(sizeContent.x), int(sizeContent.y));
-                    if (dataView->viewportWidth > 0 && dataView->viewportHeight > 0) {
-                        tetMeshVolumeRenderer->setOutputImage(dataView->dataViewTexture->getImageView());
-                        tetMeshVolumeRenderer->recreateSwapchain(
-                                dataView->viewportWidth, dataView->viewportHeight);
-                    }
+                    // Handled by resize().
+                    //if (dataView->viewportWidth > 0 && dataView->viewportHeight > 0) {
+                    //    tetMeshVolumeRenderer->setOutputImage(dataView->dataViewTexture->getImageView());
+                    //    tetMeshVolumeRenderer->recreateSwapchain(
+                    //            dataView->viewportWidth, dataView->viewportHeight);
+                    //}
                     reRender = true;
                 }
 
