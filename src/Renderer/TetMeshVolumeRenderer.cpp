@@ -33,6 +33,7 @@
 #include <Graphics/Vulkan/Render/Renderer.hpp>
 #include <Graphics/Vulkan/Render/Passes/BlitRenderPass.hpp>
 #include <ImGui/Widgets/PropertyEditor.hpp>
+#include <ImGui/Widgets/NumberFormatting.hpp>
 #include <utility>
 
 #include "Tet/TetMesh.hpp"
@@ -55,6 +56,9 @@ protected:
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
+        if (volumeRenderer->getShowDepthComplexity()) {
+            preprocessorDefines.insert(std::make_pair("SHOW_DEPTH_COMPLEXITY", ""));
+        }
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
                 { "LinkedListGather.Vertex", "LinkedListGather.Fragment" }, preprocessorDefines);
@@ -70,6 +74,10 @@ protected:
         rasterData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "VertexPositionBuffer");
         //rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "VertexColorBuffer");
         rasterData->setStaticBuffer(tetMesh->getFaceBoundaryBitBuffer(), "FaceBoundaryBitBuffer");
+        if (volumeRenderer->getShowDepthComplexity()) {
+            rasterData->setStaticBuffer(
+                    volumeRenderer->getDepthComplexityCounterBuffer(), "DepthComplexityCounterBuffer");
+        }
         rasterData->setNumVertices(numIndexedVertices);
         volumeRenderer->setRenderDataBindings(rasterData);
     }
@@ -134,6 +142,9 @@ protected:
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
+        if (volumeRenderer->getShowDepthComplexity()) {
+            preprocessorDefines.insert(std::make_pair("SHOW_DEPTH_COMPLEXITY", ""));
+        }
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(shaderIds, preprocessorDefines);
     }
@@ -141,6 +152,10 @@ protected:
         rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
         rasterData->setIndexBuffer(indexBuffer);
         rasterData->setVertexBuffer(vertexBuffer, 0);
+        if (volumeRenderer->getShowDepthComplexity()) {
+            rasterData->setStaticBuffer(
+                    volumeRenderer->getDepthComplexityCounterBuffer(), "DepthComplexityCounterBuffer");
+        }
         volumeRenderer->setRenderDataBindings(rasterData);
     }
 
@@ -242,6 +257,15 @@ void TetMeshVolumeRenderer::setTetMeshData(const TetMeshPtr& _tetMesh) {
     resolveRasterPass->setDataDirty();
     clearRasterPass->setDataDirty();
     updateLargeMeshMode();
+
+    statisticsUpToDate = false;
+    counterPrintFrags = 0.0f;
+    firstFrame = true;
+    totalNumFragments = 0;
+    usedLocations = 1;
+    maxComplexity = 0;
+    bufferSize = 1;
+
     reRender = true;
 }
 
@@ -268,10 +292,13 @@ void TetMeshVolumeRenderer::setAdjointPassData(
 }
 
 void TetMeshVolumeRenderer::recreateSwapchain(uint32_t width, uint32_t height) {
-    paddedWindowWidth = int(width), paddedWindowHeight = int(height);
+    windowWidth = int(width);
+    windowHeight = int(height);
+    paddedWindowWidth = windowWidth, paddedWindowHeight = windowHeight;
     getScreenSizeWithTiling(paddedWindowWidth, paddedWindowHeight);
     useExternalFragmentBuffer = false;
 
+    createDepthComplexityBuffers();
     reallocateFragmentBuffer();
 
     size_t startOffsetBufferSizeBytes = sizeof(uint32_t) * paddedWindowWidth * paddedWindowHeight;
@@ -303,7 +330,9 @@ void TetMeshVolumeRenderer::recreateSwapchain(uint32_t width, uint32_t height) {
 void TetMeshVolumeRenderer::recreateSwapchainExternal(
         uint32_t width, uint32_t height, size_t _fragmentBufferSize, sgl::vk::BufferPtr _fragmentBuffer,
         sgl::vk::BufferPtr _startOffsetBuffer, sgl::vk::BufferPtr _fragmentCounterBuffer) {
-    paddedWindowWidth = int(width), paddedWindowHeight = int(height);
+    windowWidth = int(width);
+    windowHeight = int(height);
+    paddedWindowWidth = windowWidth, paddedWindowHeight = windowHeight;
     getScreenSizeWithTiling(paddedWindowWidth, paddedWindowHeight);
     useExternalFragmentBuffer = true;
 
@@ -460,6 +489,7 @@ void TetMeshVolumeRenderer::render() {
     uniformData.linkedListSize = static_cast<uint32_t>(fragmentBufferSize);
     uniformData.viewportW = paddedWindowWidth;
     uniformData.viewportSize = glm::uvec2(imageSettings.width, imageSettings.height);
+    uniformData.viewportLinearW = int(imageSettings.width);
     uniformData.zNear = (*camera)->getNearClipDistance();
     uniformData.zFar = (*camera)->getFarClipDistance();
     uniformData.cameraFront = (*camera)->getCameraFront();
@@ -490,6 +520,12 @@ void TetMeshVolumeRenderer::clear() {
             VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             fragmentCounterBuffer);
+    if (showDepthComplexity) {
+        renderer->insertBufferMemoryBarrier(
+                VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                depthComplexityCounterBuffer);
+    }
 }
 
 void TetMeshVolumeRenderer::gather() {
@@ -516,6 +552,29 @@ void TetMeshVolumeRenderer::renderGuiPropertyEditorNodes(sgl::PropertyEditor& pr
     }
     if (propertyEditor.addSliderFloat("Attenuation", &attenuationCoefficient, 1.0f, 1000.0f)) {
         reRender = true;
+    }
+    bool depthComplexityJustChanged = false;
+    if (propertyEditor.addCheckbox("Show Depth Complexity", &showDepthComplexity)) {
+        gatherRasterPass->setShaderDirty();
+        reRender = true;
+        depthComplexityJustChanged = true;
+        createDepthComplexityBuffers();
+    }
+    if (showDepthComplexity && !depthComplexityJustChanged) {
+        std::string totalNumFragmentsString = sgl::numberToCommaString(int64_t(totalNumFragments));
+        propertyEditor.addText("#Fragments", totalNumFragmentsString);
+        propertyEditor.addText(
+                "Average Used",
+                sgl::toString(double(totalNumFragments) / double(usedLocations), 2));
+        propertyEditor.addText(
+                "Average All",
+                sgl::toString(double(totalNumFragments) / double(bufferSize), 2));
+        propertyEditor.addText(
+                "Max. Complexity", sgl::toString(maxComplexity) + " / " + sgl::toString(expectedMaxDepthComplexity));
+        propertyEditor.addText(
+                "Memory",
+                sgl::getNiceMemoryString(totalNumFragments * 12ull, 2) + " / "
+                + sgl::getNiceMemoryString(fragmentBuffer->getSizeInBytes(), 2));
     }
 }
 

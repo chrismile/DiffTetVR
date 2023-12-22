@@ -80,4 +80,8 @@ void main() {
         frag.next = atomicExchange(startOffset[pixelIndex], insertIndex);
         fragmentBuffer[insertIndex] = frag;
     }
+
+#ifdef SHOW_DEPTH_COMPLEXITY
+    atomicAdd(depthComplexityCounterBuffer[addrGenLinear(uvec2(x, y))], 1u);
+#endif
 }

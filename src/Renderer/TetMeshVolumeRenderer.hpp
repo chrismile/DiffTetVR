@@ -62,6 +62,9 @@ const int MESH_MODE_DEPTH_COMPLEXITIES_PPLL[2][2] = {
         {400, 900} // avg and max depth complexity very large
 };
 
+// Converts e.g. 123456789 to "123,456,789"
+std::string numberToCommaString(int64_t number);
+
 /**
  * The order-independent transparency (OIT) technique per-pixel linked lists is used.
  * For more details see: Yang, J. C., Hensley, J., Grün, H. and Thibieroz, N., "Real-Time Concurrent
@@ -101,9 +104,13 @@ public:
     [[nodiscard]] inline const sgl::vk::BufferPtr& getFragmentBuffer() const { return fragmentBuffer; }
     [[nodiscard]] inline const sgl::vk::BufferPtr& getStartOffsetBuffer() const { return startOffsetBuffer; }
     [[nodiscard]] inline const sgl::vk::BufferPtr& getFragmentCounterBuffer() const { return fragmentCounterBuffer; }
+    [[nodiscard]] inline const sgl::vk::BufferPtr& getDepthComplexityCounterBuffer() const { return depthComplexityCounterBuffer; }
+    [[nodiscard]] inline bool getShowDepthComplexity() const { return showDepthComplexity; }
 
     /// Returns if the data needs to be re-rendered, but the visualization mapping is valid.
-    bool needsReRender() { bool tmp = reRender; reRender = false; return tmp; }
+    bool needsReRender();
+    /// Called when the camera has moved.
+    void onHasMoved();
     /// Renders the GUI. The "reRender" flag might be set depending on the user's actions.
     void renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor);
 
@@ -124,7 +131,6 @@ private:
     sgl::vk::ImageViewPtr outputImageView;
     sgl::Color clearColor;
     bool reRender = false;
-    //bool showDepthComplexity = false;
 
     // Render passes.
     std::shared_ptr<GatherRasterPass> gatherRasterPass;
@@ -167,11 +173,16 @@ private:
 
         // Viewport size in x/y direction.
         glm::uvec2 viewportSize;
+
+        // Size of the viewport in x direction (in pixels) without padding.
+        int viewportLinearW;
+        int paddingUniform = 0;
     };
     UniformData uniformData = {};
     sgl::vk::BufferPtr uniformDataBuffer;
 
     // Window data.
+    int windowWidth = 0, windowHeight = 0;
     int paddedWindowWidth = 0, paddedWindowHeight = 0;
     size_t maxStorageBufferSize = 0;
 
@@ -183,6 +194,20 @@ private:
     int expectedAvgDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[0][0];
     int expectedMaxDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[0][1];
     float attenuationCoefficient = 100.0f;
+
+    // Depth complexity information mode.
+    bool showDepthComplexity = true;
+    void computeStatistics(bool isReRender);
+    void createDepthComplexityBuffers();
+    sgl::vk::BufferPtr depthComplexityCounterBuffer;
+    std::vector<sgl::vk::BufferPtr> stagingBuffers;
+    bool firstFrame = true;
+    bool statisticsUpToDate = false;
+    float counterPrintFrags = 0.0f;
+    uint64_t totalNumFragments = 0;
+    uint64_t usedLocations = 1;
+    uint64_t maxComplexity = 0;
+    uint64_t bufferSize = 1;
 
     // Tiling mode.
     int tilingModeIndex = 2;

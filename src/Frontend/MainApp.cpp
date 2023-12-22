@@ -857,7 +857,7 @@ void MainApp::update(float dt) {
 
 void MainApp::hasMoved() {
     dataView->syncCamera();
-    //tetMeshVolumeRenderer->onHasMoved();
+    tetMeshVolumeRenderer->onHasMoved();
 }
 
 void MainApp::onCameraReset() {

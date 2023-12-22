@@ -70,6 +70,10 @@ layout(binding = 0) uniform UniformDataBuffer {
 
     // Viewport size in x/y direction.
     uvec2 viewportSize;
+
+    // Size of the viewport in x direction (in pixels) without padding.
+    int viewportLinearW;
+    int paddingUniform;
 };
 
 // Fragment-and-link buffer (linked list). Stores "nodesPerPixel" number of fragments.
@@ -88,3 +92,14 @@ layout(std430, binding = 3) buffer FragCounterBuffer {
 };
 
 #include "TiledAddress.glsl"
+
+#ifdef SHOW_DEPTH_COMPLEXITY
+// Stores the number of fragments using atomic operations.
+layout(binding = 11) coherent buffer DepthComplexityCounterBuffer {
+    uint depthComplexityCounterBuffer[];
+};
+
+uint addrGenLinear(uvec2 addr2D) {
+    return addr2D.x + viewportLinearW * addr2D.y;
+}
+#endif
