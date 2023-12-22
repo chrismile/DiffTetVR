@@ -128,6 +128,11 @@ void TetMesh::setTetMeshData(
     cellIndices = _cellIndices;
     vertexPositions = _vertexPositions;
     vertexColors = _vertexColors;
+
+    //for (auto& color : vertexColors) {
+    //    color.a = std::max(color.a, 1e-3f);
+    //}
+
     meshNumCells = _cellIndices.size() / 4;
     meshNumVertices = _vertexPositions.size();
 #ifdef USE_OPEN_VOLUME_MESH
@@ -152,6 +157,17 @@ void TetMesh::setTetMeshData(
     boundingBox = {};
     for (const glm::vec3& pt : vertexPositions) {
         boundingBox.combine(pt);
+    }
+
+    for (size_t tet = 0; tet < cellIndices.size(); tet += 4) {
+        glm::vec3 p0 = vertexPositions.at(cellIndices.at(tet + 0));
+        glm::vec3 p1 = vertexPositions.at(cellIndices.at(tet + 1));
+        glm::vec3 p2 = vertexPositions.at(cellIndices.at(tet + 2));
+        glm::vec3 p3 = vertexPositions.at(cellIndices.at(tet + 3));
+        float signVal = glm::sign(glm::dot(glm::cross(p1 - p0, p2 - p0), p3 - p0));
+        if (signVal >= 0.0f) {
+            std::cout << "Invalid sign for tet " << (cellIndices.size() / 4) << std::endl;
+        }
     }
 }
 

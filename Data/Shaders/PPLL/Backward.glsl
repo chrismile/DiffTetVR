@@ -56,19 +56,30 @@ void atomicAddGradPos(uint idx, vec3 value) {
 
 vec4 accumulateLinearConst(float t, vec3 c0, vec3 c1, float a, out float A) {
     A = exp(-a * t);
+    if (a < 1e-6) {
+        // lim a->0 (t + 1.0 / a) * A - 1.0 / a) = 0
+        return vec4(0.0);
+    }
     return vec4((1.0 - A) * c0 + ((t + 1.0 / a) * A - 1.0 / a) * (c0 - c1), 1.0 - A);
 }
 
 void accumulateLinearConstAdjoint(
         float t, float tf, vec3 c0, vec3 c1, float a, float A, vec4 dOut_dC,
         inout float dOut_dt, out vec3 dOut_dc0, out vec3 dOut_dc1, out float dOut_da) {
-    const float inva = 1.0 / a;
     dOut_dt += tf * (dot(dOut_dC.rgb, (a * c0 + (a * c1 - a * c0) * t) * A) + dOut_dC.a * a * A);
-    dOut_dc0 = ((1.0 - A) + ((t + inva) * A - inva)) * dOut_dC.rgb;
-    dOut_dc1 = -((t + inva) * A - inva) * dOut_dC.rgb;
-    dOut_da =
-            dot(dOut_dC.rgb, t * A * c0 + (inva * inva - (t * t + inva * inva + t * inva) * A) * (c0 - c1))
-            + dOut_dC.a * t * A;
+    if (a < 1e-6) {
+        // For c0 and c1: lim a->0 (t + 1.0 / a) * A - 1.0 / a) = 0
+        dOut_dc0 = vec3(0.0);
+        dOut_dc1 = vec3(0.0);
+        dOut_da = dot(dOut_dC.rgb, t * c0 + 0.5 * t * t * (c1 - c0)) + dOut_dC.a * t;
+    } else {
+        const float inva = 1.0 / a;
+        dOut_dc0 = ((1.0 - A) + ((t + inva) * A - inva)) * dOut_dC.rgb;
+        dOut_dc1 = -((t + inva) * A - inva) * dOut_dC.rgb;
+        dOut_da =
+                dot(dOut_dC.rgb, t * A * c0 + (inva * inva - (t * t + inva * inva + t * inva) * A) * (c0 - c1))
+                + dOut_dC.a * t * A;
+    }
 }
 
 void getNextFragment(

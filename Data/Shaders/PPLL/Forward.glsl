@@ -30,6 +30,10 @@ float erf(float z) {
 }*/
 
 vec4 accumulateLinearConst(float t, vec3 c0, vec3 c1, float a) {
+    if (a < 1e-6) {
+        // lim a->0 (t + 1.0 / a) * A - 1.0 / a) = 0
+        return vec4(0.0);
+    }
     float A = exp(-a * t);
     return vec4((1.0 - A) * c0 + ((t + 1.0 / a) * A - 1.0 / a) * (c0 - c1), 1.0 - A);
 }

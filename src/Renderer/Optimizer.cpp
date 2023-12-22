@@ -259,6 +259,10 @@ void TetMeshOptimizer::startRequest() {
     auto renderTarget = std::make_shared<sgl::RenderTarget>(int(settings.imageWidth), int(settings.imageHeight));
     camera->setRenderTarget(renderTarget, false);
     camera->onResolutionChanged({});
+    int paddedViewportWidth = 0, paddedViewportHeight = 0;
+    std::map<std::string, std::string> preprocessorDefinesRenderer;
+    tetMeshVolumeRendererOpt->getScreenSizeWithTiling(paddedViewportWidth, paddedViewportHeight);
+    tetMeshVolumeRendererOpt->getVulkanShaderPreprocessorDefines(preprocessorDefinesRenderer);
 
     optimizerPassPositions->setOptimizerType(settings.optimizerType);
     optimizerPassPositions->setSettings(
@@ -270,7 +274,9 @@ void TetMeshOptimizer::startRequest() {
             settings.lossType, settings.optimizerSettingsColors.learningRate,
             settings.optimizerSettingsColors.beta1, settings.optimizerSettingsColors.beta2,
             settings.optimizerSettingsColors.epsilon, true);
-    lossPass->setSettings(settings.lossType, settings.imageWidth, settings.imageHeight);
+    lossPass->setSettings(
+            settings.lossType, settings.imageWidth, settings.imageHeight,
+            uint32_t(paddedViewportWidth), uint32_t(paddedViewportHeight), preprocessorDefinesRenderer);
     lossPass->updateUniformBuffer();
     renderer->insertMemoryBarrier(
             VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT,
@@ -299,8 +305,6 @@ void TetMeshOptimizer::startRequest() {
                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                 VK_ACCESS_NONE_KHR, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
         //colorAdjointTexture->getImage()->transitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-        lossPass->setImageViews(
-                colorImageGT->getImageView(), colorImageOpt->getImageView(), colorAdjointTexture->getImageView());
         imageSettings.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         imageSettings.format = VK_FORMAT_R8G8B8A8_UNORM;
         adjointPassBackbuffer = std::make_shared<sgl::vk::ImageView>(std::make_shared<sgl::vk::Image>(
@@ -355,6 +359,12 @@ void TetMeshOptimizer::startRequest() {
     tetMeshVolumeRendererOpt->recreateSwapchainExternal(
             settings.imageWidth, settings.imageHeight, fragmentBufferSize,
             fragmentBuffer, startOffsetBuffer, fragmentCounterBuffer);
+
+    if (viewportWidth != settings.imageWidth || viewportHeight != settings.imageHeight) {
+        lossPass->setImageViews(
+                colorImageGT->getImageView(), colorImageOpt->getImageView(), colorAdjointTexture->getImageView(),
+                tetMeshVolumeRendererGT->getStartOffsetBuffer(), tetMeshVolumeRendererOpt->getStartOffsetBuffer());
+    }
 
     viewportWidth = settings.imageWidth;
     viewportHeight = settings.imageHeight;

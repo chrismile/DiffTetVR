@@ -43,7 +43,9 @@ LossPass::LossPass(sgl::vk::Renderer* renderer) : ComputePass(renderer) {
 void LossPass::setImageViews(
         const sgl::vk::ImageViewPtr& _colorImageGT,
         const sgl::vk::ImageViewPtr& _colorImageOpt,
-        const sgl::vk::ImageViewPtr& _adjointColorsImageView) {
+        const sgl::vk::ImageViewPtr& _adjointColorsImageView,
+        const sgl::vk::BufferPtr& _startOffsetBufferGT,
+        const sgl::vk::BufferPtr& _startOffsetBufferOpt) {
     if (colorImageGT != _colorImageGT) {
         colorImageGT = _colorImageGT;
         if (computeData) {
@@ -62,9 +64,24 @@ void LossPass::setImageViews(
             computeData->setStaticImageView(adjointColorsImageView, "AdjointColorsImageView");
         }
     }
+    if (startOffsetBufferGT != _startOffsetBufferGT) {
+        startOffsetBufferGT = _startOffsetBufferGT;
+        if (computeData) {
+            computeData->setStaticBuffer(startOffsetBufferGT, "StartOffsetBufferGT");
+        }
+    }
+    if (startOffsetBufferOpt != _startOffsetBufferOpt) {
+        startOffsetBufferOpt = _startOffsetBufferOpt;
+        if (computeData) {
+            computeData->setStaticBuffer(startOffsetBufferOpt, "StartOffsetBufferOpt");
+        }
+    }
 }
 
-void LossPass::setSettings(LossType _lossType, uint32_t imageWidth, uint32_t imageHeight) {
+void LossPass::setSettings(
+        LossType _lossType, uint32_t imageWidth, uint32_t imageHeight,
+        uint32_t paddedViewportWidth, uint32_t paddedViewportHeight,
+        std::map<std::string, std::string> _preprocessorDefinesRenderer) {
     if (lossType != _lossType) {
         lossType = _lossType;
         setShaderDirty();
@@ -73,6 +90,16 @@ void LossPass::setSettings(LossType _lossType, uint32_t imageWidth, uint32_t ima
         uniformData.imageWidth = imageWidth;
         uniformData.imageHeight = imageHeight;
         isUniformBufferDirty = true;
+    }
+    if (paddedViewportWidth != uniformData.paddedViewportWidth
+            || paddedViewportHeight != uniformData.paddedViewportHeight) {
+        uniformData.paddedViewportWidth = paddedViewportWidth;
+        uniformData.paddedViewportHeight = paddedViewportHeight;
+        isUniformBufferDirty = true;
+    }
+    if (preprocessorDefinesRenderer != _preprocessorDefinesRenderer) {
+        preprocessorDefinesRenderer = _preprocessorDefinesRenderer;
+        setShaderDirty();
     }
 }
 
@@ -89,7 +116,7 @@ void LossPass::updateUniformBuffer() {
 
 void LossPass::loadShader() {
     sgl::vk::ShaderManager->invalidateShaderCache();
-    std::map<std::string, std::string> preprocessorDefines;
+    std::map<std::string, std::string> preprocessorDefines = preprocessorDefinesRenderer;
     preprocessorDefines.insert(std::make_pair("BLOCK_SIZE_X", std::to_string(blockSizeX)));
     preprocessorDefines.insert(std::make_pair("BLOCK_SIZE_Y", std::to_string(blockSizeY)));
     if (lossType == LossType::L1) {
@@ -110,6 +137,8 @@ void LossPass::createComputeData(
     computeData->setStaticImageView(colorImageGT, "colorImageGT");
     computeData->setStaticImageView(colorImageOpt, "colorImageOpt");
     computeData->setStaticImageView(adjointColorsImageView, "adjointColors");
+    computeData->setStaticBuffer(startOffsetBufferGT, "StartOffsetBufferGT");
+    computeData->setStaticBuffer(startOffsetBufferOpt, "StartOffsetBufferOpt");
 }
 
 void LossPass::_render() {

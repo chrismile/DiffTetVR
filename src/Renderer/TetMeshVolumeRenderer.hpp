@@ -58,7 +58,8 @@ class AdjointRasterPass;
 const int MESH_MODE_DEPTH_COMPLEXITIES_PPLL[2][2] = {
         {20, 100}, // avg and max depth complexity medium
         //{80, 256}, // avg and max depth complexity medium
-        {120, 380} // avg and max depth complexity very large
+        //{120, 380} // avg and max depth complexity very large
+        {400, 900} // avg and max depth complexity very large
 };
 
 /**
@@ -106,6 +107,9 @@ public:
     /// Renders the GUI. The "reRender" flag might be set depending on the user's actions.
     void renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor);
 
+    /// Returns screen width and screen height padded for tile size
+    void getScreenSizeWithTiling(int& screenWidth, int& screenHeight);
+
 private:
     void onClearColorChanged();
     void updateLargeMeshMode();
@@ -120,6 +124,7 @@ private:
     sgl::vk::ImageViewPtr outputImageView;
     sgl::Color clearColor;
     bool reRender = false;
+    //bool showDepthComplexity = false;
 
     // Render passes.
     std::shared_ptr<GatherRasterPass> gatherRasterPass;
@@ -189,8 +194,6 @@ private:
      * @return True if a new tiling mode was selected (shaders need to be reloaded in this case).
      */
     bool selectTilingModeUI(sgl::PropertyEditor& propertyEditor);
-    /// Returns screen width and screen height padded for tile size
-    void getScreenSizeWithTiling(int& screenWidth, int& screenHeight);
 };
 
 #endif //DIFFTETVR_TETMESHVOLUMERENDERER_HPP

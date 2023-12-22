@@ -36,11 +36,21 @@ layout(local_size_x = BLOCK_SIZE_X, local_size_y = BLOCK_SIZE_Y) in;
 
 layout(binding = 0) uniform UniformBuffer {
     uint imageWidth, imageHeight;
+    uint viewportW, viewportH; //< with tiling
 };
+
+#include "TiledAddress.glsl"
 
 layout(binding = 1, rgba32f) uniform readonly image2D colorImageGT;
 layout(binding = 2, rgba32f) uniform readonly image2D colorImageOpt;
 layout(binding = 3, rgba32f) uniform writeonly image2D adjointColors;
+
+layout(binding = 4, std430) coherent buffer StartOffsetBufferGT {
+    uint startOffsetGT[];
+};
+layout(binding = 5, std430) coherent buffer StartOffsetBufferOpt {
+    uint startOffsetOpt[];
+};
 
 void main() {
     const ivec2 imageIdx = ivec2(gl_GlobalInvocationID.xy);
@@ -48,17 +58,22 @@ void main() {
         return;
     }
     const float invN = 1.0 / float(imageWidth * imageHeight);
+    int x = int(gl_GlobalInvocationID.x);
+    int y = int(gl_GlobalInvocationID.y);
+    uint pixelIndex = addrGen(uvec2(x,y));
 
     vec4 colorOpt = imageLoad(colorImageOpt, imageIdx);
     vec4 colorGT = imageLoad(colorImageGT, imageIdx);
     vec4 colorDiff = colorOpt - colorGT;
-    if (colorOpt.a < 1e-5 || colorGT.a < 1e-5) {
-        colorDiff = vec4(0.0);
-    }
+    //if (colorOpt.a < 1e-5 || colorGT.a < 1e-5) {
+    //if (startOffsetOpt[pixelIndex] == -1 || startOffsetGT[pixelIndex] == -1) {
+    //    colorDiff = vec4(0.0);
+    //}
 
     vec4 adjointColor;
 #if defined(L1_LOSS)
-    adjointColor = invN * (2.0 * vec4(greaterThanEqual(colorDiff, vec4(0.0))) - vec4(1.0));
+    //adjointColor = invN * (2.0 * vec4(greaterThanEqual(colorDiff, vec4(0.0))) - vec4(1.0));
+    adjointColor = invN * sign(colorDiff);
 #elif defined(L2_LOSS)
     adjointColor = (invN * 2.0) * colorDiff;
 #endif

@@ -39,8 +39,13 @@ public:
     void setImageViews(
             const sgl::vk::ImageViewPtr& _colorImageGT,
             const sgl::vk::ImageViewPtr& _colorImageOpt,
-            const sgl::vk::ImageViewPtr& _adjointColorsImageView);
-    void setSettings(LossType _lossType, uint32_t imageWidth, uint32_t imageHeight);
+            const sgl::vk::ImageViewPtr& _adjointColorsImageView,
+            const sgl::vk::BufferPtr& _startOffsetBufferGT,
+            const sgl::vk::BufferPtr& _startOffsetBufferOpt);
+    void setSettings(
+            LossType _lossType, uint32_t imageWidth, uint32_t imageHeight,
+            uint32_t paddedViewportWidth, uint32_t paddedViewportHeight,
+            std::map<std::string, std::string> _preprocessorDefinesRenderer);
     void updateUniformBuffer();
 
 protected:
@@ -51,15 +56,18 @@ protected:
 private:
     LossType lossType = LossType::L2;
     const uint32_t blockSizeX = 16, blockSizeY = 16;
+    std::map<std::string, std::string> preprocessorDefinesRenderer;
 
     struct UniformData {
         uint32_t imageWidth, imageHeight;
+        uint32_t paddedViewportWidth, paddedViewportHeight;
     };
     UniformData uniformData{};
     sgl::vk::BufferPtr uniformBuffer;
     bool isUniformBufferDirty = true;
 
     sgl::vk::ImageViewPtr colorImageGT, colorImageOpt, adjointColorsImageView;
+    sgl::vk::BufferPtr startOffsetBufferGT, startOffsetBufferOpt;
 };
 
 #endif //CORRERENDER_LOSSPASS_HPP

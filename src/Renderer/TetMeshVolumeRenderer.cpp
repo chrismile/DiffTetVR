@@ -369,6 +369,36 @@ void TetMeshVolumeRenderer::getVulkanShaderPreprocessorDefines(
             || sortingAlgorithmMode == SORTING_ALGORITHM_MODE_QUICKSORT_HYBRID) {
         preprocessorDefines.insert(std::make_pair("USE_QUICKSORT", ""));
     }
+
+    if (tileWidth == 1 && tileHeight == 1) {
+        // No tiling
+        tilingModeIndex = 0;
+    } else if (tileWidth == 2 && tileHeight == 2) {
+        tilingModeIndex = 1;
+        preprocessorDefines.insert(std::make_pair("ADDRESSING_TILED_2x2", ""));
+    } else if (tileWidth == 2 && tileHeight == 8) {
+        tilingModeIndex = 2;
+        preprocessorDefines.insert(std::make_pair("ADDRESSING_TILED_2x8", ""));
+    } else if (tileWidth == 8 && tileHeight == 2) {
+        tilingModeIndex = 3;
+        preprocessorDefines.insert(std::make_pair("ADDRESSING_TILED_NxM", ""));
+    } else if (tileWidth == 4 && tileHeight == 4) {
+        tilingModeIndex = 4;
+        preprocessorDefines.insert(std::make_pair("ADDRESSING_TILED_NxM", ""));
+    } else if (tileWidth == 8 && tileHeight == 8 && !tilingUseMortonCode) {
+        tilingModeIndex = 5;
+        preprocessorDefines.insert(std::make_pair("ADDRESSING_TILED_NxM", ""));
+    } else if (tileWidth == 8 && tileHeight == 8 && tilingUseMortonCode) {
+        tilingModeIndex = 6;
+        preprocessorDefines.insert(std::make_pair("ADRESSING_MORTON_CODE_8x8", ""));
+    } else {
+        // Invalid mode, just set to mode 5, too.
+        tilingModeIndex = 5;
+        preprocessorDefines.insert(std::make_pair("ADDRESSING_TILED_NxM", ""));
+    }
+
+    preprocessorDefines.insert(std::make_pair("TILE_N", sgl::toString(tileWidth)));
+    preprocessorDefines.insert(std::make_pair("TILE_M", sgl::toString(tileHeight)));
 }
 
 void TetMeshVolumeRenderer::setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData) {
@@ -484,7 +514,7 @@ void TetMeshVolumeRenderer::renderGuiPropertyEditorNodes(sgl::PropertyEditor& pr
         resolveRasterPass->setShaderDirty();
         reRender = true;
     }
-    if (propertyEditor.addSliderFloat("attenuationCoefficient", &attenuationCoefficient, 1.0f, 1000.0f)) {
+    if (propertyEditor.addSliderFloat("Attenuation", &attenuationCoefficient, 1.0f, 1000.0f)) {
         reRender = true;
     }
 }
