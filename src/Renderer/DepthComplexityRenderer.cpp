@@ -26,6 +26,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef USE_TBB
+#include <tbb/parallel_reduce.h>
+#include <tbb/blocked_range.h>
+#endif
+
 #include <Utils/AppSettings.hpp>
 #include <Utils/Timer.hpp>
 #include <Graphics/Vulkan/Utils/Swapchain.hpp>
