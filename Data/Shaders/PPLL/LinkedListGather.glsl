@@ -78,7 +78,17 @@ void main() {
     if (insertIndex < linkedListSize) {
         // Insert the fragment into the linked list
         frag.next = atomicExchange(startOffset[pixelIndex], insertIndex);
+#if defined(FRAGMENT_BUFFER_REFERENCE_ARRAY)
+        FragmentBufferEntry fbe = FragmentBufferEntry(
+                fagmentBuffers[insertIndex / NUM_FRAGS_PER_BUFFER] + 12u * uint64_t(insertIndex % NUM_FRAGS_PER_BUFFER));
+        fbe.color = frag.color;
+        fbe.depth = frag.depth;
+        fbe.next = frag.next;
+#elif defined(FRAGMENT_BUFFER_ARRAY)
+        fragmentBuffers[nonuniformEXT(insertIndex / NUM_FRAGS_PER_BUFFER)].fragmentBuffer[insertIndex % NUM_FRAGS_PER_BUFFER] = frag;
+#else
         fragmentBuffer[insertIndex] = frag;
+#endif
     }
 
 #ifdef SHOW_DEPTH_COMPLEXITY

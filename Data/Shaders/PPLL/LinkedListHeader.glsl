@@ -77,9 +77,27 @@ layout(binding = 0) uniform UniformDataBuffer {
 };
 
 // Fragment-and-link buffer (linked list). Stores "nodesPerPixel" number of fragments.
+#if defined(FRAGMENT_BUFFER_REFERENCE_ARRAY)
+layout (buffer_reference, std430, buffer_reference_align = 4) buffer FragmentBufferEntry {
+    // Bit 0: isFrontFacing, Bit 1: isBoundary, Bit 2-31: faceIndex.
+    uint color;
+    // Depth value of the fragment
+    float depth;
+    // The index of the next node in "nodes" array
+    uint next;
+};
+layout (std430, binding = 1) buffer FragmentBuffer {
+    uint64_t fagmentBuffers[NUM_FRAGMENT_BUFFERS];
+};
+#elif defined(FRAGMENT_BUFFER_ARRAY)
+layout(std430, binding = 1) buffer FragmentBuffer {
+    LinkedListFragmentNode fragmentBuffer[];
+} fragmentBuffers[NUM_FRAGMENT_BUFFERS];
+#else
 layout(std430, binding = 1) buffer FragmentBuffer {
     LinkedListFragmentNode fragmentBuffer[];
 };
+#endif
 
 // Start-offset buffer (mapping pixels to first pixel in the buffer) of size viewportSize.x * viewportSize.y.
 layout(std430, binding = 2) coherent buffer StartOffsetBuffer {

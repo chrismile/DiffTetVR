@@ -50,15 +50,18 @@ public:
         framebufferDirty = true;
         dataDirty = true;
     }
+    void clearFragmentBuffer() {
+        if (rasterData) {
+            rasterData->setStaticBufferOptional({}, "FragmentBuffer");
+            rasterData->setStaticBufferArrayOptional({}, "FragmentBuffer");
+        }
+    }
 
 protected:
     void loadShader() override {
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
-        if (volumeRenderer->getShowDepthComplexity()) {
-            preprocessorDefines.insert(std::make_pair("SHOW_DEPTH_COMPLEXITY", ""));
-        }
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
                 { "LinkedListGather.Vertex", "LinkedListGather.Fragment" }, preprocessorDefines);
@@ -74,10 +77,6 @@ protected:
         rasterData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "VertexPositionBuffer");
         //rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "VertexColorBuffer");
         rasterData->setStaticBuffer(tetMesh->getFaceBoundaryBitBuffer(), "FaceBoundaryBitBuffer");
-        if (volumeRenderer->getShowDepthComplexity()) {
-            rasterData->setStaticBuffer(
-                    volumeRenderer->getDepthComplexityCounterBuffer(), "DepthComplexityCounterBuffer");
-        }
         rasterData->setNumVertices(numIndexedVertices);
         volumeRenderer->setRenderDataBindings(rasterData);
     }
@@ -102,6 +101,12 @@ public:
             : BlitRenderPass(volumeRenderer->getRenderer(), { "LinkedListResolve.Vertex", "LinkedListResolve.Fragment" }),
               volumeRenderer(volumeRenderer) {
         this->setAttachmentLoadOp(VK_ATTACHMENT_LOAD_OP_CLEAR);
+    }
+    void clearFragmentBuffer() {
+        if (rasterData) {
+            rasterData->setStaticBufferOptional({}, "FragmentBuffer");
+            rasterData->setStaticBufferArrayOptional({}, "FragmentBuffer");
+        }
     }
 
 protected:
@@ -136,15 +141,18 @@ public:
               volumeRenderer(volumeRenderer) {
         this->setAttachmentLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE);
     }
+    void clearFragmentBuffer() {
+        if (rasterData) {
+            rasterData->setStaticBufferOptional({}, "FragmentBuffer");
+            rasterData->setStaticBufferArrayOptional({}, "FragmentBuffer");
+        }
+    }
 
 protected:
     void loadShader() override {
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
-        if (volumeRenderer->getShowDepthComplexity()) {
-            preprocessorDefines.insert(std::make_pair("SHOW_DEPTH_COMPLEXITY", ""));
-        }
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(shaderIds, preprocessorDefines);
     }
@@ -152,10 +160,6 @@ protected:
         rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
         rasterData->setIndexBuffer(indexBuffer);
         rasterData->setVertexBuffer(vertexBuffer, 0);
-        if (volumeRenderer->getShowDepthComplexity()) {
-            rasterData->setStaticBuffer(
-                    volumeRenderer->getDepthComplexityCounterBuffer(), "DepthComplexityCounterBuffer");
-        }
         volumeRenderer->setRenderDataBindings(rasterData);
     }
 
@@ -169,6 +173,12 @@ public:
             : BlitRenderPass(volumeRenderer->getRenderer(), { "LinkedListResolve.Vertex", "LinkedListResolve.Fragment" }),
               volumeRenderer(volumeRenderer) {
         this->setAttachmentLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE);
+    }
+    void clearFragmentBuffer() {
+        if (rasterData) {
+            rasterData->setStaticBufferOptional({}, "FragmentBuffer");
+            rasterData->setStaticBufferArrayOptional({}, "FragmentBuffer");
+        }
     }
 
 protected:
@@ -213,6 +223,11 @@ TetMeshVolumeRenderer::TetMeshVolumeRenderer(sgl::vk::Renderer* renderer, sgl::C
             VMA_MEMORY_USAGE_GPU_ONLY);
     maxStorageBufferSize = std::min(
             size_t(device->getMaxMemoryAllocationSize()), size_t(device->getMaxStorageBufferRange()));
+
+    auto memoryHeapIndex = uint32_t(device->findMemoryHeapIndex(VK_MEMORY_HEAP_DEVICE_LOCAL_BIT));
+    size_t availableVram = device->getMemoryHeapBudgetVma(memoryHeapIndex);
+    double availableMemoryFactor = 28.0 / 32.0;
+    maxDeviceMemoryBudget = size_t(double(availableVram) * availableMemoryFactor);
 
     gatherRasterPass = std::make_shared<GatherRasterPass>(this);
 
@@ -336,6 +351,11 @@ void TetMeshVolumeRenderer::recreateSwapchainExternal(
     getScreenSizeWithTiling(paddedWindowWidth, paddedWindowHeight);
     useExternalFragmentBuffer = true;
 
+    fragmentBufferMode = FragmentBufferMode::BUFFER;
+    numFragmentBuffers = 1;
+    cachedNumFragmentBuffers = 1;
+    fragmentBuffers = {};
+    fragmentBufferReferenceBuffer = {};
     fragmentBufferSize = _fragmentBufferSize;
     fragmentBuffer = std::move(_fragmentBuffer);
     startOffsetBuffer = std::move(_startOffsetBuffer);
@@ -365,6 +385,32 @@ void TetMeshVolumeRenderer::setClearColor(const sgl::Color& _clearColor) {
 
 void TetMeshVolumeRenderer::getVulkanShaderPreprocessorDefines(
         std::map<std::string, std::string>& preprocessorDefines) {
+    if (showDepthComplexity) {
+        preprocessorDefines.insert(std::make_pair("SHOW_DEPTH_COMPLEXITY", ""));
+    }
+
+    if (fragmentBufferMode == FragmentBufferMode::BUFFER_REFERENCE_ARRAY) {
+        preprocessorDefines.insert(std::make_pair("FRAGMENT_BUFFER_REFERENCE_ARRAY", ""));
+    } else if (fragmentBufferMode == FragmentBufferMode::BUFFER_ARRAY) {
+        preprocessorDefines.insert(std::make_pair("FRAGMENT_BUFFER_ARRAY", ""));
+    }
+    if (fragmentBufferMode == FragmentBufferMode::BUFFER_ARRAY
+            || fragmentBufferMode == FragmentBufferMode::BUFFER_REFERENCE_ARRAY) {
+        preprocessorDefines.insert(std::make_pair("NUM_FRAGMENT_BUFFERS", std::to_string(cachedNumFragmentBuffers)));
+        preprocessorDefines.insert(std::make_pair("NUM_FRAGS_PER_BUFFER", std::to_string(maxStorageBufferSize / 12ull) + "u"));
+        auto it = preprocessorDefines.find("__extensions");
+        std::string extensionString;
+        if (it != preprocessorDefines.end()) {
+            extensionString = it->second + ";";
+        }
+        if (fragmentBufferMode == FragmentBufferMode::BUFFER_ARRAY) {
+            extensionString += "GL_EXT_nonuniform_qualifier";
+        } else if (fragmentBufferMode == FragmentBufferMode::BUFFER_REFERENCE_ARRAY) {
+            extensionString += "GL_EXT_shader_explicit_arithmetic_types_int64;GL_EXT_buffer_reference";
+        }
+        preprocessorDefines["__extensions"] = extensionString;
+    }
+
     preprocessorDefines.insert(std::make_pair("MAX_NUM_FRAGS", sgl::toString(expectedMaxDepthComplexity)));
     if (sortingAlgorithmMode == SORTING_ALGORITHM_MODE_QUICKSORT
         || sortingAlgorithmMode == SORTING_ALGORITHM_MODE_QUICKSORT_HYBRID) {
@@ -431,10 +477,20 @@ void TetMeshVolumeRenderer::getVulkanShaderPreprocessorDefines(
 }
 
 void TetMeshVolumeRenderer::setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData) {
-    renderData->setStaticBufferOptional(fragmentBuffer, "FragmentBuffer");
+    if (fragmentBufferMode == FragmentBufferMode::BUFFER) {
+        renderData->setStaticBufferOptional(fragmentBuffer, "FragmentBuffer");
+    } else if (fragmentBufferMode == FragmentBufferMode::BUFFER_ARRAY) {
+        renderData->setStaticBufferArrayOptional(fragmentBuffers, "FragmentBuffer");
+    } else {
+        renderData->setStaticBufferOptional(fragmentBufferReferenceBuffer, "FragmentBuffer");
+    }
     renderData->setStaticBuffer(startOffsetBuffer, "StartOffsetBuffer");
     renderData->setStaticBufferOptional(fragmentCounterBuffer, "FragCounterBuffer");
     renderData->setStaticBufferOptional(uniformDataBuffer, "UniformDataBuffer");
+
+    if (showDepthComplexity) {
+        renderData->setStaticBuffer(depthComplexityCounterBuffer, "DepthComplexityCounterBuffer");
+    }
 
     // For resolve pass.
     renderData->setStaticBufferOptional(vertexPositionGradientBuffer, "VertexPositionGradientBuffer");
@@ -460,23 +516,104 @@ void TetMeshVolumeRenderer::reallocateFragmentBuffer() {
 
     fragmentBufferSize = size_t(expectedAvgDepthComplexity) * size_t(paddedWidth) * size_t(paddedHeight);
     size_t fragmentBufferSizeBytes = 12ull * fragmentBufferSize;
-    if (fragmentBufferSizeBytes > maxStorageBufferSize) {
-        sgl::Logfile::get()->writeError(
-                std::string() + "Fragment buffer size was larger than maximum allocation size ("
-                + std::to_string(maxStorageBufferSize) + "). Clamping to maximum allocation size.",
-                false);
-        fragmentBufferSize = maxStorageBufferSize / 12ull;
-        fragmentBufferSizeBytes = fragmentBufferSize * 12ull;
-    } else {
-        sgl::Logfile::get()->writeInfo(
-                std::string() + "Fragment buffer size GiB: "
-                + std::to_string(double(fragmentBufferSizeBytes) / 1024.0 / 1024.0 / 1024.0));
+
+    // Delete old data first (-> refcount 0)
+    fragmentBuffers = {};
+    fragmentBuffer = {};
+    fragmentBufferReferenceBuffer = {};
+    resolveRasterPass->clearFragmentBuffer();
+    gatherRasterPass->clearFragmentBuffer();
+    clearRasterPass->clearFragmentBuffer();
+    if (adjointRasterPass) {
+        adjointRasterPass->clearFragmentBuffer();
     }
 
-    fragmentBuffer = {}; // Delete old data first (-> refcount 0)
-    fragmentBuffer = std::make_shared<sgl::vk::Buffer>(
-            renderer->getDevice(), fragmentBufferSizeBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
+    // We only need buffer arrays when the maximum allocation is larger than our budget.
+    if (maxDeviceMemoryBudget < maxStorageBufferSize) {
+        fragmentBufferMode = FragmentBufferMode::BUFFER;
+        resolveRasterPass->setShaderDirty();
+        gatherRasterPass->setShaderDirty();
+        clearRasterPass->setShaderDirty();
+        if (adjointRasterPass) {
+            adjointRasterPass->setShaderDirty();
+        }
+    }
+    size_t maxSingleBufferAllocation = std::min(maxDeviceMemoryBudget, maxStorageBufferSize);
+
+    if (fragmentBufferMode == FragmentBufferMode::BUFFER) {
+        if (fragmentBufferSizeBytes > maxSingleBufferAllocation) {
+            sgl::Logfile::get()->writeError(
+                    std::string() + "Fragment buffer size was larger than maximum allocation size ("
+                    + std::to_string(maxSingleBufferAllocation) + "). Clamping to maximum allocation size.",
+                    false);
+            fragmentBufferSize = maxSingleBufferAllocation / 12ull;
+            fragmentBufferSizeBytes = fragmentBufferSize * 12ull;
+        } else {
+            sgl::Logfile::get()->writeInfo(
+                    std::string() + "Fragment buffer size GiB: "
+                    + std::to_string(double(fragmentBufferSizeBytes) / 1024.0 / 1024.0 / 1024.0));
+        }
+
+        numFragmentBuffers = 1;
+        cachedNumFragmentBuffers = 1;
+        fragmentBuffer = std::make_shared<sgl::vk::Buffer>(
+                renderer->getDevice(), fragmentBufferSizeBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                VMA_MEMORY_USAGE_GPU_ONLY);
+    } else {
+        if (fragmentBufferSizeBytes > maxDeviceMemoryBudget) {
+            sgl::Logfile::get()->writeError(
+                    std::string() + "Fragment buffer size was larger than maximum allocation size ("
+                    + std::to_string(maxDeviceMemoryBudget) + "). Clamping to maximum allocation size.",
+                    false);
+            fragmentBufferSize = maxDeviceMemoryBudget / 12ull;
+            fragmentBufferSizeBytes = fragmentBufferSize * 12ull;
+        } else {
+            sgl::Logfile::get()->writeInfo(
+                    std::string() + "Fragment buffer size GiB: "
+                    + std::to_string(double(fragmentBufferSizeBytes) / 1024.0 / 1024.0 / 1024.0));
+        }
+
+        numFragmentBuffers = sgl::sizeceil(fragmentBufferSizeBytes, maxStorageBufferSize);
+        size_t fragmentBufferSizeBytesLeft = fragmentBufferSizeBytes;
+        for (size_t i = 0; i < numFragmentBuffers; i++) {
+            VkBufferUsageFlags flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+            if (fragmentBufferMode == FragmentBufferMode::BUFFER_REFERENCE_ARRAY) {
+                flags |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+            }
+            fragmentBuffers.emplace_back(std::make_shared<sgl::vk::Buffer>(
+                    renderer->getDevice(), std::min(fragmentBufferSizeBytesLeft, maxStorageBufferSize),
+                    flags, VMA_MEMORY_USAGE_GPU_ONLY));
+            fragmentBufferSizeBytesLeft -= maxStorageBufferSize;
+        }
+
+        if (numFragmentBuffers != cachedNumFragmentBuffers) {
+            cachedNumFragmentBuffers = numFragmentBuffers;
+            resolveRasterPass->setShaderDirty();
+            gatherRasterPass->setShaderDirty();
+            clearRasterPass->setShaderDirty();
+            if (adjointRasterPass) {
+                adjointRasterPass->setShaderDirty();
+            }
+        }
+
+        if (fragmentBufferMode == FragmentBufferMode::BUFFER_REFERENCE_ARRAY) {
+            auto* bufferReferences = new uint64_t[numFragmentBuffers];
+            for (size_t i = 0; i < numFragmentBuffers; i++) {
+                bufferReferences[i] = fragmentBuffers.at(i)->getVkDeviceAddress();
+            }
+            fragmentBufferReferenceBuffer = std::make_shared<sgl::vk::Buffer>(
+                    renderer->getDevice(), sizeof(uint64_t) * numFragmentBuffers,
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VMA_MEMORY_USAGE_GPU_ONLY);
+            fragmentBufferReferenceBuffer->updateData(
+                    sizeof(uint64_t) * numFragmentBuffers, bufferReferences, renderer->getVkCommandBuffer());
+            renderer->insertBufferMemoryBarrier(
+                    VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                    fragmentBufferReferenceBuffer);
+            delete[] bufferReferences;
+        }
+    }
 }
 
 void TetMeshVolumeRenderer::onClearColorChanged() {
@@ -550,12 +687,31 @@ void TetMeshVolumeRenderer::renderGuiPropertyEditorNodes(sgl::PropertyEditor& pr
         resolveRasterPass->setShaderDirty();
         reRender = true;
     }
+    if (propertyEditor.addCombo(
+            "Fragment Buffer Mode", (int*)&fragmentBufferMode,
+            FRAGMENT_BUFFER_MODE_NAMES, IM_ARRAYSIZE(FRAGMENT_BUFFER_MODE_NAMES))) {
+        renderer->syncWithCpu();
+        renderer->getDevice()->waitIdle();
+        resolveRasterPass->setShaderDirty();
+        gatherRasterPass->setShaderDirty();
+        clearRasterPass->setShaderDirty();
+        if (adjointRasterPass) {
+            adjointRasterPass->setShaderDirty();
+        }
+        reallocateFragmentBuffer();
+        reRender = true;
+    }
     if (propertyEditor.addSliderFloat("Attenuation", &attenuationCoefficient, 1.0f, 1000.0f)) {
         reRender = true;
     }
     bool depthComplexityJustChanged = false;
     if (propertyEditor.addCheckbox("Show Depth Complexity", &showDepthComplexity)) {
+        resolveRasterPass->setShaderDirty();
         gatherRasterPass->setShaderDirty();
+        clearRasterPass->setShaderDirty();
+        if (adjointRasterPass) {
+            adjointRasterPass->setShaderDirty();
+        }
         reRender = true;
         depthComplexityJustChanged = true;
         createDepthComplexityBuffers();
@@ -574,7 +730,7 @@ void TetMeshVolumeRenderer::renderGuiPropertyEditorNodes(sgl::PropertyEditor& pr
         propertyEditor.addText(
                 "Memory",
                 sgl::getNiceMemoryString(totalNumFragments * 12ull, 2) + " / "
-                + sgl::getNiceMemoryString(fragmentBuffer->getSizeInBytes(), 2));
+                + sgl::getNiceMemoryString(fragmentBufferSize * 12ull, 2));
     }
 }
 

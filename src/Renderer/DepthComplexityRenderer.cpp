@@ -74,10 +74,12 @@ bool TetMeshVolumeRenderer::needsReRender() {
         // Update & print statistics if enough time has passed
         counterPrintFrags += sgl::Timer->getElapsedSeconds();
         if (tetMesh && (counterPrintFrags > 1.0f || firstFrame)) {
+            if (!firstFrame) {
+                statisticsUpToDate = true;
+            }
             computeStatistics(true);
             counterPrintFrags = 0.0f;
             firstFrame = false;
-            statisticsUpToDate = true;
         }
     }
 

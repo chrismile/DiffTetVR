@@ -55,15 +55,19 @@ class ResolveRasterPass;
 class ClearRasterPass;
 class AdjointRasterPass;
 
+enum class FragmentBufferMode {
+    BUFFER, BUFFER_ARRAY, BUFFER_REFERENCE_ARRAY
+};
+const char* const FRAGMENT_BUFFER_MODE_NAMES[3] = {
+        "Buffer", "Buffer Array", "Buffer Reference Array"
+};
+
 const int MESH_MODE_DEPTH_COMPLEXITIES_PPLL[2][2] = {
         {20, 100}, // avg and max depth complexity medium
         //{80, 256}, // avg and max depth complexity medium
         //{120, 380} // avg and max depth complexity very large
         {400, 900} // avg and max depth complexity very large
 };
-
-// Converts e.g. 123456789 to "123,456,789"
-std::string numberToCommaString(int64_t number);
 
 /**
  * The order-independent transparency (OIT) technique per-pixel linked lists is used.
@@ -142,9 +146,16 @@ private:
     SortingAlgorithmMode sortingAlgorithmMode = SORTING_ALGORITHM_MODE_PRIORITY_QUEUE;
 
     // Per-pixel linked list data.
+    FragmentBufferMode fragmentBufferMode = FragmentBufferMode::BUFFER;
     bool useExternalFragmentBuffer = false;
+    size_t maxStorageBufferSize = 0;
+    size_t maxDeviceMemoryBudget = 0;
     size_t fragmentBufferSize = 0;
-    sgl::vk::BufferPtr fragmentBuffer;
+    size_t numFragmentBuffers = 1;
+    size_t cachedNumFragmentBuffers = 1;
+    sgl::vk::BufferPtr fragmentBuffer; //< if fragmentBufferMode == FragmentBufferMode::BUFFER
+    std::vector<sgl::vk::BufferPtr> fragmentBuffers; //< if fragmentBufferMode != FragmentBufferMode::BUFFER
+    sgl::vk::BufferPtr fragmentBufferReferenceBuffer; //< if fragmentBufferMode == FragmentBufferMode::BUFFER_REFERENCE_ARRAY
     sgl::vk::BufferPtr startOffsetBuffer;
     sgl::vk::BufferPtr fragmentCounterBuffer;
 
@@ -184,7 +195,6 @@ private:
     // Window data.
     int windowWidth = 0, windowHeight = 0;
     int paddedWindowWidth = 0, paddedWindowHeight = 0;
-    size_t maxStorageBufferSize = 0;
 
     // Per-pixel linked list settings.
     enum LargeMeshMode {

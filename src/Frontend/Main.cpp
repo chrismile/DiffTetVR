@@ -81,12 +81,20 @@ int main(int argc, char *argv[]) {
     optionalDeviceExtensions = sgl::vk::Device::getCudaInteropDeviceExtensions();
 #endif
     optionalDeviceExtensions.push_back(VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
+    optionalDeviceExtensions.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
 
     sgl::vk::Instance* instance = sgl::AppSettings::get()->getVulkanInstance();
     auto* device = new sgl::vk::Device;
 
     sgl::vk::DeviceFeatures requestedDeviceFeatures{};
     requestedDeviceFeatures.requestedPhysicalDeviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
+    requestedDeviceFeatures.optionalPhysicalDeviceFeatures.shaderStorageBufferArrayDynamicIndexing = VK_TRUE;
+    requestedDeviceFeatures.optionalPhysicalDeviceFeatures.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
+    requestedDeviceFeatures.optionalPhysicalDeviceFeatures.shaderInt64 = VK_TRUE;
+    requestedDeviceFeatures.optionalVulkan12Features.descriptorIndexing = VK_TRUE;
+    requestedDeviceFeatures.optionalVulkan12Features.descriptorBindingVariableDescriptorCount = VK_TRUE;
+    requestedDeviceFeatures.optionalVulkan12Features.runtimeDescriptorArray = VK_TRUE;
+    requestedDeviceFeatures.optionalVulkan12Features.shaderStorageBufferArrayNonUniformIndexing = VK_TRUE;
 
     device->createDeviceSwapchain(
             instance, window, {
