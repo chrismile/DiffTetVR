@@ -206,7 +206,7 @@ private:
     float attenuationCoefficient = 100.0f;
 
     // Depth complexity information mode.
-    bool showDepthComplexity = true;
+    bool showDepthComplexity = false;
     void computeStatistics(bool isReRender);
     void createDepthComplexityBuffers();
     sgl::vk::BufferPtr depthComplexityCounterBuffer;
