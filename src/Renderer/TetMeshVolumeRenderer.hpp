@@ -36,6 +36,8 @@
 #include <Graphics/Color.hpp>
 #include <Graphics/Scene/Camera.hpp>
 
+#include "Tet/TetQuality.hpp"
+
 namespace sgl { namespace vk {
 class Renderer;
 class ImageView;
@@ -45,6 +47,7 @@ typedef std::shared_ptr<RenderData> RenderDataPtr;
 
 namespace sgl {
 class PropertyEditor;
+class TransferFunctionWindow;
 }
 
 class TetMesh;
@@ -76,7 +79,8 @@ const int MESH_MODE_DEPTH_COMPLEXITIES_PPLL[2][2] = {
  */
 class TetMeshVolumeRenderer {
 public:
-    explicit TetMeshVolumeRenderer(sgl::vk::Renderer* renderer, sgl::CameraPtr* camera);
+    explicit TetMeshVolumeRenderer(
+            sgl::vk::Renderer* renderer, sgl::CameraPtr* camera, sgl::TransferFunctionWindow* transferFunctionWindow);
     ~TetMeshVolumeRenderer();
 
     // Public interface.
@@ -110,11 +114,16 @@ public:
     [[nodiscard]] inline const sgl::vk::BufferPtr& getFragmentCounterBuffer() const { return fragmentCounterBuffer; }
     [[nodiscard]] inline const sgl::vk::BufferPtr& getDepthComplexityCounterBuffer() const { return depthComplexityCounterBuffer; }
     [[nodiscard]] inline bool getShowDepthComplexity() const { return showDepthComplexity; }
+    [[nodiscard]] inline bool getShowTetQuality() const { return showTetQuality; }
+    [[nodiscard]] inline TetQualityMetric getTetQualityMetric() const { return tetQualityMetric; }
+    [[nodiscard]] inline sgl::TransferFunctionWindow* getTransferFunctionWindow() { return transferFunctionWindow; }
 
     /// Returns if the data needs to be re-rendered, but the visualization mapping is valid.
     bool needsReRender();
     /// Called when the camera has moved.
     void onHasMoved();
+    /// Called when the transfer function (for tet quality analysis) has been rebuilt.
+    void onTransferFunctionMapRebuilt();
     /// Renders the GUI. The "reRender" flag might be set depending on the user's actions.
     void renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor);
 
@@ -158,6 +167,11 @@ private:
     sgl::vk::BufferPtr fragmentBufferReferenceBuffer; //< if fragmentBufferMode == FragmentBufferMode::BUFFER_REFERENCE_ARRAY
     sgl::vk::BufferPtr startOffsetBuffer;
     sgl::vk::BufferPtr fragmentCounterBuffer;
+
+    // For showing tet mesh quality metrics.
+    bool showTetQuality = false;
+    TetQualityMetric tetQualityMetric = DEFAULT_QUALITY_METRIC;
+    sgl::TransferFunctionWindow* transferFunctionWindow;
 
     // For adjoint pass.
     sgl::vk::ImageViewPtr colorAdjointImage;

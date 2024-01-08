@@ -56,9 +56,31 @@ layout(binding = 4, scalar) readonly buffer TriangleIndicesBuffer {
 layout(binding = 5, scalar) readonly buffer VertexPositionBuffer {
     vec3 vertexPositions[];
 };
+
+#ifndef SHOW_TET_QUALITY
 layout(binding = 6, scalar) readonly buffer VertexColorBuffer {
     vec4 vertexColors[];
 };
+#else
+#define INVALID_TET 0xFFFFFFFFu
+layout(binding = 6, scalar) readonly buffer FaceToTetMapBuffer {
+    uvec2 faceToTetMap[];
+};
+layout(binding = 7, scalar) readonly buffer TetQualityBuffer {
+    float tetQualityArray[];
+};
+layout (binding = 8) uniform MinMaxUniformBuffer {
+    float minAttributeValue;
+    float maxAttributeValue;
+};
+layout(binding = 9) uniform sampler1D transferFunctionTexture;
+vec4 transferFunction(float attr) {
+    // Transfer to range [0, 1].
+    float posFloat = clamp((attr - minAttributeValue) / (maxAttributeValue - minAttributeValue), 0.0, 1.0);
+    // Look up the color value.
+    return texture(transferFunctionTexture, posFloat);
+}
+#endif
 
 #include "LinkedListSort.glsl"
 

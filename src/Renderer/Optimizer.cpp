@@ -79,12 +79,14 @@ ImVec2 ImGuiVulkanImage::getTextureSizeImVec2() {
 
 TetMeshOptimizer::TetMeshOptimizer(
         sgl::vk::Renderer* renderer, std::function<void(const TetMeshPtr&)> setTetMeshCallback,
-        bool hasDataSets, std::function<std::string()> renderGuiDataSetSelectionMenuCallback)
+        bool hasDataSets, std::function<std::string()> renderGuiDataSetSelectionMenuCallback,
+        sgl::TransferFunctionWindow* transferFunctionWindow)
         : renderer(renderer), setTetMeshCallback(std::move(setTetMeshCallback)), hasDataSets(hasDataSets),
-          renderGuiDataSetSelectionMenuCallback(std::move(renderGuiDataSetSelectionMenuCallback)) {
+          renderGuiDataSetSelectionMenuCallback(std::move(renderGuiDataSetSelectionMenuCallback)),
+          transferFunctionWindow(transferFunctionWindow) {
     camera = std::make_shared<sgl::Camera>();
-    tetMeshVolumeRendererGT = std::make_shared<TetMeshVolumeRenderer>(renderer, &camera);
-    tetMeshVolumeRendererOpt = std::make_shared<TetMeshVolumeRenderer>(renderer, &camera);
+    tetMeshVolumeRendererGT = std::make_shared<TetMeshVolumeRenderer>(renderer, &camera, transferFunctionWindow);
+    tetMeshVolumeRendererOpt = std::make_shared<TetMeshVolumeRenderer>(renderer, &camera, transferFunctionWindow);
     lossPass = std::make_shared<LossPass>(renderer);
     optimizerPassPositions = std::make_shared<OptimizerPass>(renderer);
     optimizerPassColors = std::make_shared<OptimizerPass>(renderer);
@@ -229,6 +231,9 @@ void TetMeshOptimizer::renderGuiDialog() {
     }
 
     if (hasResult && !hasStopped) {
+        if (settings.optimizerSettingsPositions.learningRate > 0.0f) {
+            tetMeshOpt->setVerticesChangedOnDevice(true);
+        }
         setTetMeshCallback(tetMeshOpt);
         needsReRender = true;
     }
@@ -319,8 +324,8 @@ void TetMeshOptimizer::startRequest() {
         colorImageOptImGui = std::make_shared<ImGuiVulkanImage>(renderer, colorImageOpt);
     }
 
-    tetMeshGT = std::make_shared<TetMesh>(device);
-    tetMeshOpt = std::make_shared<TetMesh>(device);
+    tetMeshGT = std::make_shared<TetMesh>(device, transferFunctionWindow);
+    tetMeshOpt = std::make_shared<TetMesh>(device, transferFunctionWindow);
     bool dataLoadedGT = tetMeshGT->loadFromFile(settings.dataSetFileNameGT);
     bool dataLoadedOpt = tetMeshOpt->loadFromFile(settings.dataSetFileNameOpt);
     if (!dataLoadedGT || !dataLoadedOpt) {

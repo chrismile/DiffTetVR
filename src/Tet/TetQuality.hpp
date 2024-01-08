@@ -1,7 +1,7 @@
 /*
  * BSD 2-Clause License
  *
- * Copyright (c) 2021, Christoph Neuhauser
+ * Copyright (c) 2024, Christoph Neuhauser
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,22 +26,22 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DIFFTETVR_SCENEDATA_HPP
-#define DIFFTETVR_SCENEDATA_HPP
+#ifndef DIFFTETVR_TETQUALITY_HPP
+#define DIFFTETVR_TETQUALITY_HPP
 
-struct SceneData {
-    SceneData(
-            sgl::CameraPtr& camera, sgl::Color& clearColor,
-            bool& screenshotTransparentBackground, bool& recordingMode, bool& useCameraFlight)
-            : camera(camera), clearColor(clearColor), screenshotTransparentBackground(screenshotTransparentBackground),
-              recordingMode(recordingMode), useCameraFlight(useCameraFlight) {}
-    sgl::CameraPtr& camera;
-    sgl::Color& clearColor;
-    bool& screenshotTransparentBackground;
-    bool& recordingMode;
-    bool& useCameraFlight;
+/*
+ * Metrics (except 1st) from: https://people.eecs.berkeley.edu/~jrs/papers/elemj.pdf
+ * See also: https://people.eecs.berkeley.edu/~jrs/papers/elem.pdf
+ */
+enum class TetQualityMetric {
+    VOLUME_SIGN, PARTHASARATHY
+};
+const char* const TET_QUALITY_METRIC_NAMES[] = {
+        "Volume Sign", "Parthasarathy"
 };
 
-const uint32_t ON_TRANSFER_FUNCTION_MAP_REBUILT_EVENT = 4052753091u;
+typedef float (TetQualityMetricFunc) (const glm::vec3&, const glm::vec3&, const glm::vec3&, const glm::vec3&);
 
-#endif //DIFFTETVR_SCENEDATA_HPP
+const TetQualityMetric DEFAULT_QUALITY_METRIC = TetQualityMetric::PARTHASARATHY;
+
+#endif //DIFFTETVR_TETQUALITY_HPP

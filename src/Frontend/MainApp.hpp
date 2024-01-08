@@ -34,6 +34,7 @@
 #include <map>
 
 #include <Utils/SciVis/SciVisApp.hpp>
+#include <ImGui/Widgets/TransferFunctionWindow.hpp>
 
 #include "SceneData.hpp"
 
@@ -134,6 +135,7 @@ private:
     bool newMeshLoaded = true;
     sgl::AABB3 boundingBox;
     TetMeshPtr tetMesh;
+    sgl::TransferFunctionWindow transferFunctionWindow;
 };
 
 #endif //DIFFTETVR_MAINAPP_HPP

@@ -30,7 +30,9 @@
 
 #include <Utils/File/Logfile.hpp>
 #include <Utils/File/FileUtils.hpp>
+#include <Graphics/Vulkan/Utils/Device.hpp>
 #include <Graphics/Vulkan/Buffers/Buffer.hpp>
+#include <ImGui/Widgets/TransferFunctionWindow.hpp>
 
 #ifdef USE_OPEN_VOLUME_MESH
 #include <OpenVolumeMesh/Geometry/VectorT.hh>
@@ -40,6 +42,7 @@
 
 #include "Loaders/BinTetLoader.hpp"
 #include "Loaders/TxtTetLoader.hpp"
+#include "TetQualityFunctions.hpp"
 #include "TetMesh.hpp"
 
 #ifdef USE_OPEN_VOLUME_MESH
@@ -84,8 +87,8 @@ TetMeshWriter* TetMesh::createTetMeshWriterByExtension(const std::string& fileEx
     }
 }
 
-
-TetMesh::TetMesh(sgl::vk::Device* device) : device(device) {
+TetMesh::TetMesh(sgl::vk::Device* device, sgl::TransferFunctionWindow* transferFunctionWindow)
+        : device(device), transferFunctionWindow(transferFunctionWindow) {
     // Create the list of tet mesh loaders.
     std::map<std::vector<std::string>, std::function<TetMeshLoader*()>> factoriesLoaderMap = {
             registerTetMeshLoader<BinTetLoader>(),
@@ -184,10 +187,17 @@ void TetMesh::uploadDataToDevice() {
         }
     }
 
+    std::vector<glm::uvec2> faceToTetMapArray;
+    for (auto& f : facesSlim) {
+        faceToTetMapArray.emplace_back(f.tetId0, f.tetId1);
+    }
+
     triangleIndexBuffer = {};
     vertexPositionBuffer = {};
     vertexColorBuffer = {};
     faceBoundaryBitBuffer = {};
+    faceToTetMapBuffer = {};
+    tetQualityBuffer = {};
 
     triangleIndexBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(uint32_t) * triangleIndices.size(), triangleIndices.data(),
@@ -195,7 +205,7 @@ void TetMesh::uploadDataToDevice() {
             VMA_MEMORY_USAGE_GPU_ONLY);
     vertexPositionBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY);
     vertexColorBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
@@ -205,6 +215,76 @@ void TetMesh::uploadDataToDevice() {
             device, sizeof(uint32_t) * facesBoundarySlim.size(), facesBoundarySlim.data(),
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY);
+    faceToTetMapBuffer = std::make_shared<sgl::vk::Buffer>(
+            device, sizeof(glm::uvec2) * faceToTetMapArray.size(), faceToTetMapArray.data(),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY);
+}
+
+void TetMesh::setTetQualityMetric(TetQualityMetric _tetQualityMetric) {
+    if (tetQualityArray.empty() || tetQualityMetric != _tetQualityMetric) {
+        tetQualityMetric = _tetQualityMetric;
+        isTetQualityDataDirty = true;
+        getTetQualityBuffer();
+    }
+}
+
+sgl::vk::BufferPtr TetMesh::getTetQualityBuffer() {
+    if (verticesChangedOnDevice) {
+        device->waitIdle();
+        auto commandBuffer = device->beginSingleTimeCommands();
+        sgl::vk::BufferPtr stagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                device, vertexPositionBuffer->getSizeInBytes(),
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        vertexPositionBuffer->copyDataTo(stagingBuffer, commandBuffer);
+        device->endSingleTimeCommands(commandBuffer);
+        auto* dataPtr = reinterpret_cast<glm::vec3*>(stagingBuffer->mapMemory());
+        for (size_t i = 0; i < vertexPositions.size(); i++) {
+            vertexPositions.at(i) = dataPtr[i];
+        }
+        stagingBuffer->unmapMemory();
+        verticesChangedOnDevice = false;
+        isTetQualityDataDirty = true;
+    }
+
+    const size_t numCells = cellIndices.size() / 4;
+    if (!tetQualityBuffer || sizeof(float) * numCells != tetQualityBuffer->getSizeInBytes()) {
+        tetQualityBuffer = std::make_shared<sgl::vk::Buffer>(
+                device, sizeof(float) * numCells,
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                VMA_MEMORY_USAGE_GPU_ONLY);
+        isTetQualityDataDirty = true;
+    }
+
+    if (isTetQualityDataDirty) {
+        tetQualityArray.resize(numCells);
+        TetQualityMetricFunc* functor = getTetQualityMetricFunc(tetQualityMetric);
+#ifdef USE_TBB
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, numCells), [&](auto const& r) {
+                for (auto tet = r.begin(); tet != r.end(); tet++) {
+#else
+#if _OPENMP >= 201107
+        #pragma omp parallel for shared(numCells, functor) default(none)
+#endif
+        for (size_t tet = 0; tet < numCells; tet++) {
+#endif
+            size_t tetOffset = size_t(tet) * 4;
+            glm::vec3 p0 = vertexPositions.at(cellIndices.at(tetOffset + 0));
+            glm::vec3 p1 = vertexPositions.at(cellIndices.at(tetOffset + 1));
+            glm::vec3 p2 = vertexPositions.at(cellIndices.at(tetOffset + 2));
+            glm::vec3 p3 = vertexPositions.at(cellIndices.at(tetOffset + 3));
+            tetQualityArray.at(tet) = functor(p0, p1, p2, p3);
+        }
+#ifdef USE_TBB
+        });
+#endif
+        transferFunctionWindow->computeHistogram(tetQualityArray);
+        isTetQualityDataDirty = false;
+        device->waitIdle();
+        tetQualityBuffer->uploadData(sizeof(float) * tetQualityArray.size(), tetQualityArray.data());
+    }
+
+    return tetQualityBuffer;
 }
 
 void TetMesh::loadTestData(TestCase testCase) {
@@ -334,6 +414,7 @@ const int tetFaceTable[4][3] = {
 struct TempFace {
     uint32_t vertexId[3];
     uint32_t faceId;
+    uint32_t tetId;
 
     inline bool operator==(const TempFace& other) const {
         for (int i = 0; i < 3; i++) {
@@ -383,7 +464,7 @@ void buildFacesSlim(
             totalFaces[faceId] = face;
             std::sort(face.vs, face.vs + 3);
             tempFaces[faceId] = TempFace{
-                    { face.vs[0], face.vs[1], face.vs[2] }, faceId
+                    { face.vs[0], face.vs[1], face.vs[2] }, faceId, cellId
             };
         }
     }
@@ -394,11 +475,13 @@ void buildFacesSlim(
     for (uint32_t i = 0; i < tempFaces.size(); ++i) {
         if (i == 0 || tempFaces[i] != tempFaces[i - 1]) {
             face = totalFaces[tempFaces[i].faceId];
+            face.tetId0 = tempFaces[i].tetId;
             facesSlim.push_back(face);
             isBoundaryFace.push_back(true);
             numFaces++;
         } else {
             isBoundaryFace[numFaces - 1] = false;
+            facesSlim[numFaces - 1].tetId1 = tempFaces[i].tetId;
         }
     }
 }
@@ -480,6 +563,9 @@ void TetMesh::updateFacesIfNecessary() {
                 faceSlim.vs[vidx] = fv_it->idx();
                 vidx++;
             }
+            auto faceCells = ovmMesh.face_cells(fh);
+            faceSlim.tetId0 = faceCells.at(0).is_valid() ? faceCells.at(0).idx() : INVALID_TET;
+            faceSlim.tetId1 = faceCells.at(1).is_valid() ? faceCells.at(1).idx() : INVALID_TET;
             facesSlim.at(fh.idx()) = faceSlim;
         }
     }

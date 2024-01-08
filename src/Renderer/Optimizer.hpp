@@ -62,7 +62,8 @@ class TetMeshOptimizer {
 public:
     TetMeshOptimizer(
             sgl::vk::Renderer* renderer, std::function<void(const TetMeshPtr&)> setTetMeshCallback,
-            bool hasDataSets, std::function<std::string()> renderGuiDataSetSelectionMenuCallback);
+            bool hasDataSets, std::function<std::string()> renderGuiDataSetSelectionMenuCallback,
+            sgl::TransferFunctionWindow* transferFunctionWindow);
 
     void openDialog();
     void renderGuiDialog();
@@ -90,6 +91,7 @@ private:
     bool hasDataSets = false;
     std::function<std::string()> renderGuiDataSetSelectionMenuCallback;
     bool hasRequest = false;
+    sgl::TransferFunctionWindow* transferFunctionWindow;
 
     bool usePreviewCached = false;
     uint32_t viewportWidth = 0;

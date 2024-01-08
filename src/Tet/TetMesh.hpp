@@ -41,6 +41,12 @@
 
 #include <Math/Geometry/AABB3.hpp>
 
+#include "TetQuality.hpp"
+
+namespace sgl {
+class TransferFunctionWindow;
+}
+
 namespace sgl { namespace vk {
 class Device;
 class Buffer;
@@ -50,11 +56,14 @@ typedef std::shared_ptr<Buffer> BufferPtr;
 class TetMeshLoader;
 class TetMeshWriter;
 
+const uint32_t INVALID_TET = 0xFFFFFFFFu;
+
 /**
  * Slim data representation is used only for rendering.
  */
 struct FaceSlim {
     uint32_t vs[3]; ///< vertex indices
+    uint32_t tetId0 = INVALID_TET, tetId1 = INVALID_TET;
 };
 
 enum class TestCase {
@@ -68,7 +77,7 @@ struct OvmRepresentationData;
 
 class TetMesh {
 public:
-    explicit TetMesh(sgl::vk::Device* device);
+    explicit TetMesh(sgl::vk::Device* device, sgl::TransferFunctionWindow* transferFunctionWindow);
     ~TetMesh();
     void setTetMeshData(
             const std::vector<uint32_t>& _cellIndices, const std::vector<glm::vec3>& _vertexPositions,
@@ -79,11 +88,16 @@ public:
     [[nodiscard]] inline bool isDirty() const { return isVisualRepresentationDirty; }
     inline void resetDirty() { isVisualRepresentationDirty = false; }
     [[nodiscard]] inline const sgl::AABB3& getBoundingBox() { return boundingBox; }
+    void setVerticesChangedOnDevice(bool _verticesChanged) { verticesChangedOnDevice = _verticesChanged; }
+    void setTetQualityMetric(TetQualityMetric _tetQualityMetric);
 
     sgl::vk::BufferPtr getTriangleIndexBuffer() { return triangleIndexBuffer; }
     sgl::vk::BufferPtr getVertexPositionBuffer() { return vertexPositionBuffer; }
     sgl::vk::BufferPtr getVertexColorBuffer() { return vertexColorBuffer; }
     sgl::vk::BufferPtr getFaceBoundaryBitBuffer() { return faceBoundaryBitBuffer; }
+    // Buffers below are only used for tet quality renderer.
+    sgl::vk::BufferPtr getFaceToTetMapBuffer() { return faceToTetMapBuffer; }
+    sgl::vk::BufferPtr getTetQualityBuffer();
 
     // Get mesh information.
     [[nodiscard]] inline size_t getNumCells() const { return meshNumCells; }
@@ -114,7 +128,13 @@ private:
     bool cellsDirty = false;
     bool isVisualRepresentationDirty = false;
     bool useOvmRepresentation = false;
+    bool verticesChangedOnDevice = false;
     //TetMeshRepresentationType representationType = TetMeshRepresentationType::SLIM;
+    // Tet quality.
+    sgl::TransferFunctionWindow* transferFunctionWindow;
+    std::vector<float> tetQualityArray;
+    TetQualityMetric tetQualityMetric = DEFAULT_QUALITY_METRIC;
+    bool isTetQualityDataDirty = true;
 
     void rebuildInternalRepresentationIfNecessary_Slim();
     std::vector<FaceSlim> facesSlim;
@@ -135,6 +155,9 @@ private:
     sgl::vk::BufferPtr vertexPositionBuffer;
     sgl::vk::BufferPtr vertexColorBuffer;
     sgl::vk::BufferPtr faceBoundaryBitBuffer;
+    // Buffers below are only used for tet quality renderer.
+    sgl::vk::BufferPtr faceToTetMapBuffer;
+    sgl::vk::BufferPtr tetQualityBuffer;
 };
 
 #endif //DIFFTETVR_TETMESH_HPP

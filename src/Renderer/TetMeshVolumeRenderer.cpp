@@ -34,6 +34,7 @@
 #include <Graphics/Vulkan/Render/Passes/BlitRenderPass.hpp>
 #include <ImGui/Widgets/PropertyEditor.hpp>
 #include <ImGui/Widgets/NumberFormatting.hpp>
+#include <ImGui/Widgets/TransferFunctionWindow.hpp>
 #include <utility>
 
 #include "Tet/TetMesh.hpp"
@@ -116,6 +117,9 @@ protected:
         preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
         preprocessorDefines.insert(std::make_pair("PI_SQRT", std::to_string(std::sqrt(sgl::PI))));
         preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
+        if (volumeRenderer->getShowTetQuality()) {
+            preprocessorDefines.insert(std::make_pair("SHOW_TET_QUALITY", ""));
+        }
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(shaderIds, preprocessorDefines);
     }
@@ -126,7 +130,18 @@ protected:
         const auto& tetMesh = volumeRenderer->getTetMesh();
         rasterData->setStaticBuffer(tetMesh->getTriangleIndexBuffer(), "TriangleIndicesBuffer");
         rasterData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "VertexPositionBuffer");
-        rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "VertexColorBuffer");
+        if (volumeRenderer->getShowTetQuality()) {
+            rasterData->setStaticBuffer(tetMesh->getFaceToTetMapBuffer(), "FaceToTetMapBuffer");
+            rasterData->setStaticBuffer(tetMesh->getTetQualityBuffer(), "TetQualityBuffer");
+            rasterData->setStaticTexture(
+                    volumeRenderer->getTransferFunctionWindow()->getTransferFunctionMapTextureVulkan(),
+                    "transferFunctionTexture");
+            rasterData->setStaticBuffer(
+                    volumeRenderer->getTransferFunctionWindow()->getMinMaxUboVulkan(),
+                    "MinMaxUniformBuffer");
+        } else {
+            rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "VertexColorBuffer");
+        }
         volumeRenderer->setRenderDataBindings(rasterData);
     }
 
@@ -214,8 +229,9 @@ private:
     TetMeshVolumeRenderer* volumeRenderer;
 };
 
-TetMeshVolumeRenderer::TetMeshVolumeRenderer(sgl::vk::Renderer* renderer, sgl::CameraPtr* camera)
-        : renderer(renderer), camera(camera) {
+TetMeshVolumeRenderer::TetMeshVolumeRenderer(
+        sgl::vk::Renderer* renderer, sgl::CameraPtr* camera, sgl::TransferFunctionWindow* transferFunctionWindow)
+        : renderer(renderer), camera(camera), transferFunctionWindow(transferFunctionWindow) {
     sgl::vk::Device* device = renderer->getDevice();
     uniformDataBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(UniformData),
@@ -246,6 +262,10 @@ TetMeshVolumeRenderer::TetMeshVolumeRenderer(sgl::vk::Renderer* renderer, sgl::C
 }
 
 TetMeshVolumeRenderer::~TetMeshVolumeRenderer() {
+}
+
+void TetMeshVolumeRenderer::onTransferFunctionMapRebuilt() {
+    ;
 }
 
 void TetMeshVolumeRenderer::updateLargeMeshMode() {
@@ -699,6 +719,16 @@ void TetMeshVolumeRenderer::renderGuiPropertyEditorNodes(sgl::PropertyEditor& pr
             adjointRasterPass->setShaderDirty();
         }
         reallocateFragmentBuffer();
+        reRender = true;
+    }
+    if (propertyEditor.addCheckbox("Use Quality Metric", &showTetQuality)) {
+        resolveRasterPass->setShaderDirty();
+        reRender = true;
+    }
+    if (showTetQuality && propertyEditor.addCombo(
+            "Tet Quality Metric", (int*)&tetQualityMetric,
+            TET_QUALITY_METRIC_NAMES, IM_ARRAYSIZE(TET_QUALITY_METRIC_NAMES))) {
+        tetMesh->setTetQualityMetric(tetQualityMetric);
         reRender = true;
     }
     if (propertyEditor.addSliderFloat("Attenuation", &attenuationCoefficient, 1.0f, 1000.0f)) {

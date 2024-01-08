@@ -70,7 +70,14 @@ vec4 accumulateLinear(float t, vec3 c0, vec3 c1, float a0, float a1) {
     return vec4(exp(c) * (A + B + C), 1.0 - exp(-a0 * t + 0.5 * (a0 - a1) * t * t));
 }
 
-void getNextFragment(in uint i, in uint fragsCount, out vec4 color, out float depthLinear, out bool boundary, out bool frontFace) {
+void getNextFragment(
+        in uint i, in uint fragsCount,
+#ifdef SHOW_TET_QUALITY
+        out uvec2 tetIds,
+#else
+        out vec4 color,
+#endif
+        out float depthLinear, out bool boundary, out bool frontFace) {
     minHeapSink4(0, fragsCount - i);
     uint faceBits = colorList[0];
     float depthBufferValue = depthList[0];
@@ -80,8 +87,12 @@ void getNextFragment(in uint i, in uint fragsCount, out vec4 color, out float de
     depthLinear = convertDepthBufferValueToLinearDepth(depthBufferValue);
     frontFace = (faceBits & 1u) == 1u ? true : false;
     boundary = ((faceBits >> 1u) & 1u) == 1u ? true : false;
-    uint faceIndex = (faceBits >> 2u) * 3u;
 
+#ifdef SHOW_TET_QUALITY
+    uint faceIndex = faceBits >> 2u;
+    tetIds = faceToTetMap[faceIndex];
+#else
+    uint faceIndex = (faceBits >> 2u) * 3u;
     // Compute world space position from depth.
 #ifndef COMPUTE_SHADER // TODO
     vec2 fragCoord = gl_FragCoord.xy;
@@ -108,6 +119,7 @@ void getNextFragment(in uint i, in uint fragsCount, out vec4 color, out float de
     float v = length(cross(fragmentPositionWorld - p0, d20)) / totalArea;
     const vec3 barycentricCoordinates = vec3(u, v, 1.0 - u - v);
     color = c0 * barycentricCoordinates.x + c1 * barycentricCoordinates.y + c2 * barycentricCoordinates.z;
+#endif
 }
 
 vec4 frontToBackPQ(uint fragsCount) {
@@ -119,6 +131,35 @@ vec4 frontToBackPQ(uint fragsCount) {
         minHeapSink4(i, fragsCount); // Sink all inner nodes
     }
 
+    // Start with transparent Ray
+    vec4 rayColor = vec4(0.0);
+    vec4 currentColor;
+
+#ifdef SHOW_TET_QUALITY
+
+    uvec2 fragmentTetIds;
+    float fragmentDepth;
+    bool fragmentBoundary;
+    bool fragmentFrontFace;
+
+    uint openTetId = INVALID_TET;
+    for (i = 0; i < fragsCount; i++) {
+        getNextFragment(i, fragsCount, fragmentTetIds, fragmentDepth, fragmentBoundary, fragmentFrontFace);
+        bool eqA = fragmentTetIds.x != INVALID_TET && fragmentTetIds.x == openTetId;
+        bool eqB = fragmentTetIds.y != INVALID_TET && fragmentTetIds.y == openTetId;
+        if (eqA || eqB) {
+            float tetQuality = tetQualityArray[openTetId];
+            currentColor = transferFunction(tetQuality);
+            rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.a * currentColor.rgb;
+            rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
+        } else {
+            eqA = fragmentTetIds.y != INVALID_TET;
+        }
+        openTetId = eqA ? fragmentTetIds.y : fragmentTetIds.x;
+    }
+
+#else // !defined(SHOW_TET_QUALITY)
+
     vec4 fragment1Color, fragment2Color;
     float fragment1Depth, fragment2Depth;
     bool fragment1Boundary, fragment2Boundary;
@@ -126,9 +167,6 @@ vec4 frontToBackPQ(uint fragsCount) {
     float t, tSeg;
     getNextFragment(0, fragsCount, fragment2Color, fragment2Depth, fragment2Boundary, fragment2FrontFace);
 
-    // Start with transparent Ray
-    vec4 rayColor = vec4(0.0);
-    vec4 currentColor;
     for (i = 1; i < fragsCount; i++) {
         // Load the new fragment.
         fragment1Color = fragment2Color;
@@ -167,6 +205,8 @@ vec4 frontToBackPQ(uint fragsCount) {
         rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
 #endif
     }
+
+#endif // SHOW_TET_QUALITY
 
     //rayColor.rgb = rayColor.rgb / rayColor.a; // Correct rgb with alpha
     return rayColor;

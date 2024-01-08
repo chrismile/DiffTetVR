@@ -36,6 +36,7 @@
 #include <Utils/Dialog.hpp>
 #include <Utils/File/Logfile.hpp>
 #include <Utils/File/FileUtils.hpp>
+#include <Utils/Events/EventManager.hpp>
 #include <Input/Keyboard.hpp>
 #include <Graphics/Window.hpp>
 #include <Graphics/Vulkan/Utils/Instance.hpp>
@@ -115,6 +116,7 @@ MainApp::MainApp()
     sgl::AppSettings::get()->getSettings().getValueOpt("showCoordinateAxesOverlay", showCoordinateAxesOverlay);
 
     useLinearRGB = false;
+    transferFunctionWindow.setClearColor(clearColor);
     coordinateAxesOverlayWidget.setClearColor(clearColor);
 
     if (usePerformanceMeasurementMode) {
@@ -130,7 +132,8 @@ MainApp::MainApp()
     customDataSetFileName = sgl::FileUtils::get()->getUserDirectory();
     loadAvailableDataSetInformation();
 
-    tetMeshVolumeRenderer = std::make_shared<TetMeshVolumeRenderer>(rendererVk, &cameraHandle);
+    tetMeshVolumeRenderer = std::make_shared<TetMeshVolumeRenderer>(
+            rendererVk, &cameraHandle, &transferFunctionWindow);
     tetMeshVolumeRenderer->setUseLinearRGB(useLinearRGB);
     tetMeshVolumeRenderer->setClearColor(clearColor);
     //tetMeshVolumeRenderer->setFileDialogInstance(fileDialogInstance);
@@ -172,7 +175,7 @@ MainApp::MainApp()
                 } else {
                     return "";
                 }
-            });
+            }, &transferFunctionWindow);
 
 #ifdef __linux__
     signal(SIGSEGV, signalHandler);
@@ -265,7 +268,7 @@ void MainApp::render() {
         //selectedDataSetIndex = 0;
         //customDataSetFileName = "/home/christoph/datasets/Toy/chord/linear_4x4.nc";
         //loadVolumeDataSet({ customDataSetFileName });
-        tetMesh = std::make_shared<TetMesh>(device);
+        tetMesh = std::make_shared<TetMesh>(device, &transferFunctionWindow);
         tetMesh->loadTestData(TestCase::SINGLE_TETRAHEDRON);
         tetMeshVolumeRenderer->setTetMeshData(tetMesh);
         isFirstFrame = false;
@@ -543,6 +546,15 @@ void MainApp::renderGui() {
         reRender = false;
     }
 
+    if (tetMeshVolumeRenderer->getShowTetQuality() && transferFunctionWindow.renderGui()) {
+        reRender = true;
+        if (transferFunctionWindow.getTransferFunctionMapRebuilt()) {
+            tetMeshVolumeRenderer->onTransferFunctionMapRebuilt();
+            sgl::EventManager::get()->triggerEvent(std::make_shared<sgl::Event>(
+                    ON_TRANSFER_FUNCTION_MAP_REBUILT_EVENT));
+        }
+    }
+
     if (checkpointWindow.renderGui()) {
         fovDegree = camera->getFOVy() / sgl::PI * 180.0f;
         reRender = true;
@@ -558,6 +570,7 @@ void MainApp::renderGuiGeneralSettingsPropertyEditor() {
     if (propertyEditor.addColorEdit3("Clear Color", (float*)&clearColorSelection, 0)) {
         clearColor = sgl::colorFromFloat(
                 clearColorSelection.x, clearColorSelection.y, clearColorSelection.z, clearColorSelection.w);
+        transferFunctionWindow.setClearColor(clearColor);
         coordinateAxesOverlayWidget.setClearColor(clearColor);
         if (tetMeshVolumeRenderer) {
             rendererVk->syncWithCpu();
@@ -845,6 +858,8 @@ void MainApp::update(float dt) {
 
     checkLoadingRequestFinished();
 
+    transferFunctionWindow.update(dt);
+
     ImGuiIO &io = ImGui::GetIO();
     if (!io.WantCaptureKeyboard || recording || focusedWindowIndex != -1) {
         moveCameraKeyboard(dt);
@@ -891,7 +906,7 @@ void MainApp::loadTetMeshDataSet(const std::string& fileName, bool blockingDataL
         //transformationMatrixPtr = &transformationMatrix;
     }
 
-    TetMeshPtr tetMesh(new TetMesh(device));
+    TetMeshPtr tetMesh(new TetMesh(device, &transferFunctionWindow));
 
     if (blockingDataLoading) {
         bool dataLoaded = tetMesh->loadFromFile(fileName);
