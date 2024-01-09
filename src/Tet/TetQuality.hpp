@@ -34,10 +34,14 @@
  * See also: https://people.eecs.berkeley.edu/~jrs/papers/elem.pdf
  */
 enum class TetQualityMetric {
-    VOLUME_SIGN, PARTHASARATHY
+    VOLUME_SIGN, GRAD_INTERPOLATED, GRAD_INTERPOLATED_ALT,
+    STIFFNESS_POISSON_ALT, KNUPP, PARTHASARATHY,
+    NONSMOOTH, NONSMOOTH_ALT, BAKER, FREITAG
 };
 const char* const TET_QUALITY_METRIC_NAMES[] = {
-        "Volume Sign", "Parthasarathy"
+        "Volume Sign", "Gradient Interpolated", "Gradient Interpolated (Alt)",
+        "Stiffness Poisson (Alt)", "Knupp", "Parthasarathy",
+        "Nonsmooth", "Nonsmooth (Alt)", "Baker", "Freitag"
 };
 
 typedef float (TetQualityMetricFunc) (const glm::vec3&, const glm::vec3&, const glm::vec3&, const glm::vec3&);

@@ -208,6 +208,11 @@ vec4 frontToBackPQ(uint fragsCount) {
 
 #endif // SHOW_TET_QUALITY
 
-    //rayColor.rgb = rayColor.rgb / rayColor.a; // Correct rgb with alpha
+#ifdef ALPHA_MODE_STRAIGHT
+    if (rayColor.a > 1e-5) {
+        rayColor.rgb = rayColor.rgb / rayColor.a; // Correct rgb with alpha
+    }
+#endif
+
     return rayColor;
 }

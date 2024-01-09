@@ -65,11 +65,16 @@ const char* const FRAGMENT_BUFFER_MODE_NAMES[3] = {
         "Buffer", "Buffer Array", "Buffer Reference Array"
 };
 
-const int MESH_MODE_DEPTH_COMPLEXITIES_PPLL[2][2] = {
+const int MESH_MODE_DEPTH_COMPLEXITIES_PPLL[3][2] = {
         {20, 100}, // avg and max depth complexity medium
         //{80, 256}, // avg and max depth complexity medium
         //{120, 380} // avg and max depth complexity very large
+        {100, 520}, // avg and max depth complexity very large
         {400, 900} // avg and max depth complexity very large
+};
+
+enum class AlphaMode {
+    PREMUL, STRAIGHT
 };
 
 /**
@@ -113,6 +118,7 @@ public:
     [[nodiscard]] inline const sgl::vk::BufferPtr& getStartOffsetBuffer() const { return startOffsetBuffer; }
     [[nodiscard]] inline const sgl::vk::BufferPtr& getFragmentCounterBuffer() const { return fragmentCounterBuffer; }
     [[nodiscard]] inline const sgl::vk::BufferPtr& getDepthComplexityCounterBuffer() const { return depthComplexityCounterBuffer; }
+    [[nodiscard]] inline AlphaMode getAlphaMode() const { return alphaMode; }
     [[nodiscard]] inline bool getShowDepthComplexity() const { return showDepthComplexity; }
     [[nodiscard]] inline bool getShowTetQuality() const { return showTetQuality; }
     [[nodiscard]] inline TetQualityMetric getTetQualityMetric() const { return tetQualityMetric; }
@@ -144,6 +150,7 @@ private:
     sgl::vk::ImageViewPtr outputImageView;
     sgl::Color clearColor;
     bool reRender = false;
+    AlphaMode alphaMode = AlphaMode::PREMUL;
 
     // Render passes.
     std::shared_ptr<GatherRasterPass> gatherRasterPass;
@@ -212,9 +219,9 @@ private:
 
     // Per-pixel linked list settings.
     enum LargeMeshMode {
-        MESH_SIZE_MEDIUM, MESH_SIZE_LARGE
+        MESH_SIZE_SMALL, MESH_SIZE_MEDIUM, MESH_SIZE_LARGE
     };
-    LargeMeshMode largeMeshMode = MESH_SIZE_MEDIUM;
+    LargeMeshMode largeMeshMode = MESH_SIZE_SMALL;
     int expectedAvgDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[0][0];
     int expectedMaxDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[0][1];
     float attenuationCoefficient = 100.0f;

@@ -77,6 +77,8 @@ private:
     void hasMoved() override;
     /// Callback when the camera was reset.
     void onCameraReset() override;
+    /// Called when the clear color was changed.
+    void onClearColorChanged() override;
 
     // Dock space mode.
     void renderGuiMenuBar();

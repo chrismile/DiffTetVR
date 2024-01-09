@@ -115,10 +115,6 @@ MainApp::MainApp()
     sgl::AppSettings::get()->getSettings().getValueOpt("showFpsOverlay", showFpsOverlay);
     sgl::AppSettings::get()->getSettings().getValueOpt("showCoordinateAxesOverlay", showCoordinateAxesOverlay);
 
-    useLinearRGB = false;
-    transferFunctionWindow.setClearColor(clearColor);
-    coordinateAxesOverlayWidget.setClearColor(clearColor);
-
     if (usePerformanceMeasurementMode) {
         useCameraFlight = true;
     }
@@ -131,6 +127,9 @@ MainApp::MainApp()
     fileDialogInstance = IGFD_Create();
     customDataSetFileName = sgl::FileUtils::get()->getUserDirectory();
     loadAvailableDataSetInformation();
+
+    useLinearRGB = false;
+    onClearColorChanged();
 
     tetMeshVolumeRenderer = std::make_shared<TetMeshVolumeRenderer>(
             rendererVk, &cameraHandle, &transferFunctionWindow);
@@ -566,17 +565,22 @@ void MainApp::renderGui() {
     }
 }
 
+void MainApp::onClearColorChanged() {
+    clearColor.setA(screenshotTransparentBackground ? 0 : 255);
+    transferFunctionWindow.setClearColor(clearColor);
+    coordinateAxesOverlayWidget.setClearColor(clearColor);
+    if (tetMeshVolumeRenderer) {
+        rendererVk->syncWithCpu();
+        tetMeshVolumeRenderer->setClearColor(clearColor);
+    }
+    reRender = true;
+}
+
 void MainApp::renderGuiGeneralSettingsPropertyEditor() {
     if (propertyEditor.addColorEdit3("Clear Color", (float*)&clearColorSelection, 0)) {
         clearColor = sgl::colorFromFloat(
                 clearColorSelection.x, clearColorSelection.y, clearColorSelection.z, clearColorSelection.w);
-        transferFunctionWindow.setClearColor(clearColor);
-        coordinateAxesOverlayWidget.setClearColor(clearColor);
-        if (tetMeshVolumeRenderer) {
-            rendererVk->syncWithCpu();
-            tetMeshVolumeRenderer->setClearColor(clearColor);
-        }
-        reRender = true;
+        onClearColorChanged();
     }
 
     newDockSpaceMode = useDockSpaceMode;

@@ -120,6 +120,9 @@ protected:
         if (volumeRenderer->getShowTetQuality()) {
             preprocessorDefines.insert(std::make_pair("SHOW_TET_QUALITY", ""));
         }
+        if (volumeRenderer->getAlphaMode() == AlphaMode::STRAIGHT) {
+            preprocessorDefines.insert(std::make_pair("ALPHA_MODE_STRAIGHT", ""));
+        }
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(shaderIds, preprocessorDefines);
     }
@@ -270,9 +273,11 @@ void TetMeshVolumeRenderer::onTransferFunctionMapRebuilt() {
 
 void TetMeshVolumeRenderer::updateLargeMeshMode() {
     // More than one million cells?
-    LargeMeshMode newMeshLargeMeshMode = MESH_SIZE_MEDIUM;
+    LargeMeshMode newMeshLargeMeshMode = MESH_SIZE_SMALL;
     if (tetMesh->getNumCells() > size_t(1e6)) { // > 1m line cells
         newMeshLargeMeshMode = MESH_SIZE_LARGE;
+    } else if (tetMesh->getNumCells() > size_t(1e5)) { // > 1m line cells
+        newMeshLargeMeshMode = MESH_SIZE_MEDIUM;
     }
     if (newMeshLargeMeshMode != largeMeshMode && !useExternalFragmentBuffer) {
         renderer->getDevice()->waitIdle();
@@ -292,6 +297,10 @@ void TetMeshVolumeRenderer::setTetMeshData(const TetMeshPtr& _tetMesh) {
     resolveRasterPass->setDataDirty();
     clearRasterPass->setDataDirty();
     updateLargeMeshMode();
+
+    if (showTetQuality) {
+        tetMesh->setTetQualityMetric(tetQualityMetric);
+    }
 
     statisticsUpToDate = false;
     counterPrintFrags = 0.0f;
@@ -638,6 +647,13 @@ void TetMeshVolumeRenderer::reallocateFragmentBuffer() {
 
 void TetMeshVolumeRenderer::onClearColorChanged() {
     resolveRasterPass->setAttachmentClearColor(clearColor.getFloatColorRGBA());
+    if ((clearColor.getA() == 0) != (alphaMode == AlphaMode::STRAIGHT)) {
+        resolveRasterPass->setShaderDirty();
+        alphaMode = clearColor.getA() == 0 ? AlphaMode::STRAIGHT : AlphaMode::PREMUL;
+        resolveRasterPass->setBlendMode(
+                alphaMode == AlphaMode::PREMUL
+                ? sgl::vk::BlendMode::BACK_TO_FRONT_PREMUL_ALPHA : sgl::vk::BlendMode::OVERWRITE);
+    }
 }
 
 void TetMeshVolumeRenderer::render() {
@@ -722,6 +738,7 @@ void TetMeshVolumeRenderer::renderGuiPropertyEditorNodes(sgl::PropertyEditor& pr
         reRender = true;
     }
     if (propertyEditor.addCheckbox("Use Quality Metric", &showTetQuality)) {
+        tetMesh->setTetQualityMetric(tetQualityMetric);
         resolveRasterPass->setShaderDirty();
         reRender = true;
     }
