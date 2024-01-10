@@ -126,7 +126,7 @@ void main() {
     float gt = g[globalThreadIdx];
     float mt = beta1 * m[globalThreadIdx] + (1.0 - beta1) * gt;
     m[globalThreadIdx] = mt;
-    float vt = beta2 * v[globalThreadIdx] + (1.0 - beta1) * gt * gt;
+    float vt = beta2 * v[globalThreadIdx] + (1.0 - beta2) * gt * gt;
     v[globalThreadIdx] = vt;
 
     // Compute bias-corrected first and second moment estimate.
@@ -142,10 +142,6 @@ void main() {
     } else {
         newVal = clamp(newVal, 0.0, 1.0);
     }
-#else
-    //if (globalThreadIdx != 7u) {
-    //    newVal = parameters[globalThreadIdx];
-    //}
 #endif
     parameters[globalThreadIdx] = newVal;
 }

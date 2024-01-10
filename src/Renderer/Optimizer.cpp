@@ -46,6 +46,7 @@
 #include "Renderer/TetMeshVolumeRenderer.hpp"
 #include "LossPass.hpp"
 #include "OptimizerPass.hpp"
+#include "TetRegularizerPass.hpp"
 #include "Optimizer.hpp"
 
 ImGuiVulkanImage::ImGuiVulkanImage(sgl::vk::Renderer* renderer, sgl::vk::TexturePtr _texture)
@@ -88,6 +89,7 @@ TetMeshOptimizer::TetMeshOptimizer(
     tetMeshVolumeRendererGT = std::make_shared<TetMeshVolumeRenderer>(renderer, &camera, transferFunctionWindow);
     tetMeshVolumeRendererOpt = std::make_shared<TetMeshVolumeRenderer>(renderer, &camera, transferFunctionWindow);
     lossPass = std::make_shared<LossPass>(renderer);
+    tetRegularizerPass = std::make_shared<TetRegularizerPass>(renderer);
     optimizerPassPositions = std::make_shared<OptimizerPass>(renderer);
     optimizerPassColors = std::make_shared<OptimizerPass>(renderer);
 }
@@ -152,7 +154,7 @@ void TetMeshOptimizer::renderGuiDialog() {
             std::string name = std::string() + "Optimizer Settings (" + PARAMETER_NAMES[i] + ")";
             if (ImGui::CollapsingHeader(name.c_str(), nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
                 std::string alphaId = std::string("alpha##alpha-") + PARAMETER_NAMES[i];
-                ImGui::SliderFloat(alphaId.c_str(), &optSettings.learningRate, 0.0f, 1.0f);
+                ImGui::SliderFloat(alphaId.c_str(), &optSettings.learningRate, 0.0f, 1.0f, "%.4f");
                 if (settings.optimizerType == OptimizerType::ADAM) {
                     std::string beta1Id = std::string("beta1##beta1-") + PARAMETER_NAMES[i];
                     std::string beta2Id = std::string("beta2##beta2-") + PARAMETER_NAMES[i];
@@ -160,6 +162,11 @@ void TetMeshOptimizer::renderGuiDialog() {
                     ImGui::SliderFloat(beta2Id.c_str(), &optSettings.beta2, 0.0f, 1.0f);
                 }
             }
+        }
+
+        if (ImGui::CollapsingHeader("Tet Regularizer", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::SliderFloat("Weight lambda##lambda-regularizer", &settings.tetRegularizerSettings.lambda, 0.0f, 1.0f);
+            ImGui::SliderFloat("Softplus beta##beta-regularizer", &settings.tetRegularizerSettings.beta, 1.0f, 50.0f);
         }
 
         if (ImGui::CollapsingHeader(
@@ -283,6 +290,7 @@ void TetMeshOptimizer::startRequest() {
             settings.lossType, settings.imageWidth, settings.imageHeight,
             uint32_t(paddedViewportWidth), uint32_t(paddedViewportHeight), preprocessorDefinesRenderer);
     lossPass->updateUniformBuffer();
+    tetRegularizerPass->setSettings(settings.tetRegularizerSettings.lambda, settings.tetRegularizerSettings.beta);
     renderer->insertMemoryBarrier(
             VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT,
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
@@ -344,6 +352,8 @@ void TetMeshOptimizer::startRequest() {
     vertexColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
     optimizerPassPositions->setBuffers(vertexPositionBuffer, vertexPositionGradientBuffer);
     optimizerPassColors->setBuffers(vertexColorBuffer, vertexColorGradientBuffer);
+    auto cellIndicesBuffer = tetMeshOpt->getCellIndicesBuffer();
+    tetRegularizerPass->setBuffers(cellIndicesBuffer, vertexPositionBuffer, vertexPositionGradientBuffer);
 
     // TODO: Make sure data is freed before allocating new data.
     tetMeshVolumeRendererGT->setClearColor(sgl::Color(0, 0, 0, 0));
@@ -464,9 +474,13 @@ void TetMeshOptimizer::updateRequest() {
     // Clear the gradients.
     if (settings.optimizePositions) {
         vertexPositionGradientBuffer->fill(0, renderer->getVkCommandBuffer());
+        VkPipelineStageFlags destStage =
+                settings.tetRegularizerSettings.lambda > 0.0f
+                ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+                : VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         renderer->insertBufferMemoryBarrier(
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, destStage,
                 vertexPositionGradientBuffer);
     }
     if (settings.optimizeColors) {
@@ -475,6 +489,16 @@ void TetMeshOptimizer::updateRequest() {
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 vertexColorGradientBuffer);
+    }
+
+    // Compute the tet regularizer loss/gradients.
+    if (settings.optimizePositions && settings.tetRegularizerSettings.lambda > 0.0f) {
+        tetRegularizerPass->render();
+        renderer->insertBufferMemoryBarrier(
+                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                vertexPositionGradientBuffer);
     }
 
     // Compute the gradients wrt. the transfer function entries for the image loss.

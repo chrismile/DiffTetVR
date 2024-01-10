@@ -250,6 +250,15 @@ void MainApp::resolutionChanged(sgl::EventPtr event) {
     }
 }
 
+void MainApp::processSDLEvent(const SDL_Event &event) {
+    SciVisApp::processSDLEvent(event);
+
+    // TODO: Test why x11vnc has problems with mouse events.
+    /*if (event.type == SDL_MOUSEMOTION) {
+        std::cout << "Mouse moved." << std::endl;
+    }*/
+}
+
 void MainApp::updateColorSpaceMode() {
     SciVisApp::updateColorSpaceMode();
     tetMeshVolumeRenderer->setUseLinearRGB(useLinearRGB);

@@ -1,7 +1,7 @@
 /*
  * BSD 2-Clause License
  *
- * Copyright (c) 2023, Christoph Neuhauser
+ * Copyright (c) 2024, Christoph Neuhauser
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,57 +26,38 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DIFFTETVR_OPTIMIZERDEFINES_HPP
-#define DIFFTETVR_OPTIMIZERDEFINES_HPP
+#ifndef DIFFTETVR_TETREGULARIZERPASS_HPP
+#define DIFFTETVR_TETREGULARIZERPASS_HPP
 
-#include <cstdint>
+#include <Graphics/Vulkan/Render/Passes/Pass.hpp>
 
-enum class OptimizerType {
-    SGD, ADAM
-};
-const char* const OPTIMIZER_TYPE_NAMES[] = {
-        "SGD", "Adam"
-};
+#include "OptimizerDefines.hpp"
 
-enum class LossType {
-    L1, L2
-};
-const char* const LOSS_TYPE_NAMES[] = {
-        "L1", "L2"
-};
+class TetRegularizerPass : public sgl::vk::ComputePass {
+public:
+    explicit TetRegularizerPass(sgl::vk::Renderer* renderer);
+    void setBuffers(
+            const sgl::vk::BufferPtr& _cellIndicesBuffer,
+            const sgl::vk::BufferPtr& _vertexPositionBuffer,
+            const sgl::vk::BufferPtr& _vertexPositionGradientBuffer);
+    void setSettings(float lambda, float beta);
 
-struct OptimizerSettings {
-    // SGD & Adam.
-    float learningRate = 0.4f;
-    // Adam.
-    float beta1 = 0.9f;
-    float beta2 = 0.999f;
-    float epsilon = 1e-8f;
-};
+protected:
+    void loadShader() override;
+    void createComputeData(sgl::vk::Renderer* renderer, sgl::vk::ComputePipelinePtr& computePipeline) override;
+    void _render() override;
 
-struct TetRegularizerSettings {
-    // Regularizer loss weight (0 means turned off).
-    float lambda = 0.0f;
-    // Softplus parameter.
-    float beta = 10.0f;
-};
+private:
+    const uint32_t computeBlockSize = 256;
 
-struct OptimizationSettings {
-    OptimizerType optimizerType = OptimizerType::ADAM;
-    LossType lossType = LossType::L2;
-    bool optimizePositions = true;
-    bool optimizeColors = true;
-    OptimizerSettings optimizerSettingsPositions{};
-    OptimizerSettings optimizerSettingsColors{};
-    TetRegularizerSettings tetRegularizerSettings{};
-    int maxNumEpochs = 200;
-    // DVR.
-    uint32_t imageWidth = 512;
-    uint32_t imageHeight = 512;
-    float attenuationCoefficient = 1.0f;
-    bool sampleRandomView = true;
-    // Selected file name.
-    std::string dataSetFileNameGT, dataSetFileNameOpt;
+    struct UniformData {
+        float lambda; ///< Regularizer strength.
+        float beta; ///< Softplus parameter.
+    };
+    UniformData uniformData{};
+    sgl::vk::BufferPtr uniformBuffer;
+
+    sgl::vk::BufferPtr cellIndicesBuffer, vertexPositionBuffer, vertexPositionGradientBuffer;
 };
 
-#endif //DIFFTETVR_OPTIMIZERDEFINES_HPP
+#endif //DIFFTETVR_TETREGULARIZERPASS_HPP

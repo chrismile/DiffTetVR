@@ -42,6 +42,7 @@ class TetMesh;
 typedef std::shared_ptr<TetMesh> TetMeshPtr;
 class TetMeshVolumeRenderer;
 class LossPass;
+class TetRegularizerPass;
 class OptimizerPass;
 
 class ImGuiVulkanImage {
@@ -124,6 +125,7 @@ private:
     std::shared_ptr<TetMeshVolumeRenderer> tetMeshVolumeRendererGT;
     std::shared_ptr<TetMeshVolumeRenderer> tetMeshVolumeRendererOpt;
     std::shared_ptr<LossPass> lossPass;
+    std::shared_ptr<TetRegularizerPass> tetRegularizerPass;
     std::shared_ptr<OptimizerPass> optimizerPassPositions;
     std::shared_ptr<OptimizerPass> optimizerPassColors;
 };

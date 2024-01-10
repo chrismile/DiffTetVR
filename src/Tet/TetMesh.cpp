@@ -192,6 +192,7 @@ void TetMesh::uploadDataToDevice() {
         faceToTetMapArray.emplace_back(f.tetId0, f.tetId1);
     }
 
+    cellIndicesBuffer = {};
     triangleIndexBuffer = {};
     vertexPositionBuffer = {};
     vertexColorBuffer = {};
@@ -199,6 +200,10 @@ void TetMesh::uploadDataToDevice() {
     faceToTetMapBuffer = {};
     tetQualityBuffer = {};
 
+    cellIndicesBuffer = std::make_shared<sgl::vk::Buffer>(
+            device, sizeof(uint32_t) * cellIndices.size(), cellIndices.data(),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY);
     triangleIndexBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(uint32_t) * triangleIndices.size(), triangleIndices.data(),
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,

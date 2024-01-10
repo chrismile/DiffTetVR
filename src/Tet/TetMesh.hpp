@@ -91,6 +91,7 @@ public:
     void setVerticesChangedOnDevice(bool _verticesChanged) { verticesChangedOnDevice = _verticesChanged; }
     void setTetQualityMetric(TetQualityMetric _tetQualityMetric);
 
+    sgl::vk::BufferPtr getCellIndicesBuffer() { return cellIndicesBuffer; }
     sgl::vk::BufferPtr getTriangleIndexBuffer() { return triangleIndexBuffer; }
     sgl::vk::BufferPtr getVertexPositionBuffer() { return vertexPositionBuffer; }
     sgl::vk::BufferPtr getVertexColorBuffer() { return vertexColorBuffer; }
@@ -151,6 +152,7 @@ private:
 
     // GPU data.
     void uploadDataToDevice();
+    sgl::vk::BufferPtr cellIndicesBuffer;
     sgl::vk::BufferPtr triangleIndexBuffer;
     sgl::vk::BufferPtr vertexPositionBuffer;
     sgl::vk::BufferPtr vertexColorBuffer;

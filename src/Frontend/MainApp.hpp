@@ -79,6 +79,8 @@ private:
     void onCameraReset() override;
     /// Called when the clear color was changed.
     void onClearColorChanged() override;
+    /// Called when an SDL event occurred.
+    void processSDLEvent(const SDL_Event &event) override;
 
     // Dock space mode.
     void renderGuiMenuBar();
