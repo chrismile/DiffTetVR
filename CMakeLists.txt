@@ -135,7 +135,7 @@ if ("SUPPORT_CUDA_INTEROP" IN_LIST SGL_INTERFACE_COMPILE_DEFINITIONS)
         MESSAGE(STATUS "CUDA could not be found. Disabling tiny-cuda-nn an QuickMLP support.")
     endif()
 else()
-    MESSAGE(FATAL_ERROR "sgl was not built with CUDA interoperability support.")
+    MESSAGE(STATUS "sgl was not built with CUDA interoperability support.")
 endif()
 
 if (NOT ${USE_OVM})

@@ -165,7 +165,8 @@ void TetMeshOptimizer::renderGuiDialog() {
         }
 
         if (ImGui::CollapsingHeader("Tet Regularizer", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::SliderFloat("Weight lambda##lambda-regularizer", &settings.tetRegularizerSettings.lambda, 0.0f, 1.0f);
+            ImGui::SliderFloat(
+                    "Weight lambda##lambda-regularizer", &settings.tetRegularizerSettings.lambda, 0.0f, 1.0f, "%.4f");
             ImGui::SliderFloat("Softplus beta##beta-regularizer", &settings.tetRegularizerSettings.beta, 1.0f, 50.0f);
         }
 

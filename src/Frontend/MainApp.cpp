@@ -250,15 +250,6 @@ void MainApp::resolutionChanged(sgl::EventPtr event) {
     }
 }
 
-void MainApp::processSDLEvent(const SDL_Event &event) {
-    SciVisApp::processSDLEvent(event);
-
-    // TODO: Test why x11vnc has problems with mouse events.
-    /*if (event.type == SDL_MOUSEMOTION) {
-        std::cout << "Mouse moved." << std::endl;
-    }*/
-}
-
 void MainApp::updateColorSpaceMode() {
     SciVisApp::updateColorSpaceMode();
     tetMeshVolumeRenderer->setUseLinearRGB(useLinearRGB);
@@ -334,16 +325,16 @@ void MainApp::renderGui() {
             sgl::ImGuiWrapper::get()->getScaleDependentSize(1000, 580),
             ImVec2(FLT_MAX, FLT_MAX))) {
         if (IGFD_IsOk(fileDialogInstance)) {
-            std::string filePathName = IGFD_GetFilePathName(fileDialogInstance);
-            std::string filePath = IGFD_GetCurrentPath(fileDialogInstance);
-            std::string filter = IGFD_GetCurrentFilter(fileDialogInstance);
+            std::string filePathName = IGFD_GetFilePathNameString(fileDialogInstance);
+            std::string filePath = IGFD_GetCurrentPathString(fileDialogInstance);
+            std::string filter = IGFD_GetCurrentFilterString(fileDialogInstance);
             std::string userDatas;
             if (IGFD_GetUserDatas(fileDialogInstance)) {
                 userDatas = std::string((const char*)IGFD_GetUserDatas(fileDialogInstance));
             }
             auto selection = IGFD_GetSelection(fileDialogInstance);
 
-            const char* currentPath = IGFD_GetCurrentPath(fileDialogInstance);
+            std::string currentPath = IGFD_GetCurrentPathString(fileDialogInstance);
             std::string filename = currentPath;
             if (!filename.empty() && filename.back() != '/' && filename.back() != '\\') {
                 filename += "/";
@@ -352,10 +343,6 @@ void MainApp::renderGui() {
                 filename += selection.table[0].fileName;
             }
             IGFD_Selection_DestroyContent(&selection);
-            if (currentPath) {
-                free((void*)currentPath);
-                currentPath = nullptr;
-            }
 
             fileDialogDirectory = sgl::FileUtils::get()->getPathToFile(filename);
 
@@ -386,25 +373,25 @@ void MainApp::renderGui() {
             sgl::ImGuiWrapper::get()->getScaleDependentSize(1000, 580),
             ImVec2(FLT_MAX, FLT_MAX))) {
         if (IGFD_IsOk(fileDialogInstance)) {
-            std::string filePathName = IGFD_GetFilePathName(fileDialogInstance);
-            std::string filePath = IGFD_GetCurrentPath(fileDialogInstance);
-            std::string filter = IGFD_GetCurrentFilter(fileDialogInstance);
+            std::string filePathName = IGFD_GetFilePathNameString(fileDialogInstance);
+            std::string filePath = IGFD_GetCurrentPathString(fileDialogInstance);
+            std::string filter = IGFD_GetCurrentFilterString(fileDialogInstance);
             std::string userDatas;
             if (IGFD_GetUserDatas(fileDialogInstance)) {
                 userDatas = std::string((const char*)IGFD_GetUserDatas(fileDialogInstance));
             }
             auto selection = IGFD_GetSelection(fileDialogInstance);
 
-            const char* currentPath = IGFD_GetCurrentPath(fileDialogInstance);
+            std::string currentPath = IGFD_GetCurrentPathString(fileDialogInstance);
             std::string filename = currentPath;
             if (!filename.empty() && filename.back() != '/' && filename.back() != '\\') {
                 filename += "/";
             }
             std::string currentFileName;
             if (filter == ".*") {
-                currentFileName = IGFD_GetCurrentFileNameRaw(fileDialogInstance);
+                currentFileName = IGFD_GetCurrentFileNameRawString(fileDialogInstance);
             } else {
-                currentFileName = IGFD_GetCurrentFileName(fileDialogInstance);
+                currentFileName = IGFD_GetCurrentFileNameString(fileDialogInstance);
             }
             if (selection.count != 0 && selection.table[0].fileName == currentFileName) {
                 filename += selection.table[0].fileName;
@@ -412,10 +399,6 @@ void MainApp::renderGui() {
                 filename += currentFileName;
             }
             IGFD_Selection_DestroyContent(&selection);
-            if (currentPath) {
-                free((void*)currentPath);
-                currentPath = nullptr;
-            }
 
             saveTestMeshFileDialogDirectory = sgl::FileUtils::get()->getPathToFile(filename);
 
