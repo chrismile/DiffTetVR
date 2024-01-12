@@ -77,6 +77,10 @@ struct OptimizationSettings {
     bool sampleRandomView = true;
     // Selected file name.
     std::string dataSetFileNameGT, dataSetFileNameOpt;
+    // Export position gradient field.
+    bool exportPositionGradients = false;
+    std::string exportFileNameGradientField;
+    bool isBinaryVtk = true;
 };
 
 #endif //DIFFTETVR_OPTIMIZERDEFINES_HPP

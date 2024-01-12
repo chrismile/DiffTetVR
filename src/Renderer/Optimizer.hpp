@@ -44,6 +44,7 @@ class TetMeshVolumeRenderer;
 class LossPass;
 class TetRegularizerPass;
 class OptimizerPass;
+class VtkWriter;
 
 class ImGuiVulkanImage {
 public:
@@ -116,6 +117,12 @@ private:
     int previewDelay = 0;
     bool showPreview = true;
     std::shared_ptr<ImGuiVulkanImage> colorImageGTImGui, colorImageOptImGui;
+
+    // For exporting position gradients to a file.
+    std::shared_ptr<VtkWriter> vtkWriter;
+    sgl::vk::BufferPtr vertexPositionStagingBuffer;
+    sgl::vk::BufferPtr vertexPositionGradientStagingBuffer;
+
 
     // For Adam.
     sgl::vk::BufferPtr firstMomentEstimateBuffer;

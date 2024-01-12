@@ -43,6 +43,7 @@
 #include <ImGui/imgui_custom.h>
 
 #include "Tet/TetMesh.hpp"
+#include "Tet/Writers/VtkWriter.hpp"
 #include "Renderer/TetMeshVolumeRenderer.hpp"
 #include "LossPass.hpp"
 #include "OptimizerPass.hpp"
@@ -178,6 +179,14 @@ void TetMeshOptimizer::renderGuiDialog() {
             ImGui::Checkbox("Sample Random View", &settings.sampleRandomView);
         }
 
+        if (settings.optimizePositions) {
+            ImGui::Checkbox("Export Position Gradients Field", &settings.exportPositionGradients);
+            if (settings.exportPositionGradients) {
+                ImGui::InputText("File Path", &settings.exportFileNameGradientField);
+                ImGui::Checkbox("Binary VTK", &settings.isBinaryVtk);
+            }
+        }
+
         if (ImGui::Button("OK", ImVec2(120, 0))) {
             shallStartOptimization = true;
         }
@@ -277,6 +286,12 @@ void TetMeshOptimizer::startRequest() {
     tetMeshVolumeRendererOpt->getScreenSizeWithTiling(paddedViewportWidth, paddedViewportHeight);
     tetMeshVolumeRendererOpt->getVulkanShaderPreprocessorDefines(preprocessorDefinesRenderer);
 
+    vtkWriter = {};
+    if (settings.exportPositionGradients && settings.optimizePositions) {
+        vtkWriter = std::make_shared<VtkWriter>();
+        vtkWriter->initializeWriter(settings.exportFileNameGradientField, settings.isBinaryVtk);
+    }
+
     optimizerPassPositions->setOptimizerType(settings.optimizerType);
     optimizerPassPositions->setSettings(
             settings.lossType, settings.optimizerSettingsPositions.learningRate,
@@ -346,7 +361,8 @@ void TetMeshOptimizer::startRequest() {
     auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
     auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
     sgl::vk::BufferSettings bufferSettings{};
-    bufferSettings.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bufferSettings.usage =
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     bufferSettings.sizeInBytes = vertexPositionBuffer->getSizeInBytes();
     vertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
     bufferSettings.sizeInBytes = vertexColorBuffer->getSizeInBytes();
@@ -507,17 +523,52 @@ void TetMeshOptimizer::updateRequest() {
     if (settings.optimizePositions) {
         renderer->insertBufferMemoryBarrier(
                 VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                 vertexPositionGradientBuffer);
     }
     if (settings.optimizeColors) {
         renderer->insertBufferMemoryBarrier(
                 VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                 vertexColorGradientBuffer);
     }
 
-    bool debugOutput = false;
+    if (settings.exportPositionGradients && settings.optimizePositions) {
+        const auto& cellIndices = tetMeshOpt->getCellIndices();
+        auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
+        if (!vertexPositionStagingBuffer
+            || vertexPositionStagingBuffer->getSizeInBytes() != vertexPositionBuffer->getSizeInBytes()) {
+            vertexPositionStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                    renderer->getDevice(), vertexPositionBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        }
+        if (!vertexPositionGradientStagingBuffer
+            || vertexPositionGradientStagingBuffer->getSizeInBytes() != vertexPositionGradientBuffer->getSizeInBytes()) {
+            vertexPositionGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                    renderer->getDevice(), vertexPositionGradientBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        }
+        renderer->insertMemoryBarrier(
+                VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+        vertexPositionBuffer->copyDataTo(
+                vertexPositionStagingBuffer, 0, 0, vertexPositionStagingBuffer->getSizeInBytes(),
+                renderer->getVkCommandBuffer());
+        vertexPositionGradientBuffer->copyDataTo(
+                vertexPositionGradientStagingBuffer, 0, 0, vertexPositionGradientBuffer->getSizeInBytes(),
+                renderer->getVkCommandBuffer());
+        renderer->syncWithCpu();
+
+        auto* vertexPositions = reinterpret_cast<glm::vec3*>(vertexPositionStagingBuffer->mapMemory());
+        auto* vertexPositionGradients = reinterpret_cast<glm::vec3*>(vertexPositionGradientStagingBuffer->mapMemory());
+        const auto numVertices = int(vertexPositionBuffer->getSizeInBytes() / sizeof(glm::vec3));
+        vtkWriter->writeNextTimeStep(
+                cellIndices, vertexPositions, vertexPositionGradients, numVertices);
+        vertexPositionStagingBuffer->unmapMemory();
+        vertexPositionGradientStagingBuffer->unmapMemory();
+    }
+
+    /*bool debugOutput = false;
     if (debugOutput) {
         auto vertexPositionGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
                 renderer->getDevice(), vertexPositionGradientBuffer->getSizeInBytes(),
@@ -548,7 +599,7 @@ void TetMeshOptimizer::updateRequest() {
         std::cout << std::endl;
         vertexPositionGradientStagingBuffer->unmapMemory();
         vertexColorGradientStagingBuffer->unmapMemory();
-    }
+    }*/
 
     // Run the optimizer.
     if (settings.optimizePositions) {
@@ -563,7 +614,7 @@ void TetMeshOptimizer::updateRequest() {
             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
-    if (debugOutput) {
+    /*if (debugOutput) {
         auto vertexPositionBuffer = tetMeshGT->getVertexPositionBuffer();
         auto vertexColorBuffer = tetMeshGT->getVertexColorBuffer();
         auto vertexPositionStagingBuffer = std::make_shared<sgl::vk::Buffer>(
@@ -595,7 +646,7 @@ void TetMeshOptimizer::updateRequest() {
         std::cout << std::endl;
         vertexPositionStagingBuffer->unmapMemory();
         vertexColorStagingBuffer->unmapMemory();
-    }
+    }*/
 
     currentEpoch++;
 }

@@ -91,6 +91,9 @@ public:
     void setVerticesChangedOnDevice(bool _verticesChanged) { verticesChangedOnDevice = _verticesChanged; }
     void setTetQualityMetric(TetQualityMetric _tetQualityMetric);
 
+    [[nodiscard]] const std::vector<uint32_t>& getCellIndices() const { return cellIndices; }
+    [[nodiscard]] const std::vector<glm::vec3>& getVertexPositions() const { return vertexPositions; }
+    [[nodiscard]] const std::vector<glm::vec4>& getVertexColors() const { return vertexColors; }
     sgl::vk::BufferPtr getCellIndicesBuffer() { return cellIndicesBuffer; }
     sgl::vk::BufferPtr getTriangleIndexBuffer() { return triangleIndexBuffer; }
     sgl::vk::BufferPtr getVertexPositionBuffer() { return vertexPositionBuffer; }
