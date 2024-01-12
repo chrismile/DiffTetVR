@@ -33,6 +33,7 @@
 #include <vector>
 
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 class VtkWriter {
 public:
@@ -51,7 +52,11 @@ public:
      */
     void writeNextTimeStep(
             const std::vector<uint32_t>& cellIndices,
-            const glm::vec3* vertexPositions, const glm::vec3* vertexVectorData, int numPoints);
+            const glm::vec3* vertexPositions,
+            const glm::vec4* vertexColors,
+            const glm::vec3* vertexPositionGradients,
+            const glm::vec4* vertexColorGradients,
+            int numPoints);
 
 private:
     void writeVtkHeader(FILE* file) const;
@@ -59,6 +64,10 @@ private:
     void writeCells(FILE* file, const std::vector<uint32_t>& cellIndices) const;
     void writePointDataVector(
             FILE* file, const glm::vec3* vectorData, int numPoints, const std::string& vectorName) const;
+    void writePointDataScalar(
+            FILE* file, const float* scalarData, int numPoints, const std::string& scalarName) const;
+    void writePointDataColor(
+            FILE* file, const glm::vec4* colorDataVec4, int numPoints, const std::string& scalarName) const;
 
     std::string filename;
     bool isBinaryVtk;

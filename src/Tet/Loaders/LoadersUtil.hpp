@@ -31,6 +31,17 @@
 
 #include <cstdint>
 
+#include <glm/vec3.hpp>
+
+/**
+ * Computes the magnitude field of a given vector field.
+ * @param vectorField A float array of size numEntries storing the 3D vector field (input).
+ * @param vectorMagnitudeField A float array of size numEntries into which the vector magnitude is written (output).
+ * @param numEntries The number of field entries.
+ */
+void computeVectorMagnitudeField(
+        const glm::vec3* vectorField, float* vectorMagnitudeField, int numEntries);
+
 /**
  * Swaps the endianness of the passed array.
  * @param values The array to swap endianness for.

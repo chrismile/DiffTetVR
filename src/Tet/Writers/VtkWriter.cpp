@@ -28,8 +28,14 @@
 
 #include <cstring>
 
+#ifdef USE_TBB
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
+#endif
+
 #include <Utils/File/Logfile.hpp>
 #include <Utils/File/FileUtils.hpp>
+#include <Graphics/Color.hpp>
 
 #include "Tet/Loaders/LoadersUtil.hpp"
 #include "VtkWriter.hpp"
@@ -44,7 +50,11 @@ void VtkWriter::initializeWriter(const std::string& _filename, bool _isBinaryVtk
 
 void VtkWriter::writeNextTimeStep(
         const std::vector<uint32_t>& cellIndices,
-        const glm::vec3* vertexPositions, const glm::vec3* vertexVectorData, int numPoints) {
+        const glm::vec3* vertexPositions,
+        const glm::vec4* vertexColors,
+        const glm::vec3* vertexPositionGradients,
+        const glm::vec4* vertexColorGradients,
+        int numPoints) {
     std::string vtkFilename = filename + "." + std::to_string(timeStepNumber) + ".vtk";
     FILE* file;
     if (isBinaryVtk) {
@@ -56,11 +66,35 @@ void VtkWriter::writeNextTimeStep(
         sgl::Logfile::get()->throwError("Error: Couldn't open file \"" + vtkFilename + "\" for writing.");
     }
 
+    auto* vertexColorGradientsMagnitude = new float[numPoints];
+    auto* vertexAlphaGradients = new float[numPoints];
+#ifdef USE_TBB
+    tbb::parallel_for(tbb::blocked_range<int>(0, numPoints), [&](auto const& r) {
+        for (auto i = r.begin(); i != r.end(); i++) {
+#else
+    #pragma omp parallel for default(none) \
+    shared(numPoints, vertexColorGradients, vertexColorGradientsMagnitude, vertexAlphaGradients)
+    for (int i = 0; i < numPoints; i++) {
+#endif
+        const glm::vec4& v = vertexColorGradients[i];
+        vertexColorGradientsMagnitude[i] = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+        vertexAlphaGradients[i] = v.a;
+    }
+#ifdef USE_TBB
+    });
+#endif
+
     writeVtkHeader(file);
     writePointCoordinates(file, vertexPositions, numPoints);
     writeCells(file, cellIndices);
     fprintf(file, "POINT_DATA %i\n", numPoints);
-    writePointDataVector(file, vertexVectorData, numPoints, "Gradient");
+    writePointDataVector(file, vertexPositionGradients, numPoints, "PositionGrad");
+    writePointDataScalar(file, vertexColorGradientsMagnitude, numPoints, "RGBGradMag");
+    writePointDataScalar(file, vertexAlphaGradients, numPoints, "AlphaGrad");
+    writePointDataColor(file, vertexColors, numPoints, "VertexColor");
+
+    delete[] vertexColorGradientsMagnitude;
+    delete[] vertexAlphaGradients;
     fclose(file);
     timeStepNumber++;
 }
@@ -148,6 +182,47 @@ void VtkWriter::writePointDataVector(
         for (int i = 0; i < numPoints; i++) {
             const glm::vec3& v = vectorData[i];
             fprintf(file, "%f %f %f\n", v.x, v.y, v.z);
+        }
+    }
+}
+
+void VtkWriter::writePointDataScalar(
+        FILE* file, const float* scalarData, int numPoints, const std::string& scalarName) const {
+    std::string header = "SCALARS " + scalarName + " float 1\n";
+    fwrite(header.c_str(), sizeof(char), header.size(), file);
+    fprintf(file, "LOOKUP_TABLE default\n");
+
+    if (isBinaryVtk) {
+        auto* pointDataScalar = new float[numPoints];
+        memcpy(pointDataScalar, scalarData, numPoints * sizeof(float));
+        swapEndianness(pointDataScalar, numPoints);
+        fwrite(pointDataScalar, sizeof(float), numPoints, file);
+        delete[] pointDataScalar;
+    } else {
+        for (int i = 0; i < numPoints; i++) {
+            const float& s = scalarData[i];
+            fprintf(file, "%f\n", s);
+        }
+    }
+}
+
+void VtkWriter::writePointDataColor(
+        FILE* file, const glm::vec4* colorDataVec4, int numPoints, const std::string& scalarName) const {
+    std::string header = "COLOR_SCALARS " + scalarName + " 4\n";
+    fwrite(header.c_str(), sizeof(char), header.size(), file);
+
+    if (isBinaryVtk) {
+        auto* pointDataScalar = new uint32_t[numPoints];
+        for (int i = 0; i < numPoints; i++) {
+            pointDataScalar[i] = sgl::colorFromVec4(colorDataVec4[i]).getColorRGBA();
+        }
+        swapEndianness(pointDataScalar, numPoints);
+        fwrite(pointDataScalar, sizeof(uint32_t), numPoints, file);
+        delete[] pointDataScalar;
+    } else {
+        for (int i = 0; i < numPoints; i++) {
+            const glm::vec4& c = colorDataVec4[i];
+            fprintf(file, "%f %f %f %f\n", c.r, c.g, c.b, c.a);
         }
     }
 }

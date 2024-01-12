@@ -37,6 +37,23 @@
 
 #include "LoadersUtil.hpp"
 
+void computeVectorMagnitudeField(
+        const glm::vec3* vectorField, float* vectorMagnitudeField, int numEntries) {
+#ifdef USE_TBB
+    tbb::parallel_for(tbb::blocked_range<int>(0, numEntries), [&](auto const& r) {
+        for (auto i = r.begin(); i != r.end(); i++) {
+#else
+    #pragma omp parallel for shared(numEntries, vectorField, vectorMagnitudeField) default(none)
+    for (int i = 0; i < numEntries; i++) {
+#endif
+        const glm::vec3& v = vectorField[i];
+        vectorMagnitudeField[i] = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    }
+#ifdef USE_TBB
+    });
+#endif
+}
+
 void swapEndianness(uint8_t* byteArray, size_t sizeInBytes, size_t bytesPerEntry) {
     /*
      * Variable length arrays (VLAs) are a C99-only feature, and supported by GCC and Clang merely as C++ extensions.

@@ -121,8 +121,9 @@ private:
     // For exporting position gradients to a file.
     std::shared_ptr<VtkWriter> vtkWriter;
     sgl::vk::BufferPtr vertexPositionStagingBuffer;
+    sgl::vk::BufferPtr vertexColorStagingBuffer;
     sgl::vk::BufferPtr vertexPositionGradientStagingBuffer;
-
+    sgl::vk::BufferPtr vertexColorGradientStagingBuffer;
 
     // For Adam.
     sgl::vk::BufferPtr firstMomentEstimateBuffer;

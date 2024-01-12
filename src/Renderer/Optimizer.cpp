@@ -536,16 +536,29 @@ void TetMeshOptimizer::updateRequest() {
     if (settings.exportPositionGradients && settings.optimizePositions) {
         const auto& cellIndices = tetMeshOpt->getCellIndices();
         auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
+        auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
         if (!vertexPositionStagingBuffer
-            || vertexPositionStagingBuffer->getSizeInBytes() != vertexPositionBuffer->getSizeInBytes()) {
+                || vertexPositionStagingBuffer->getSizeInBytes() != vertexPositionBuffer->getSizeInBytes()) {
             vertexPositionStagingBuffer = std::make_shared<sgl::vk::Buffer>(
                     renderer->getDevice(), vertexPositionBuffer->getSizeInBytes(),
                     VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
         }
+        if (!vertexColorStagingBuffer
+                || vertexColorStagingBuffer->getSizeInBytes() != vertexColorBuffer->getSizeInBytes()) {
+            vertexColorStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                    renderer->getDevice(), vertexColorBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        }
         if (!vertexPositionGradientStagingBuffer
-            || vertexPositionGradientStagingBuffer->getSizeInBytes() != vertexPositionGradientBuffer->getSizeInBytes()) {
+                || vertexPositionGradientStagingBuffer->getSizeInBytes() != vertexPositionGradientBuffer->getSizeInBytes()) {
             vertexPositionGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
                     renderer->getDevice(), vertexPositionGradientBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        }
+        if (!vertexColorGradientStagingBuffer
+                || vertexColorGradientStagingBuffer->getSizeInBytes() != vertexColorGradientBuffer->getSizeInBytes()) {
+            vertexColorGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                    renderer->getDevice(), vertexColorGradientBuffer->getSizeInBytes(),
                     VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
         }
         renderer->insertMemoryBarrier(
@@ -554,18 +567,29 @@ void TetMeshOptimizer::updateRequest() {
         vertexPositionBuffer->copyDataTo(
                 vertexPositionStagingBuffer, 0, 0, vertexPositionStagingBuffer->getSizeInBytes(),
                 renderer->getVkCommandBuffer());
+        vertexColorBuffer->copyDataTo(
+                vertexColorStagingBuffer, 0, 0, vertexColorStagingBuffer->getSizeInBytes(),
+                renderer->getVkCommandBuffer());
         vertexPositionGradientBuffer->copyDataTo(
                 vertexPositionGradientStagingBuffer, 0, 0, vertexPositionGradientBuffer->getSizeInBytes(),
+                renderer->getVkCommandBuffer());
+        vertexColorGradientBuffer->copyDataTo(
+                vertexColorGradientStagingBuffer, 0, 0, vertexColorGradientBuffer->getSizeInBytes(),
                 renderer->getVkCommandBuffer());
         renderer->syncWithCpu();
 
         auto* vertexPositions = reinterpret_cast<glm::vec3*>(vertexPositionStagingBuffer->mapMemory());
+        auto* vertexColors = reinterpret_cast<glm::vec4*>(vertexColorStagingBuffer->mapMemory());
         auto* vertexPositionGradients = reinterpret_cast<glm::vec3*>(vertexPositionGradientStagingBuffer->mapMemory());
+        auto* vertexColorGradients = reinterpret_cast<glm::vec4*>(vertexColorGradientStagingBuffer->mapMemory());
         const auto numVertices = int(vertexPositionBuffer->getSizeInBytes() / sizeof(glm::vec3));
         vtkWriter->writeNextTimeStep(
-                cellIndices, vertexPositions, vertexPositionGradients, numVertices);
+                cellIndices, vertexPositions, vertexColors,
+                vertexPositionGradients, vertexColorGradients, numVertices);
         vertexPositionStagingBuffer->unmapMemory();
+        vertexColorStagingBuffer->unmapMemory();
         vertexPositionGradientStagingBuffer->unmapMemory();
+        vertexColorGradientStagingBuffer->unmapMemory();
     }
 
     /*bool debugOutput = false;

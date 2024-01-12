@@ -214,7 +214,7 @@ void TetMesh::uploadDataToDevice() {
             VMA_MEMORY_USAGE_GPU_ONLY);
     vertexColorBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY);
     faceBoundaryBitBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(uint32_t) * facesBoundarySlim.size(), facesBoundarySlim.data(),
