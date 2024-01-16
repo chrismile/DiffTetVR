@@ -118,7 +118,7 @@ void getNextFragment(
     // Barycentric interpolation.
     vec3 d20 = p2 - p0;
     vec3 d21 = p2 - p1;
-    float totalArea = max(length(cross(d20, d21)), 1e-5);
+    float totalArea = max(length(cross(d20, d21)), 1e-6);
     u = length(cross(d21, p - p1)) / totalArea;
     v = length(cross(p - p0, d20)) / totalArea;
     const vec3 barycentricCoordinates = vec3(u, v, 1.0 - u - v);
@@ -137,7 +137,7 @@ void segmentLengthAdjoint(
     float wf0 = 1.0 - uf0 - vf0;
     float wf1 = 1.0 - uf1 - vf1;
     float denomSq = pow2(pf00.x*uf0 + pf01.x*vf0 + pf02.x*wf0 - pf10.x*uf1 - pf11.x*vf1 - pf12.x*wf1) + pow2(pf00.y*uf0 + pf01.y*vf0 + pf02.y*wf0 - pf10.y*uf1 - pf11.y*vf1 - pf12.y*wf1) + pow2(pf00.z*uf0 + pf01.z*vf0 + pf02.z*wf0 - pf10.z*uf1 - pf11.z*vf1 - pf12.z*wf1);
-    float invDenom = 1.0 / sqrt(max(denomSq, 1e-5));
+    float invDenom = 1.0 / sqrt(max(denomSq, 1e-6));
     float dt_duf0 = ((pf00.x - pf02.x)*(pf00.x*uf0 + pf01.x*vf0 + pf02.x*wf0 - pf10.x*uf1 - pf11.x*vf1 - pf12.x*wf1) + (pf00.y - pf02.y)*(pf00.y*uf0 + pf01.y*vf0 + pf02.y*wf0 - pf10.y*uf1 - pf11.y*vf1 - pf12.y*wf1) + (pf00.z - pf02.z)*(pf00.z*uf0 + pf01.z*vf0 + pf02.z*wf0 - pf10.z*uf1 - pf11.z*vf1 - pf12.z*wf1)) * invDenom;
     float dt_dvf0 = ((pf01.x - pf02.x)*(pf00.x*uf0 + pf01.x*vf0 + pf02.x*wf0 - pf10.x*uf1 - pf11.x*vf1 - pf12.x*wf1) + (pf01.y - pf02.y)*(pf00.y*uf0 + pf01.y*vf0 + pf02.y*wf0 - pf10.y*uf1 - pf11.y*vf1 - pf12.y*wf1) + (pf01.z - pf02.z)*(pf00.z*uf0 + pf01.z*vf0 + pf02.z*wf0 - pf10.z*uf1 - pf11.z*vf1 - pf12.z*wf1)) * invDenom;
     float dt_duf1 = (-(pf10.x - pf12.x)*(pf00.x*uf0 + pf01.x*vf0 + pf02.x*wf0 - pf10.x*uf1 - pf11.x*vf1 - pf12.x*wf1) - (pf10.y - pf12.y)*(pf00.y*uf0 + pf01.y*vf0 + pf02.y*wf0 - pf10.y*uf1 - pf11.y*vf1 - pf12.y*wf1) - (pf10.z - pf12.z)*(pf00.z*uf0 + pf01.z*vf0 + pf02.z*wf0 - pf10.z*uf1 - pf11.z*vf1 - pf12.z*wf1)) * invDenom;
@@ -181,9 +181,9 @@ void baryAdjoint(
     float f0 = pow2((p0.x - p2.x)*(p1.y - p2.y) - (p0.y - p2.y)*(p1.x - p2.x)) + pow2((p0.x - p2.x)*(p1.z - p2.z) - (p0.z - p2.z)*(p1.x - p2.x)) + pow2((p0.y - p2.y)*(p1.z - p2.z) - (p0.z - p2.z)*(p1.y - p2.y));
     float f1 = pow2((p.x - p1.x)*(p1.y - p2.y) - (p.y - p1.y)*(p1.x - p2.x)) + pow2((p.x - p1.x)*(p1.z - p2.z) - (p.z - p1.z)*(p1.x - p2.x)) + pow2((p.y - p1.y)*(p1.z - p2.z) - (p.z - p1.z)*(p1.y - p2.y));
     float f2 = pow2((p.x - p0.x)*(p0.y - p2.y) - (p.y - p0.y)*(p0.x - p2.x)) + pow2((p.x - p0.x)*(p0.z - p2.z) - (p.z - p0.z)*(p0.x - p2.x)) + pow2((p.y - p0.y)*(p0.z - p2.z) - (p.z - p0.z)*(p0.y - p2.y));
-    float denom0 = max(pow(f0, 3.0/2.0), 1e-5);
-    float denom1 = max(sqrt(f1), 1e-5);
-    float denom2 = max(sqrt(f2), 1e-5);
+    float denom0 = max(pow(f0, 3.0/2.0), 1e-6);
+    float denom1 = max(sqrt(f1), 1e-6);
+    float denom2 = max(sqrt(f2), 1e-6);
     float du_dp0x = (-(p1.y - p2.y)*((p0.x - p2.x)*(p1.y - p2.y) - (p0.y - p2.y)*(p1.x - p2.x)) + (p1.z - p2.z)*(-(p0.x - p2.x)*(p1.z - p2.z) + (p0.z - p2.z)*(p1.x - p2.x)))*denom1/denom0;
     float du_dp0y = ((p1.x - p2.x)*((p0.x - p2.x)*(p1.y - p2.y) - (p0.y - p2.y)*(p1.x - p2.x)) - (p1.z - p2.z)*((p0.y - p2.y)*(p1.z - p2.z) - (p0.z - p2.z)*(p1.y - p2.y)))*denom1/denom0;
     float du_dp0z = (-(p1.x - p2.x)*(-(p0.x - p2.x)*(p1.z - p2.z) + (p0.z - p2.z)*(p1.x - p2.x)) + (p1.y - p2.y)*((p0.y - p2.y)*(p1.z - p2.z) - (p0.z - p2.z)*(p1.y - p2.y)))*denom1/denom0;

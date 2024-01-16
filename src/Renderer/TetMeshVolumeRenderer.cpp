@@ -274,20 +274,24 @@ void TetMeshVolumeRenderer::onTransferFunctionMapRebuilt() {
 void TetMeshVolumeRenderer::updateLargeMeshMode() {
     // More than one million cells?
     LargeMeshMode newMeshLargeMeshMode = MESH_SIZE_SMALL;
-    if (tetMesh->getNumCells() > size_t(1e6)) { // > 1m line cells
+    if (tetMesh->getNumCells() > size_t(1e6)) { // > 1m cells
         newMeshLargeMeshMode = MESH_SIZE_LARGE;
-    } else if (tetMesh->getNumCells() > size_t(1e5)) { // > 1m line cells
+    } else if (tetMesh->getNumCells() > size_t(1e5)) { // > 1m cells
         newMeshLargeMeshMode = MESH_SIZE_MEDIUM;
     }
-    if (newMeshLargeMeshMode != largeMeshMode && !useExternalFragmentBuffer) {
+    if (newMeshLargeMeshMode != largeMeshMode) {
         renderer->getDevice()->waitIdle();
         largeMeshMode = newMeshLargeMeshMode;
         expectedAvgDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[int(largeMeshMode)][0];
         expectedMaxDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[int(largeMeshMode)][1];
-        if (outputImageView) {
+        if (outputImageView && !useExternalFragmentBuffer) {
             reallocateFragmentBuffer();
         }
         resolveRasterPass->setShaderDirty();
+        gatherRasterPass->setDataDirty();
+        if (adjointRasterPass) {
+            adjointRasterPass->setDataDirty();
+        }
     }
 }
 
@@ -656,9 +660,30 @@ void TetMeshVolumeRenderer::onClearColorChanged() {
     }
 }
 
+//#define USE_ORTHO_PROJ
+
 void TetMeshVolumeRenderer::render() {
     auto imageSettings = outputImageView->getImage()->getImageSettings();
+#ifdef USE_ORTHO_PROJ
+    glm::mat4 projMatTest = (*camera)->getProjectionMatrix();
+    projMat = glm::orthoRH_ZO(
+            -0.5f, 0.5f, -0.5f, 0.5f,
+            (*camera)->getNearClipDistance(), (*camera)->getFarClipDistance());
+    //projMat = glm::perspectiveRH_ZO(
+    //        (*camera)->getFOVy(), (*camera)->getAspectRatio(),
+    //        (*camera)->getNearClipDistance(), (*camera)->getFarClipDistance());
+    projMat[1][1] = -projMat[1][1]; // coordinateOrigin == CoordinateOrigin::TOP_LEFT
+    //glm::mat4 viewProjMat = projMat * (*camera)->getViewMatrix();
+    //projMat = (*camera)->getProjectionMatrix();
+    //glm::vec4 p(0.1f, 0.1f, -0.2f, 1.0f);
+    //glm::vec4 pt0 = projMatTest * p;
+    //glm::vec4 pt1 = projMat * p;
+    glm::mat4 inverseViewProjMat = glm::inverse(projMat * (*camera)->getViewMatrix());
+    uniformData.inverseViewProjectionMatrix = inverseViewProjMat;
+#else
     uniformData.inverseViewProjectionMatrix = (*camera)->getInverseViewProjMatrix();
+#endif
+
     uniformData.linkedListSize = static_cast<uint32_t>(fragmentBufferSize);
     uniformData.viewportW = paddedWindowWidth;
     uniformData.viewportSize = glm::uvec2(imageSettings.width, imageSettings.height);
@@ -702,7 +727,11 @@ void TetMeshVolumeRenderer::clear() {
 }
 
 void TetMeshVolumeRenderer::gather() {
+#ifdef USE_ORTHO_PROJ
+    renderer->setProjectionMatrix(projMat);
+#else
     renderer->setProjectionMatrix((*camera)->getProjectionMatrix());
+#endif
     renderer->setViewMatrix((*camera)->getViewMatrix());
     renderer->setModelMatrix(sgl::matrixIdentity());
 

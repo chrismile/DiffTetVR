@@ -93,6 +93,7 @@ public:
     void recreateSwapchain(uint32_t width, uint32_t height);
     void setUseLinearRGB(bool _useLinearRGB);
     void setTetMeshData(const TetMeshPtr& _tetMesh);
+    void setAttenuationCoefficient(float _attenuationCoefficient) { attenuationCoefficient = _attenuationCoefficient; reRender = true; }
     void setClearColor(const sgl::Color& _clearColor);
     void setNewTilingMode(int newTileWidth, int newTileHeight, bool useMortonCode = false);
 
@@ -100,6 +101,7 @@ public:
     void setAdjointPassData(
             sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer,
             sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer);
+    void setUseExternalFragmentBuffer(bool _useExternal) { useExternalFragmentBuffer = _useExternal; }
     void recreateSwapchainExternal(
             uint32_t width, uint32_t height, size_t _fragmentBufferSize, sgl::vk::BufferPtr _fragmentBuffer,
             sgl::vk::BufferPtr _startOffsetBuffer, sgl::vk::BufferPtr _fragmentCounterBuffer);
@@ -151,6 +153,9 @@ private:
     sgl::Color clearColor;
     bool reRender = false;
     AlphaMode alphaMode = AlphaMode::PREMUL;
+
+    // Only for tests.
+    glm::mat4 projMat;
 
     // Render passes.
     std::shared_ptr<GatherRasterPass> gatherRasterPass;

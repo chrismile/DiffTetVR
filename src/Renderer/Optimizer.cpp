@@ -375,6 +375,7 @@ void TetMeshOptimizer::startRequest() {
     // TODO: Make sure data is freed before allocating new data.
     tetMeshVolumeRendererGT->setClearColor(sgl::Color(0, 0, 0, 0));
     tetMeshVolumeRendererGT->setTetMeshData(tetMeshGT);
+    tetMeshVolumeRendererGT->setAttenuationCoefficient(settings.attenuationCoefficient);
     tetMeshVolumeRendererGT->setOutputImage(colorImageGT->getImageView());
     tetMeshVolumeRendererGT->recreateSwapchain(settings.imageWidth, settings.imageHeight);
     fragmentBufferSize = tetMeshVolumeRendererGT->getFragmentBufferSize();
@@ -382,8 +383,10 @@ void TetMeshOptimizer::startRequest() {
     startOffsetBuffer = tetMeshVolumeRendererGT->getStartOffsetBuffer();
     fragmentCounterBuffer = tetMeshVolumeRendererGT->getFragmentCounterBuffer();
 
+    tetMeshVolumeRendererOpt->setUseExternalFragmentBuffer(true);
     tetMeshVolumeRendererOpt->setClearColor(sgl::Color(0, 0, 0, 0));
     tetMeshVolumeRendererOpt->setTetMeshData(tetMeshOpt);
+    tetMeshVolumeRendererOpt->setAttenuationCoefficient(settings.attenuationCoefficient);
     tetMeshVolumeRendererOpt->setOutputImage(colorImageOpt->getImageView());
     tetMeshVolumeRendererOpt->setAdjointPassData(
             colorAdjointTexture->getImageView(), adjointPassBackbuffer,
