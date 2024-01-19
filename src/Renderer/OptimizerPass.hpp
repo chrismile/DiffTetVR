@@ -39,8 +39,10 @@ public:
     void setOptimizerType(OptimizerType _optimizerType);
     void setBuffers(
             const sgl::vk::BufferPtr& _tfOptBuffer,
-            const sgl::vk::BufferPtr& _tfOptGradientBuffer);
-    void setSettings(LossType _lossType, float alpha, float beta1, float beta2, float epsilon, bool _isColor);
+            const sgl::vk::BufferPtr& _tfOptGradientBuffer,
+            const sgl::vk::BufferPtr& _vertexBoundaryBitBuffer);
+    void setSettings(
+            LossType _lossType, float alpha, float beta1, float beta2, float epsilon, bool _isColor, bool _fixBoundary);
     void setEpochIndex(int epochIdx);
 
 protected:
@@ -62,9 +64,11 @@ private:
     UniformData uniformData{};
     sgl::vk::BufferPtr uniformBuffer;
     bool isColor = false;
+    bool fixBoundary = false;
 
     sgl::vk::BufferPtr parametersBuffer, parametersGradientBuffer;
     sgl::vk::BufferPtr firstMomentEstimateBuffer, secondMomentEstimateBuffer;
+    sgl::vk::BufferPtr vertexBoundaryBitBuffer;
 };
 
 #endif //CORRERENDER_OPTIMIZERPASS_HPP

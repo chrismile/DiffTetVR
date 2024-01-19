@@ -99,6 +99,7 @@ public:
     sgl::vk::BufferPtr getVertexPositionBuffer() { return vertexPositionBuffer; }
     sgl::vk::BufferPtr getVertexColorBuffer() { return vertexColorBuffer; }
     sgl::vk::BufferPtr getFaceBoundaryBitBuffer() { return faceBoundaryBitBuffer; }
+    sgl::vk::BufferPtr getVertexBoundaryBitBuffer() { return vertexBoundaryBitBuffer; }
     // Buffers below are only used for tet quality renderer.
     sgl::vk::BufferPtr getFaceToTetMapBuffer() { return faceToTetMapBuffer; }
     sgl::vk::BufferPtr getTetQualityBuffer();
@@ -143,6 +144,7 @@ private:
     void rebuildInternalRepresentationIfNecessary_Slim();
     std::vector<FaceSlim> facesSlim;
     std::vector<uint32_t> facesBoundarySlim;
+    std::vector<uint32_t> verticesBoundarySlim;
 
 #ifdef USE_OPEN_VOLUME_MESH
     void rebuildInternalRepresentationIfNecessary_Ovm();
@@ -160,6 +162,7 @@ private:
     sgl::vk::BufferPtr vertexPositionBuffer;
     sgl::vk::BufferPtr vertexColorBuffer;
     sgl::vk::BufferPtr faceBoundaryBitBuffer;
+    sgl::vk::BufferPtr vertexBoundaryBitBuffer;
     // Buffers below are only used for tet quality renderer.
     sgl::vk::BufferPtr faceToTetMapBuffer;
     sgl::vk::BufferPtr tetQualityBuffer;

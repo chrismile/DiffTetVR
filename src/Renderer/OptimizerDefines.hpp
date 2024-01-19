@@ -70,6 +70,7 @@ struct OptimizationSettings {
     OptimizerSettings optimizerSettingsColors{};
     TetRegularizerSettings tetRegularizerSettings{};
     int maxNumEpochs = 200;
+    bool fixBoundary = false;
     // DVR.
     uint32_t imageWidth = 512;
     uint32_t imageHeight = 512;

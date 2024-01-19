@@ -197,6 +197,7 @@ void TetMesh::uploadDataToDevice() {
     vertexPositionBuffer = {};
     vertexColorBuffer = {};
     faceBoundaryBitBuffer = {};
+    vertexBoundaryBitBuffer = {};
     faceToTetMapBuffer = {};
     tetQualityBuffer = {};
 
@@ -218,6 +219,10 @@ void TetMesh::uploadDataToDevice() {
             VMA_MEMORY_USAGE_GPU_ONLY);
     faceBoundaryBitBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(uint32_t) * facesBoundarySlim.size(), facesBoundarySlim.data(),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY);
+    vertexBoundaryBitBuffer = std::make_shared<sgl::vk::Buffer>(
+            device, sizeof(uint32_t) * verticesBoundarySlim.size(), verticesBoundarySlim.data(),
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY);
     faceToTetMapBuffer = std::make_shared<sgl::vk::Buffer>(
@@ -453,7 +458,8 @@ struct TempFace {
 
 void buildFacesSlim(
         const std::vector<glm::vec3>& vertices, const std::vector<uint32_t>& cellIndices,
-        std::vector<FaceSlim>& facesSlim, std::vector<uint32_t>& isBoundaryFace) {
+        std::vector<FaceSlim>& facesSlim, std::vector<uint32_t>& isBoundaryFace,
+        std::vector<uint32_t>& isBoundaryVertex) {
     const uint32_t numTets = cellIndices.size() / 4;
     std::vector<FaceSlim> totalFaces(numTets * 4);
     std::vector<TempFace> tempFaces(numTets * 4);
@@ -475,6 +481,8 @@ void buildFacesSlim(
     }
     std::sort(tempFaces.begin(), tempFaces.end());
 
+    isBoundaryVertex.clear();
+    isBoundaryVertex.resize(vertices.size(), false);
     facesSlim.reserve(tempFaces.size() / 2);
     uint32_t numFaces = 0;
     for (uint32_t i = 0; i < tempFaces.size(); ++i) {
@@ -489,10 +497,17 @@ void buildFacesSlim(
             facesSlim[numFaces - 1].tetId1 = tempFaces[i].tetId;
         }
     }
+    for (uint32_t i = 0; i < facesSlim.size(); ++i) {
+        if (isBoundaryFace.at(i)) {
+            for (unsigned int v : facesSlim.at(i).vs) {
+                isBoundaryVertex[v] = true;
+            }
+        }
+    }
 }
 
 void TetMesh::rebuildInternalRepresentationIfNecessary_Slim() {
-    buildFacesSlim(vertexPositions, cellIndices, facesSlim, facesBoundarySlim);
+    buildFacesSlim(vertexPositions, cellIndices, facesSlim, facesBoundarySlim, verticesBoundarySlim);
     isVisualRepresentationDirty = true;
 }
 
@@ -558,14 +573,20 @@ void TetMesh::updateFacesIfNecessary() {
         OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
         facesSlim.resize(ovmMesh.n_faces());
         facesBoundarySlim.resize(ovmMesh.n_faces());
+        verticesBoundarySlim.clear();
+        verticesBoundarySlim.resize(ovmMesh.n_vertices(), false);
         FaceSlim faceSlim{};
         for (OpenVolumeMesh::FaceIter f_it = ovmMesh.faces_begin(); f_it != ovmMesh.faces_end(); f_it++) {
             auto fh = *f_it;
-            facesBoundarySlim.at(fh.idx()) = !fh.halfface_handle(0).is_valid() || !fh.halfface_handle(1).is_valid();
+            bool isBoundary = !fh.halfface_handle(0).is_valid() || !fh.halfface_handle(1).is_valid();
+            facesBoundarySlim.at(fh.idx()) = isBoundary;
             int vidx = 0;
             for (auto fv_it = ovmMesh.fv_iter(fh); fv_it.valid(); fv_it++) {
                 assert(vidx < 3);
                 faceSlim.vs[vidx] = fv_it->idx();
+                if (isBoundary) {
+                    verticesBoundarySlim[vidx] = true;
+                }
                 vidx++;
             }
             auto faceCells = ovmMesh.face_cells(fh);

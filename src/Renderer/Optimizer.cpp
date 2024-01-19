@@ -141,6 +141,7 @@ void TetMeshOptimizer::renderGuiDialog() {
         }
         ImGui::SameLine();
         ImGui::Checkbox("Show Preview", &showPreview);
+        ImGui::Checkbox("Fix Boundary", &settings.fixBoundary);
 
         const char* const PARAMETER_NAMES[] = { "Positions", "Colors" };
         for (int i = 0; i < 2; i++) {
@@ -296,12 +297,12 @@ void TetMeshOptimizer::startRequest() {
     optimizerPassPositions->setSettings(
             settings.lossType, settings.optimizerSettingsPositions.learningRate,
             settings.optimizerSettingsPositions.beta1, settings.optimizerSettingsPositions.beta2,
-            settings.optimizerSettingsPositions.epsilon, false);
+            settings.optimizerSettingsPositions.epsilon, false, settings.fixBoundary);
     optimizerPassColors->setOptimizerType(settings.optimizerType);
     optimizerPassColors->setSettings(
             settings.lossType, settings.optimizerSettingsColors.learningRate,
             settings.optimizerSettingsColors.beta1, settings.optimizerSettingsColors.beta2,
-            settings.optimizerSettingsColors.epsilon, true);
+            settings.optimizerSettingsColors.epsilon, true, settings.fixBoundary);
     lossPass->setSettings(
             settings.lossType, settings.imageWidth, settings.imageHeight,
             uint32_t(paddedViewportWidth), uint32_t(paddedViewportHeight), preprocessorDefinesRenderer);
@@ -360,6 +361,7 @@ void TetMeshOptimizer::startRequest() {
 
     auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
     auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
+    auto vertexBoundaryBitBuffer = tetMeshOpt->getVertexBoundaryBitBuffer();
     sgl::vk::BufferSettings bufferSettings{};
     bufferSettings.usage =
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -367,8 +369,8 @@ void TetMeshOptimizer::startRequest() {
     vertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
     bufferSettings.sizeInBytes = vertexColorBuffer->getSizeInBytes();
     vertexColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
-    optimizerPassPositions->setBuffers(vertexPositionBuffer, vertexPositionGradientBuffer);
-    optimizerPassColors->setBuffers(vertexColorBuffer, vertexColorGradientBuffer);
+    optimizerPassPositions->setBuffers(vertexPositionBuffer, vertexPositionGradientBuffer, vertexBoundaryBitBuffer);
+    optimizerPassColors->setBuffers(vertexColorBuffer, vertexColorGradientBuffer, vertexBoundaryBitBuffer);
     auto cellIndicesBuffer = tetMeshOpt->getCellIndicesBuffer();
     tetRegularizerPass->setBuffers(cellIndicesBuffer, vertexPositionBuffer, vertexPositionGradientBuffer);
 

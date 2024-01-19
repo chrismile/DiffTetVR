@@ -54,11 +54,22 @@ layout(binding = 2, std430) readonly buffer ParametersGradientBuffer {
     float g[];
 };
 
+#if !defined(COLOR_OPTIMIZATION) && defined(FIX_BOUNDARY_VERTICES)
+layout(binding = 2, std430) readonly buffer VertexBoundaryBitBuffer {
+    uint isVertexOnBoundaryArray[];
+};
+#endif
+
 void main() {
     uint globalThreadIdx = gl_GlobalInvocationID.x;
     if (globalThreadIdx >= numParameters) {
         return;
     }
+#if !defined(COLOR_OPTIMIZATION) && defined(FIX_BOUNDARY_VERTICES)
+    if (isVertexOnBoundaryArray[globalThreadIdx / 3u] != 0u) {
+        return;
+    }
+#endif
 
     // Update the parameters.
     //parameters[globalThreadIdx] -= alpha * g[globalThreadIdx];
@@ -116,11 +127,22 @@ layout(binding = 4, std430) buffer SecondMomentEstimateBuffer {
     float v[];
 };
 
+#if !defined(COLOR_OPTIMIZATION) && defined(FIX_BOUNDARY_VERTICES)
+layout(binding = 5, std430) readonly buffer VertexBoundaryBitBuffer {
+    uint isVertexOnBoundaryArray[];
+};
+#endif
+
 void main() {
     uint globalThreadIdx = gl_GlobalInvocationID.x;
     if (globalThreadIdx >= numParameters) {
         return;
     }
+#if !defined(COLOR_OPTIMIZATION) && defined(FIX_BOUNDARY_VERTICES)
+    if (isVertexOnBoundaryArray[globalThreadIdx / 3u] != 0u) {
+        return;
+    }
+#endif
 
     // Update biased first and second moment estimate.
     float gt = g[globalThreadIdx];

@@ -41,7 +41,8 @@ OptimizerPass::OptimizerPass(sgl::vk::Renderer* renderer) : ComputePass(renderer
 
 void OptimizerPass::setBuffers(
         const sgl::vk::BufferPtr& _parametersBuffer,
-        const sgl::vk::BufferPtr& _parametersGradientBuffer) {
+        const sgl::vk::BufferPtr& _parametersGradientBuffer,
+        const sgl::vk::BufferPtr& _vertexBoundaryBitBuffer) {
     if (parametersBuffer != _parametersBuffer) {
         parametersBuffer = _parametersBuffer;
         if (computeData) {
@@ -52,6 +53,12 @@ void OptimizerPass::setBuffers(
         parametersGradientBuffer = _parametersGradientBuffer;
         if (computeData) {
             computeData->setStaticBuffer(parametersGradientBuffer, "ParametersGradientBuffer");
+        }
+    }
+    if (vertexBoundaryBitBuffer != _vertexBoundaryBitBuffer) {
+        vertexBoundaryBitBuffer = _vertexBoundaryBitBuffer;
+        if (computeData) {
+            computeData->setStaticBufferOptional(vertexBoundaryBitBuffer, "VertexBoundaryBitBuffer");
         }
     }
     if (!firstMomentEstimateBuffer
@@ -76,13 +83,17 @@ void OptimizerPass::setOptimizerType(OptimizerType _optimizerType) {
 }
 
 void OptimizerPass::setSettings(
-        LossType _lossType, float alpha, float beta1, float beta2, float epsilon, bool _isColor) {
+        LossType _lossType, float alpha, float beta1, float beta2, float epsilon, bool _isColor, bool _fixBoundary) {
     if (lossType != _lossType) {
         lossType = _lossType;
         setShaderDirty();
     }
     if (isColor != _isColor) {
         isColor = _isColor;
+        setShaderDirty();
+    }
+    if (fixBoundary != _fixBoundary) {
+        fixBoundary = _fixBoundary;
         setShaderDirty();
     }
     if (uniformData.alpha != alpha || uniformData.beta1 != beta1 || uniformData.beta2 != beta2
@@ -121,6 +132,9 @@ void OptimizerPass::loadShader() {
     if (isColor) {
         preprocessorDefines.insert(std::make_pair("COLOR_OPTIMIZATION", ""));
     }
+    if (fixBoundary) {
+        preprocessorDefines.insert(std::make_pair("FIX_BOUNDARY_VERTICES", ""));
+    }
     std::string shaderName;
     if (optimizerType == OptimizerType::SGD) {
         shaderName = "Optimizer.Compute.SGD";
@@ -139,6 +153,9 @@ void OptimizerPass::createComputeData(
     if (optimizerType == OptimizerType::ADAM) {
         computeData->setStaticBuffer(firstMomentEstimateBuffer, "FirstMomentEstimateBuffer");
         computeData->setStaticBuffer(secondMomentEstimateBuffer, "SecondMomentEstimateBuffer");
+    }
+    if (fixBoundary) {
+        computeData->setStaticBufferOptional(vertexBoundaryBitBuffer, "VertexBoundaryBitBuffer");
     }
 }
 
