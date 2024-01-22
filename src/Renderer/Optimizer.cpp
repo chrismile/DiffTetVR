@@ -198,9 +198,11 @@ void TetMeshOptimizer::renderGuiDialog() {
         }
 
         if (shallStartOptimization) {
-            ImGui::OpenPopup("Optimization Progress");
-            isOptimizationProgressDialogOpen = true;
             startRequest();
+            if (hasRequest) {
+                ImGui::OpenPopup("Optimization Progress");
+                isOptimizationProgressDialogOpen = true;
+            }
         }
 
         if (ImGui::BeginPopupModal(
@@ -357,6 +359,7 @@ void TetMeshOptimizer::startRequest() {
         hasRequest = false;
         tetMeshGT = {};
         tetMeshOpt = {};
+        return;
     }
 
     auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();

@@ -162,19 +162,27 @@ void TetMesh::setTetMeshData(
         boundingBox.combine(pt);
     }
 
+    uint32_t tmp;
     for (size_t tet = 0; tet < cellIndices.size(); tet += 4) {
         glm::vec3 p0 = vertexPositions.at(cellIndices.at(tet + 0));
         glm::vec3 p1 = vertexPositions.at(cellIndices.at(tet + 1));
         glm::vec3 p2 = vertexPositions.at(cellIndices.at(tet + 2));
         glm::vec3 p3 = vertexPositions.at(cellIndices.at(tet + 3));
         float signVal = glm::sign(glm::dot(glm::cross(p1 - p0, p2 - p0), p3 - p0));
-        if (signVal >= 0.0f) {
-            std::cout << "Invalid sign for tet " << (cellIndices.size() / 4) << std::endl;
+        if (useOvmRepresentation && signVal >= 0.0f) {
+            tmp = cellIndices.at(tet + 2);
+            cellIndices.at(tet + 2) = cellIndices.at(tet + 3);
+            cellIndices.at(tet + 3) = tmp;
+        } else {
+            if (signVal >= 0.0f) {
+                std::cout << "Invalid sign for tet " << (tet / 4) << std::endl;
+            }
         }
     }
 }
 
 void TetMesh::uploadDataToDevice() {
+    updateCellIndicesIfNecessary();
     updateVerticesIfNecessary();
     updateFacesIfNecessary();
     isVisualRepresentationDirty = true;
@@ -542,6 +550,95 @@ void TetMesh::rebuildInternalRepresentationIfNecessary_Ovm() {
 
         newData = false;
     }
+}
+
+/*glm::vec3 getPos(
+        const OpenVolumeMesh::PropertyPtr<OpenVolumeMesh::Vec3f, OpenVolumeMesh::Entity::Vertex> vertexPositionsOvm,
+        OpenVolumeMesh::VertexHandle vh) {
+    auto v = vertexPositionsOvm.at(vh);
+    return { v[0], v[1], v[2] };
+}*/
+
+void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
+    OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
+    auto& vertexPositionsOvm = ovmMesh.vertex_positions();
+    auto& vertexColorProp = ovmRepresentationData->vertexColorProp;
+
+    std::vector<OpenVolumeMesh::EdgeHandle> edgesToDelete;
+    std::unordered_map<OpenVolumeMesh::EdgeHandle, OpenVolumeMesh::VertexHandle> edgeToNewVertexMap;
+    OpenVolumeMesh::VertexHandle vh((int)vertexIndex);
+    for (auto ve_it = ovmMesh.ve_iter(vh); ve_it.valid(); ve_it++) {
+        const auto& eh = ve_it.cur_handle();
+        auto vhs = ovmMesh.edge_vertices(eh);
+        auto vh0 = vhs.at(0);
+        auto vh1 = vhs.at(1);
+        const auto& vp0Ovm = vertexPositionsOvm.at(vh0);
+        const auto& vp1Ovm = vertexPositionsOvm.at(vh1);
+        glm::vec3 vp0(vp0Ovm[0], vp0Ovm[1], vp0Ovm[2]);
+        glm::vec3 vp1(vp1Ovm[0], vp1Ovm[1], vp1Ovm[2]);
+        glm::vec3 vpe = glm::mix(vp0, vp1, 0.5f);
+        const auto& vc0Ovm = vertexColorProp[vh0];
+        const auto& vc1Ovm = vertexColorProp[vh1];
+        glm::vec4 vc0(vc0Ovm[0], vc0Ovm[1], vc0Ovm[2], vc0Ovm[3]);
+        glm::vec4 vc1(vc1Ovm[0], vc1Ovm[1], vc1Ovm[2], vc1Ovm[3]);
+        glm::vec4 vce = glm::mix(vc0, vc1, 0.5f);
+        auto vhe = ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(vpe.x, vpe.y, vpe.z));
+        vertexColorProp[vhe] = OpenVolumeMesh::Vec4f(vce.x, vce.y, vce.z, vce.w);
+        edgeToNewVertexMap.insert(std::make_pair(eh, vhe));
+        edgesToDelete.push_back(eh);
+    }
+
+    std::array<OpenVolumeMesh::VertexHandle, 3> vhes, vhbs;
+    for (auto vc_it = ovmMesh.vc_iter(vh); vc_it.valid(); vc_it++) {
+        int i = 0;
+        for (auto ce_it = ovmMesh.ce_iter(vc_it.cur_handle()); ce_it.valid(); ce_it++) {
+            auto vhs = ovmMesh.edge_vertices(ce_it.cur_handle());
+            auto ev_it = edgeToNewVertexMap.find(ce_it.cur_handle());
+            if (ev_it == edgeToNewVertexMap.end()) {
+                continue;
+            }
+            OpenVolumeMesh::VertexHandle vh0 = vhs[0];
+            OpenVolumeMesh::VertexHandle vh1 = vhs[1];
+            vhes[i] = ev_it->second;
+            vhbs[i] = vh == vh0 ? vh1 : vh0;
+            i++;
+        }
+        ovmMesh.add_cell(vh,      vhes[0], vhes[1], vhes[2]);
+        ovmMesh.add_cell(vhes[0], vhbs[0], vhbs[1], vhbs[2]);
+        ovmMesh.add_cell(vhes[0], vhes[1], vhbs[2], vhbs[1]);
+        ovmMesh.add_cell(vhes[0], vhes[1], vhes[2], vhbs[2]);
+        /*glm::vec3 vhp = getPos(vertexPositionsOvm, vh);
+       glm::vec3 vhep[] = {
+               getPos(vertexPositionsOvm, vhes[0]),
+               getPos(vertexPositionsOvm, vhes[1]),
+               getPos(vertexPositionsOvm, vhes[2]),
+       };
+       glm::vec3 vhbp[] = {
+               getPos(vertexPositionsOvm, vhbs[0]),
+               getPos(vertexPositionsOvm, vhbs[1]),
+               getPos(vertexPositionsOvm, vhbs[2]),
+       };
+       std::cout << TetQualityMetrics::volumeSign(vhp, vhep[0], vhep[1], vhep[2]) << std::endl;
+       std::cout << TetQualityMetrics::volumeSign(vhep[0], vhbp[0], vhbp[1], vhbp[2]) << std::endl;
+       std::cout << TetQualityMetrics::volumeSign(vhep[0], vhep[1], vhbp[2], vhbp[1]) << std::endl;
+       std::cout << TetQualityMetrics::volumeSign(vhep[0], vhep[1], vhep[2], vhbp[2]) << std::endl;*/
+    }
+
+    // If we sort from largest to smallest, there shouldn't be a problem with invalid handles.
+    std::sort(edgesToDelete.rbegin(), edgesToDelete.rend());
+    for (const auto& eh : edgesToDelete) {
+        ovmMesh.delete_edge(eh);
+    }
+
+    /*for (auto vc_it = ovmMesh.vc_iter(vh); vc_it.valid(); vc_it++) {
+        // TODO: Is it OK to delete in this loop?
+        ovmMesh.delete_cell(vc_it.cur_handle());
+    }*/
+
+    verticesDirty = true;
+    facesDirty = true;
+    cellsDirty = true;
+    ovmMesh.collect_garbage();
 }
 
 void TetMesh::updateVerticesIfNecessary() {

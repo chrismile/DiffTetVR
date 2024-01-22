@@ -147,6 +147,7 @@ private:
     std::vector<uint32_t> verticesBoundarySlim;
 
 #ifdef USE_OPEN_VOLUME_MESH
+    void subdivideAtVertex(uint32_t vertexIndex, float t);
     void rebuildInternalRepresentationIfNecessary_Ovm();
     OvmRepresentationData* ovmRepresentationData = nullptr;
 #endif
