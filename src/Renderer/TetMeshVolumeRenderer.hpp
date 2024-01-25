@@ -123,6 +123,7 @@ public:
     [[nodiscard]] inline AlphaMode getAlphaMode() const { return alphaMode; }
     [[nodiscard]] inline bool getShowDepthComplexity() const { return showDepthComplexity; }
     [[nodiscard]] inline bool getShowTetQuality() const { return showTetQuality; }
+    [[nodiscard]] inline bool getUseShading() const { return useShading; }
     [[nodiscard]] inline TetQualityMetric getTetQualityMetric() const { return tetQualityMetric; }
     [[nodiscard]] inline sgl::TransferFunctionWindow* getTransferFunctionWindow() { return transferFunctionWindow; }
 
@@ -182,6 +183,7 @@ private:
 
     // For showing tet mesh quality metrics.
     bool showTetQuality = false;
+    bool useShading = false;
     TetQualityMetric tetQualityMetric = DEFAULT_QUALITY_METRIC;
     sgl::TransferFunctionWindow* transferFunctionWindow;
 
@@ -208,12 +210,15 @@ private:
         // Volume attenuation.
         float attenuationCoefficient;
 
+        glm::vec3 cameraPosition;
+        float cameraPositionPadding{};
+
         // Viewport size in x/y direction.
         glm::uvec2 viewportSize;
 
         // Size of the viewport in x direction (in pixels) without padding.
         int viewportLinearW;
-        int paddingUniform = 0;
+        int paddingUniform{};
     };
     UniformData uniformData = {};
     sgl::vk::BufferPtr uniformDataBuffer;

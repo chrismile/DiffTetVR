@@ -70,12 +70,20 @@ vec4 accumulateLinear(float t, vec3 c0, vec3 c1, float a0, float a1) {
     return vec4(exp(c) * (A + B + C), 1.0 - exp(-a0 * t + 0.5 * (a0 - a1) * t * t));
 }
 
+#ifdef USE_SHADING
+#include "Lighting.glsl"
+#endif
+
 void getNextFragment(
         in uint i, in uint fragsCount,
 #ifdef SHOW_TET_QUALITY
         out uvec2 tetIds,
 #else
         out vec4 color,
+#endif
+#if defined(SHOW_TET_QUALITY) && defined(USE_SHADING)
+        out vec3 fragmentPosition,
+        out vec3 faceNormal,
 #endif
         out float depthLinear, out bool boundary, out bool frontFace) {
     minHeapSink4(0, fragsCount - i);
@@ -89,8 +97,22 @@ void getNextFragment(
     boundary = ((faceBits >> 1u) & 1u) == 1u ? true : false;
 
 #ifdef SHOW_TET_QUALITY
-    uint faceIndex = faceBits >> 2u;
-    tetIds = faceToTetMap[faceIndex];
+    uint faceIndexTri = faceBits >> 2u;
+    tetIds = faceToTetMap[faceIndexTri];
+#if defined(SHOW_TET_QUALITY) && defined(USE_SHADING)
+    uint faceIndex = (faceBits >> 2u) * 3u;
+    vec4 fragPosNdc = vec4(2.0 * gl_FragCoord.xy / vec2(viewportSize) - vec2(1.0), depthBufferValue, 1.0);
+    vec4 fragPosWorld = inverseViewProjectionMatrix * fragPosNdc;
+    vec3 fragmentPositionWorld = fragPosWorld.xyz / fragPosWorld.w;
+    uint i0 = triangleIndices[faceIndex];
+    uint i1 = triangleIndices[faceIndex + 1];
+    uint i2 = triangleIndices[faceIndex + 2];
+    vec3 p0 = vertexPositions[i0];
+    vec3 p1 = vertexPositions[i1];
+    vec3 p2 = vertexPositions[i2];
+    fragmentPosition = fragmentPositionWorld;
+    faceNormal = normalize(cross(p1 - p0, p2 - p0));
+#endif
 #else
     uint faceIndex = (faceBits >> 2u) * 3u;
     // Compute world space position from depth.
@@ -141,21 +163,37 @@ vec4 frontToBackPQ(uint fragsCount) {
     float fragmentDepth;
     bool fragmentBoundary;
     bool fragmentFrontFace;
+#ifdef USE_SHADING
+    vec3 fragmentPositionWorld, lastFragmentPositionWorld;
+    vec3 fragmentNormal, lastFragmentNormal;
+#endif
 
     uint openTetId = INVALID_TET;
     for (i = 0; i < fragsCount; i++) {
-        getNextFragment(i, fragsCount, fragmentTetIds, fragmentDepth, fragmentBoundary, fragmentFrontFace);
+        getNextFragment(
+                i, fragsCount, fragmentTetIds,
+#ifdef USE_SHADING
+                fragmentPositionWorld, fragmentNormal,
+#endif
+                fragmentDepth, fragmentBoundary, fragmentFrontFace);
         bool eqA = fragmentTetIds.x != INVALID_TET && fragmentTetIds.x == openTetId;
         bool eqB = fragmentTetIds.y != INVALID_TET && fragmentTetIds.y == openTetId;
         if (eqA || eqB) {
             float tetQuality = tetQualityArray[openTetId];
             currentColor = transferFunction(tetQuality);
+#ifdef USE_SHADING
+            currentColor = blinnPhongShadingSurface(currentColor, lastFragmentPositionWorld, lastFragmentNormal);
+#endif
             rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.a * currentColor.rgb;
             rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
         } else {
             eqA = fragmentTetIds.y != INVALID_TET;
         }
         openTetId = eqA ? fragmentTetIds.y : fragmentTetIds.x;
+#ifdef USE_SHADING
+        lastFragmentPositionWorld = fragmentPositionWorld;
+        lastFragmentNormal = fragmentNormal;
+#endif
     }
 
 #else // !defined(SHOW_TET_QUALITY)

@@ -68,6 +68,9 @@ layout(binding = 0) uniform UniformDataBuffer {
     // Volume attenuation.
     float attenuationCoefficient;
 
+    vec3 cameraPosition;
+    float cameraPositionPadding;
+
     // Viewport size in x/y direction.
     uvec2 viewportSize;
 

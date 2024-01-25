@@ -119,6 +119,9 @@ protected:
         preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
         if (volumeRenderer->getShowTetQuality()) {
             preprocessorDefines.insert(std::make_pair("SHOW_TET_QUALITY", ""));
+            if (volumeRenderer->getUseShading()) {
+                preprocessorDefines.insert(std::make_pair("USE_SHADING", ""));
+            }
         }
         if (volumeRenderer->getAlphaMode() == AlphaMode::STRAIGHT) {
             preprocessorDefines.insert(std::make_pair("ALPHA_MODE_STRAIGHT", ""));
@@ -691,6 +694,7 @@ void TetMeshVolumeRenderer::render() {
     uniformData.zNear = (*camera)->getNearClipDistance();
     uniformData.zFar = (*camera)->getFarClipDistance();
     uniformData.cameraFront = (*camera)->getCameraFront();
+    uniformData.cameraPosition = (*camera)->getPosition();
     uniformData.attenuationCoefficient = attenuationCoefficient;
     uniformDataBuffer->updateData(
             sizeof(UniformData), &uniformData, renderer->getVkCommandBuffer());
@@ -768,6 +772,10 @@ void TetMeshVolumeRenderer::renderGuiPropertyEditorNodes(sgl::PropertyEditor& pr
     }
     if (propertyEditor.addCheckbox("Use Quality Metric", &showTetQuality)) {
         tetMesh->setTetQualityMetric(tetQualityMetric);
+        resolveRasterPass->setShaderDirty();
+        reRender = true;
+    }
+    if (showTetQuality && propertyEditor.addCheckbox("Use Shading", &useShading)) {
         resolveRasterPass->setShaderDirty();
         reRender = true;
     }
