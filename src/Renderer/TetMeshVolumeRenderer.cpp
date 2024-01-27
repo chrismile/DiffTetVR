@@ -293,7 +293,7 @@ void TetMeshVolumeRenderer::updateLargeMeshMode() {
         resolveRasterPass->setShaderDirty();
         gatherRasterPass->setDataDirty();
         if (adjointRasterPass) {
-            adjointRasterPass->setDataDirty();
+            adjointRasterPass->setShaderDirty();
         }
     }
 }
