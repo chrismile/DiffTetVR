@@ -62,6 +62,30 @@ bool BinTetLoader::loadFromFile(
     return true;
 }
 
+bool BinTetLoader::peekSizes(const std::string& filePath, size_t& numCells, size_t& numVertices) {
+    std::ifstream file;
+    file.open(filePath, std::ios::binary);
+
+    uint32_t versionNumber = 0;
+    file.read((char*)&versionNumber, sizeof(uint32_t));
+    if (versionNumber != 1u) {
+        sgl::Logfile::get()->writeError(
+                std::string() + "Error in BinTetLoader::peekSizes: Invalid version number in file \""
+                + filePath + "\".");
+        return false;
+    }
+
+    uint32_t numCellIndices = 0, numVertexPositions = 0;
+    file.read((char*)&numCellIndices, sizeof(uint32_t));
+    file.seekg(ptrdiff_t(sizeof(uint32_t) * numCellIndices), std::ios_base::cur);
+    file.read((char*)&numVertexPositions, sizeof(uint32_t));
+    file.close();
+
+    numCells = numCellIndices / 4u;
+    numVertices = numVertexPositions;
+    return true;
+}
+
 bool BinTetWriter::saveToFile(
         const std::string& filePath, const std::vector<uint32_t>& cellIndices,
         const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors) {

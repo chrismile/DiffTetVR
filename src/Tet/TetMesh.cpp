@@ -833,9 +833,9 @@ void TetMesh::setHexMeshConst(
     vertexColors.clear();
 
     // Add vertex positions & colors.
-    for (int iz = 0; iz < zs; iz++) {
-        for (int iy = 0; iy < ys; iy++) {
-            for (int ix = 0; ix < xs; ix++) {
+    for (int iz = 0; iz < int(zs); iz++) {
+        for (int iy = 0; iy < int(ys); iy++) {
+            for (int ix = 0; ix < int(xs); ix++) {
                 glm::vec3 p;
                 p.x = gridAabb.min.x + (float(ix) / float(xs - 1)) * (gridAabb.max.x - gridAabb.min.x);
                 p.y = gridAabb.min.y + (float(iy) / float(ys - 1)) * (gridAabb.max.y - gridAabb.min.y);
@@ -849,9 +849,9 @@ void TetMesh::setHexMeshConst(
     // Add all tet indices.
 #define IDXS(x,y,z) ((z)*xs*ys + (y)*xs + (x))
     int hex[8];
-    for (int iz = 0; iz < zs - 1; iz++) {
-        for (int iy = 0; iy < ys - 1; iy++) {
-            for (int ix = 0; ix < xs - 1; ix++) {
+    for (int iz = 0; iz < int(zs) - 1; iz++) {
+        for (int iy = 0; iy < int(ys) - 1; iy++) {
+            for (int ix = 0; ix < int(xs) - 1; ix++) {
                 hex[0] = IDXS(ix,     iy,     iz    );
                 hex[1] = IDXS(ix + 1, iy,     iz    );
                 hex[2] = IDXS(ix + 1, iy + 1, iz    );

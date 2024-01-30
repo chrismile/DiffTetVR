@@ -106,6 +106,32 @@ bool TxtTetLoader::loadFromFile(
     return true;
 }
 
+bool TxtTetLoader::peekSizes(const std::string& filePath, size_t& numCells, size_t& numVertices) {
+    std::ifstream file;
+    file.open(filePath);
+
+    // Unfortunately, there's no good way to peek at the sizes for the text format, as we cannot skip the data.
+    // Thus, check if the file is moderately large, and in that case load and parse the file completely.
+    file.seekg (0, std::ios::end);
+    auto length = file.tellg();
+    file.seekg (0, std::ios::beg);
+    file.close();
+
+    // Maximum size: 1MiB.
+    if (length > 1024 * 1024 * 1024) {
+        return false;
+    }
+
+    std::vector<uint32_t> cellIndices;
+    std::vector<glm::vec3> vertexPositions;
+    std::vector<glm::vec4> vertexColors;
+    loadFromFile(filePath, cellIndices, vertexPositions, vertexColors);
+
+    numCells = cellIndices.size() / 4;
+    numVertices = vertexPositions.size();
+    return true;
+}
+
 bool TxtTetWriter::saveToFile(
         const std::string& filePath, const std::vector<uint32_t>& cellIndices,
         const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors) {

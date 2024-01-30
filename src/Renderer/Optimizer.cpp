@@ -33,6 +33,7 @@
 
 #include <Math/Math.hpp>
 #include <Utils/File/Logfile.hpp>
+#include <Utils/File/FileUtils.hpp>
 #include <Graphics/Scene/RenderTarget.hpp>
 #include <Graphics/Vulkan/Buffers/Buffer.hpp>
 #include <Graphics/Vulkan/Utils/Device.hpp>
@@ -44,6 +45,7 @@
 
 #include "Tet/TetMesh.hpp"
 #include "Tet/Loaders/LoadersUtil.hpp"
+#include "Tet/Loaders/TetMeshLoader.hpp"
 #include "Tet/Writers/VtkWriter.hpp"
 #include "Renderer/TetMeshVolumeRenderer.hpp"
 #include "LossPass.hpp"
@@ -114,6 +116,13 @@ void TetMeshOptimizer::renderGuiDialog() {
             std::string selection = renderGuiDataSetSelectionMenuCallback();
             if (!selection.empty()) {
                 settings.dataSetFileNameGT = selection;
+                std::string fileExtension = sgl::FileUtils::get()->getFileExtensionLower(settings.dataSetFileNameGT);
+                auto tetMeshTest = std::make_shared<TetMesh>(renderer->getDevice(), transferFunctionWindow);
+                TetMeshLoader* tetMeshLoader = tetMeshTest->createTetMeshLoaderByExtension(fileExtension);
+                size_t numCells = 0, numVertices = 0;
+                if (tetMeshLoader && tetMeshLoader->peekSizes(settings.dataSetFileNameGT, numCells, numVertices)) {
+                    settings.maxNumTets = uint32_t(std::ceil(0.1 * double(numCells)));
+                }
             }
             ImGui::EndPopup();
         }
@@ -254,7 +263,8 @@ void TetMeshOptimizer::renderGuiDialog() {
                 updateRequest();
             }
             hasResult = getHasResult();
-            if (showPreview && settings.maxNumEpochs > 0) {
+            if (showPreview && settings.maxNumEpochs > 0
+                    && (!hasResult || (this->currentEpoch != 0 && this->coarseToFineEpoch != 0))) {
                 if (previewDelay > 0) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(int(previewDelay)));
                 }

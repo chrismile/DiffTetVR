@@ -38,6 +38,7 @@ public:
     bool loadFromFile(
             const std::string& filePath, std::vector<uint32_t>& cellIndices,
             std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors) override;
+    bool peekSizes(const std::string& filePath, size_t& numCells, size_t& numVertices) override;
 };
 
 class TxtTetWriter : public TetMeshWriter {

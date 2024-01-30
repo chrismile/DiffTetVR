@@ -48,6 +48,8 @@ public:
     virtual bool loadFromFile(
             const std::string& filePath, std::vector<uint32_t>& cellIndices,
             std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors) = 0;
+    // May be used to peek at the size of the data stored in the file. Returns false if not supported.
+    virtual bool peekSizes(const std::string& filePath, size_t& numCells, size_t& numVertices) { return false; }
 
 #ifdef USE_OPEN_VOLUME_MESH
     // For formats relying on Open Volume Mesh support.
