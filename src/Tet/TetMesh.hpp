@@ -91,6 +91,12 @@ public:
     void setVerticesChangedOnDevice(bool _verticesChanged) { verticesChangedOnDevice = _verticesChanged; }
     void setTetQualityMetric(TetQualityMetric _tetQualityMetric);
 
+    // Coarse to fine strategy.
+    void setForceUseOvmRepresentation();
+    void subdivideVertices(const std::vector<float>& gradientMagnitudes, uint32_t numSplits);
+    /// Initialize with tetrahedralized tet mesh with constant color.
+    void setHexMeshConst(const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor);
+
     [[nodiscard]] const std::vector<uint32_t>& getCellIndices() const { return cellIndices; }
     [[nodiscard]] const std::vector<glm::vec3>& getVertexPositions() const { return vertexPositions; }
     [[nodiscard]] const std::vector<glm::vec4>& getVertexColors() const { return vertexColors; }
@@ -121,6 +127,7 @@ private:
     sgl::vk::Device* device;
 
     // Mesh data.
+    void setTetMeshDataInternal();
     size_t meshNumCells = 0;
     size_t meshNumVertices = 0;
     std::vector<uint32_t> cellIndices;
@@ -133,6 +140,7 @@ private:
     bool cellsDirty = false;
     bool isVisualRepresentationDirty = false;
     bool useOvmRepresentation = false;
+    bool forceUseOvmRepresentation = false;
     bool verticesChangedOnDevice = false;
     //TetMeshRepresentationType representationType = TetMeshRepresentationType::SLIM;
     // Tet quality.

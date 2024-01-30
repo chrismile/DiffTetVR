@@ -131,13 +131,16 @@ void TetMesh::setTetMeshData(
     cellIndices = _cellIndices;
     vertexPositions = _vertexPositions;
     vertexColors = _vertexColors;
+    setTetMeshDataInternal();
+}
 
+void TetMesh::setTetMeshDataInternal() {
     //for (auto& color : vertexColors) {
     //    color.a = std::max(color.a, 1e-3f);
     //}
 
-    meshNumCells = _cellIndices.size() / 4;
-    meshNumVertices = _vertexPositions.size();
+    meshNumCells = cellIndices.size() / 4;
+    meshNumVertices = vertexPositions.size();
 #ifdef USE_OPEN_VOLUME_MESH
     if (ovmRepresentationData) {
         delete ovmRepresentationData;
@@ -389,7 +392,9 @@ bool TetMesh::loadFromFile(const std::string& filePath) {
 #endif
         retVal = tetMeshLoader->loadFromFile(filePath, _cellIndices, _vertexPositions, _vertexColors);
         if (retVal) {
-            useOvmRepresentation = false;
+            if (!forceUseOvmRepresentation) {
+                useOvmRepresentation = false;
+            }
             setTetMeshData(_cellIndices, _vertexPositions, _vertexColors);
         }
 #ifdef USE_OPEN_VOLUME_MESH
@@ -724,3 +729,147 @@ void TetMesh::updateCellIndicesIfNecessary() {
     ;
 }
 #endif
+
+void TetMesh::setForceUseOvmRepresentation() {
+    useOvmRepresentation = true;
+    forceUseOvmRepresentation = true;
+}
+
+void TetMesh::subdivideVertices(const std::vector<float>& gradientMagnitudes, uint32_t numSplits) {
+#ifndef USE_OPEN_VOLUME_MESH
+    sgl::Logfile::get()->throwError(
+                "Error in TetMesh::subdivideVertices: Not built with OpenVolumeMesh support.");
+#endif
+
+    if (!useOvmRepresentation) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::subdivideVertices: OpenVolumeMesh representation is not used.");
+    }
+
+    std::vector<std::pair<float, uint32_t>> gradientMagnitudePairs;
+    for (uint32_t i = 0; i < uint32_t(gradientMagnitudes.size()); i++) {
+        gradientMagnitudePairs.emplace_back(gradientMagnitudes.at(i), i);
+    }
+    std::sort(gradientMagnitudePairs.rbegin(), gradientMagnitudePairs.rend());
+    numSplits = std::min(numSplits, uint32_t(vertexPositions.size()));
+
+#ifdef USE_OPEN_VOLUME_MESH
+    for (uint32_t i = 0; i < numSplits; i++) {
+        const float t = 0.5;
+        uint32_t vertexIndex = gradientMagnitudePairs.at(i).second;
+        subdivideAtVertex(vertexIndex, t);
+    }
+    uploadDataToDevice();
+#endif
+}
+
+
+
+const int hexFaceTable[6][4] = {
+        // Use consistent winding for faces at the boundary (normals pointing out of the cell - no arbitrary decisions).
+        { 0,1,2,3 },
+        { 5,4,7,6 },
+        { 4,5,1,0 },
+        { 4,0,3,7 },
+        { 6,7,3,2 },
+        { 1,5,6,2 },
+};
+/*
+ * Vertex and edge IDs:
+ *
+ *      3 +----------------+ 2
+ *       /|               /|
+ *      / |              / |
+ *     /  |             /  |
+ *    /   |            /   |
+ * 7 +----------------+ 6  |
+ *   |    |           |    |
+ *   |    |           |    |
+ *   |    |           |    |
+ *   |  0 +-----------|----+ 1
+ *   |   /            |   /
+ *   |  /             |  /
+ *   | /              | /
+ *   |/               |/
+ * 4 +----------------+ 5
+ *
+ * Tet mapping: https://cs.stackexchange.com/questions/89910/how-to-decompose-a-unit-cube-into-tetrahedra
+ */
+const int HEX_TO_TET_TABLE[6][4] = {
+        // { 0, 4, 7, 6 }, -1
+        // { 0, 4, 5, 6 }, +1
+        // { 0, 3, 7, 6 }, +1
+        // { 0, 3, 2, 6 }, -1
+        // { 0, 1, 5, 6 }, -1
+        // { 0, 1, 2, 6 }, +1
+        { 0, 4, 7, 6 },
+        { 0, 4, 6, 5 },
+        { 0, 3, 6, 7 },
+        { 0, 3, 2, 6 },
+        { 0, 1, 5, 6 },
+        { 0, 1, 6, 2 },
+};
+
+void convertHexToTetIndices(const std::vector<uint32_t>& hexIndices, std::vector<uint32_t>& tetIndices) {
+    // Add all tet indices.
+    uint32_t hex[8];
+    for (size_t i = 0; i < hexIndices.size(); i += 8) {
+        for (size_t j = 0; j < 8; j++) {
+            hex[j] = hexIndices[i + j];
+        }
+        for (int tet = 0; tet < 6; tet++) {
+            for (int idx = 0; idx < 4; idx++) {
+                tetIndices.push_back(hex[HEX_TO_TET_TABLE[tet][idx]]);
+            }
+        }
+    }
+}
+
+void TetMesh::setHexMeshConst(
+        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor) {
+    std::vector<uint32_t> hexIndices;
+    cellIndices.clear();
+    vertexPositions.clear();
+    vertexColors.clear();
+
+    // Add vertex positions & colors.
+    for (int iz = 0; iz < zs; iz++) {
+        for (int iy = 0; iy < ys; iy++) {
+            for (int ix = 0; ix < xs; ix++) {
+                glm::vec3 p;
+                p.x = gridAabb.min.x + (float(ix) / float(xs - 1)) * (gridAabb.max.x - gridAabb.min.x);
+                p.y = gridAabb.min.y + (float(iy) / float(ys - 1)) * (gridAabb.max.y - gridAabb.min.y);
+                p.z = gridAabb.min.z + (float(iz) / float(zs - 1)) * (gridAabb.max.z - gridAabb.min.z);
+                vertexPositions.emplace_back(p);
+                vertexColors.emplace_back(constColor);
+            }
+        }
+    }
+
+    // Add all tet indices.
+#define IDXS(x,y,z) ((z)*xs*ys + (y)*xs + (x))
+    int hex[8];
+    for (int iz = 0; iz < zs - 1; iz++) {
+        for (int iy = 0; iy < ys - 1; iy++) {
+            for (int ix = 0; ix < xs - 1; ix++) {
+                hex[0] = IDXS(ix,     iy,     iz    );
+                hex[1] = IDXS(ix + 1, iy,     iz    );
+                hex[2] = IDXS(ix + 1, iy + 1, iz    );
+                hex[3] = IDXS(ix,     iy + 1, iz    );
+                hex[4] = IDXS(ix,     iy,     iz + 1);
+                hex[5] = IDXS(ix + 1, iy,     iz + 1);
+                hex[6] = IDXS(ix + 1, iy + 1, iz + 1);
+                hex[7] = IDXS(ix,     iy + 1, iz + 1);
+                for (int tet = 0; tet < 6; tet++) {
+                    for (int idx = 0; idx < 4; idx++) {
+                        cellIndices.push_back(hex[HEX_TO_TET_TABLE[tet][idx]]);
+                    }
+                }
+            }
+        }
+    }
+#undef IDXS
+
+    convertHexToTetIndices(hexIndices, cellIndices);
+    setTetMeshDataInternal();
+}

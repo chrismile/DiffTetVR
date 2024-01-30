@@ -102,6 +102,18 @@ void OptimizerPass::setSettings(
         uniformData.beta1 = beta1;
         uniformData.beta2 = beta2;
         uniformData.epsilon = epsilon;
+        isUniformBufferDirty = true;
+    }
+}
+
+void OptimizerPass::updateUniformBuffer() {
+    if (isUniformBufferDirty) {
+        isUniformBufferDirty = false;
+        uniformBuffer->updateData(
+                sizeof(UniformData), &uniformData, renderer->getVkCommandBuffer());
+        renderer->insertMemoryBarrier(
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
     }
 }
 
@@ -111,11 +123,7 @@ void OptimizerPass::setEpochIndex(int epochIdx) {
             firstMomentEstimateBuffer->fill(0, renderer->getVkCommandBuffer());
             secondMomentEstimateBuffer->fill(0, renderer->getVkCommandBuffer());
         }
-        uniformBuffer->updateData(
-                sizeof(UniformData), &uniformData, renderer->getVkCommandBuffer());
-        renderer->insertMemoryBarrier(
-                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+        updateUniformBuffer();
     }
     t = float(epochIdx + 1);
 }

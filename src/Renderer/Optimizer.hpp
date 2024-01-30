@@ -95,10 +95,16 @@ private:
     bool hasRequest = false;
     sgl::TransferFunctionWindow* transferFunctionWindow;
 
+    void coarseToFineSubdivide(const glm::vec3* vertexPositionGradients, const glm::vec4* vertexColorGradients);
+    const int COARSE_TO_FINE_EPOCH_COLOR = 0;
+    const int COARSE_TO_FINE_EPOCH_COLOR_POS = 1;
+    const int COARSE_TO_FINE_EPOCH_GATHER = 2;
     bool usePreviewCached = false;
     uint32_t viewportWidth = 0;
     uint32_t viewportHeight = 0;
     int currentEpoch = 0;
+    int coarseToFineEpoch = 0;
+    uint32_t numCellsInit = 0;
     sgl::CameraPtr camera;
 
     // Image data & adjoint image data.

@@ -43,6 +43,7 @@ public:
             const sgl::vk::BufferPtr& _vertexBoundaryBitBuffer);
     void setSettings(
             LossType _lossType, float alpha, float beta1, float beta2, float epsilon, bool _isColor, bool _fixBoundary);
+    void updateUniformBuffer();
     void setEpochIndex(int epochIdx);
 
 protected:
@@ -63,6 +64,7 @@ private:
     float t = 1.0f; ///< Time step.
     UniformData uniformData{};
     sgl::vk::BufferPtr uniformBuffer;
+    bool isUniformBufferDirty = true;
     bool isColor = false;
     bool fixBoundary = false;
 

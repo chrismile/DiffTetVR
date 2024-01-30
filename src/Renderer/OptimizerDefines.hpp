@@ -45,9 +45,17 @@ const char* const LOSS_TYPE_NAMES[] = {
         "L1", "L2"
 };
 
+enum class SplitGradientType {
+    POSITION, COLOR
+};
+const char* const SPLIT_GRADIENT_TYPE_NAMES[] = {
+        "Position", "Color"
+};
+
 struct OptimizerSettings {
     // SGD & Adam.
     float learningRate = 0.4f;
+    float lrDecayRate = 0.999f;
     // Adam.
     float beta1 = 0.9f;
     float beta2 = 0.999f;
@@ -56,9 +64,9 @@ struct OptimizerSettings {
 
 struct TetRegularizerSettings {
     // Regularizer loss weight (0 means turned off).
-    float lambda = 0.0f;
+    float lambda = 0.1f;
     // Softplus parameter.
-    float beta = 10.0f;
+    float beta = 100.0f;
 };
 
 struct OptimizationSettings {
@@ -78,6 +86,13 @@ struct OptimizationSettings {
     bool sampleRandomView = true;
     // Selected file name.
     std::string dataSetFileNameGT, dataSetFileNameOpt;
+    // Coarse to fine.
+    bool useCoarseToFine = true;
+    bool useConstantInitGrid = false;
+    glm::uvec3 initGridResolution{16,16,16};
+    uint32_t maxNumTets = 1320000;
+    float numSplitsRatio = 0.1f;
+    SplitGradientType splitGradientType = SplitGradientType::COLOR;
     // Export position gradient field.
     bool exportPositionGradients = false;
     std::string exportFileNameGradientField;

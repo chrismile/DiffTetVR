@@ -32,6 +32,7 @@
 #include <cstdint>
 
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 /**
  * Computes the magnitude field of a given vector field.
@@ -41,6 +42,8 @@
  */
 void computeVectorMagnitudeField(
         const glm::vec3* vectorField, float* vectorMagnitudeField, int numEntries);
+void computeVectorMagnitudeField(
+        const glm::vec4* vectorField, float* vectorMagnitudeField, int numEntries);
 
 /**
  * Swaps the endianness of the passed array.
