@@ -37,7 +37,9 @@
 
 #ifdef USE_OPEN_VOLUME_MESH
 #include <OpenVolumeMesh/Geometry/VectorT.hh>
+#include <OpenVolumeMesh/Unstable/Topology/TetTopology.hh>
 #include <OpenVolumeMesh/Mesh/TetrahedralMesh.hh>
+#include <OpenVolumeMesh/Mesh/TetrahedralGeometryKernel.hh>
 #include "Loaders/OvmLoader.hpp"
 #endif
 
@@ -48,7 +50,8 @@
 
 #ifdef USE_OPEN_VOLUME_MESH
 struct OvmRepresentationData {
-    OpenVolumeMesh::GeometricTetrahedralMeshV3f ovmMesh;
+    //OpenVolumeMesh::GeometricTetrahedralMeshV3f ovmMesh;
+    OpenVolumeMesh::TetrahedralGeometryKernel<OpenVolumeMesh::Geometry::Vec3f, OpenVolumeMesh::TetrahedralMeshTopologyKernel> ovmMesh;
     OpenVolumeMesh::VertexPropertyPtr<OpenVolumeMesh::Vec4f> vertexColorProp;
 
 };
@@ -166,21 +169,14 @@ void TetMesh::setTetMeshDataInternal() {
         boundingBox.combine(pt);
     }
 
-    uint32_t tmp;
     for (size_t tet = 0; tet < cellIndices.size(); tet += 4) {
         glm::vec3 p0 = vertexPositions.at(cellIndices.at(tet + 0));
         glm::vec3 p1 = vertexPositions.at(cellIndices.at(tet + 1));
         glm::vec3 p2 = vertexPositions.at(cellIndices.at(tet + 2));
         glm::vec3 p3 = vertexPositions.at(cellIndices.at(tet + 3));
         float signVal = glm::sign(glm::dot(glm::cross(p1 - p0, p2 - p0), p3 - p0));
-        if (useOvmRepresentation && signVal >= 0.0f) {
-            tmp = cellIndices.at(tet + 2);
-            cellIndices.at(tet + 2) = cellIndices.at(tet + 3);
-            cellIndices.at(tet + 3) = tmp;
-        } else {
-            if (signVal >= 0.0f) {
-                std::cout << "Invalid sign for tet " << (tet / 4) << std::endl;
-            }
+        if (signVal >= 0.0f) {
+            std::cout << "Invalid sign for tet " << (tet / 4) << std::endl;
         }
     }
 }
@@ -529,7 +525,7 @@ void TetMesh::rebuildInternalRepresentationIfNecessary_Slim() {
 void TetMesh::rebuildInternalRepresentationIfNecessary_Ovm() {
     if (newData) {
         // https://www.graphics.rwth-aachen.de/media/openvolumemesh_static/Documentation/OpenVolumeMesh-Doc-Latest/ovm_tutorial_01.html
-        OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
+        auto& ovmMesh = ovmRepresentationData->ovmMesh;
         std::vector<OpenVolumeMesh::VertexHandle> ovmVertices;
         ovmVertices.reserve(vertexPositions.size());
         for (const glm::vec3& v : vertexPositions) {
@@ -565,11 +561,39 @@ void TetMesh::rebuildInternalRepresentationIfNecessary_Ovm() {
     return { v[0], v[1], v[2] };
 }*/
 
+#define USE_SPLIT_EDGE
+
 void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
-    OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
+    auto& ovmMesh = ovmRepresentationData->ovmMesh;
     auto& vertexPositionsOvm = ovmMesh.vertex_positions();
     auto& vertexColorProp = ovmRepresentationData->vertexColorProp;
 
+#ifdef USE_SPLIT_EDGE
+    // Add new vertices along the incident edges & collect old edges to delete.
+    std::vector<OpenVolumeMesh::EdgeHandle> edgesToDelete;
+    OpenVolumeMesh::VertexHandle vh((int)vertexIndex);
+    for (auto ve_it = ovmMesh.ve_iter(vh); ve_it.valid(); ve_it++) {
+        const auto& eh = ve_it.cur_handle();
+        edgesToDelete.push_back(eh);
+    }
+
+    for (const auto& eh : edgesToDelete) {
+        auto heh = eh.halfedge_handle(0);
+        auto verts = ovmMesh.halfedge_vertices(heh);
+        if (verts[0] != vh) {
+            heh = heh.opposite_handle();
+        }
+        auto vhe = ovmMesh.split_edge(heh, t);
+        const auto& vc0Ovm = vertexColorProp[verts[0]];
+        const auto& vc1Ovm = vertexColorProp[verts[1]];
+        glm::vec4 vc0(vc0Ovm[0], vc0Ovm[1], vc0Ovm[2], vc0Ovm[3]);
+        glm::vec4 vc1(vc1Ovm[0], vc1Ovm[1], vc1Ovm[2], vc1Ovm[3]);
+        glm::vec4 vce = glm::mix(vc0, vc1, t);
+        vertexColorProp[vhe] = OpenVolumeMesh::Vec4f(vce.x, vce.y, vce.z, vce.w);
+    }
+    ovmMesh.collect_garbage();
+#else
+    // Add new vertices along the incident edges & collect old edges to delete.
     std::vector<OpenVolumeMesh::EdgeHandle> edgesToDelete;
     std::unordered_map<OpenVolumeMesh::EdgeHandle, OpenVolumeMesh::VertexHandle> edgeToNewVertexMap;
     OpenVolumeMesh::VertexHandle vh((int)vertexIndex);
@@ -582,22 +606,38 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
         const auto& vp1Ovm = vertexPositionsOvm.at(vh1);
         glm::vec3 vp0(vp0Ovm[0], vp0Ovm[1], vp0Ovm[2]);
         glm::vec3 vp1(vp1Ovm[0], vp1Ovm[1], vp1Ovm[2]);
-        glm::vec3 vpe = glm::mix(vp0, vp1, 0.5f);
+        glm::vec3 vpe = glm::mix(vp0, vp1, t);
         const auto& vc0Ovm = vertexColorProp[vh0];
         const auto& vc1Ovm = vertexColorProp[vh1];
         glm::vec4 vc0(vc0Ovm[0], vc0Ovm[1], vc0Ovm[2], vc0Ovm[3]);
         glm::vec4 vc1(vc1Ovm[0], vc1Ovm[1], vc1Ovm[2], vc1Ovm[3]);
-        glm::vec4 vce = glm::mix(vc0, vc1, 0.5f);
+        glm::vec4 vce = glm::mix(vc0, vc1, t);
         auto vhe = ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(vpe.x, vpe.y, vpe.z));
         vertexColorProp[vhe] = OpenVolumeMesh::Vec4f(vce.x, vce.y, vce.z, vce.w);
         edgeToNewVertexMap.insert(std::make_pair(eh, vhe));
         edgesToDelete.push_back(eh);
     }
 
+    // Collect the new indices of the new cells. Only add them after deleting the old cells.
     std::vector<OpenVolumeMesh::VertexHandle> newCells;
-    std::array<OpenVolumeMesh::VertexHandle, 3> vhes, vhbs;
+
+    // Each cell has 3 subdivided edges. 'vhes' stores the 3 subdivision points.
+    std::array<OpenVolumeMesh::VertexHandle, 3> vhes;
+    // 'vhbs' stores the end points of the 3 subdivided edges not equal to 'vh'.
+    std::array<OpenVolumeMesh::VertexHandle, 3> vhbs;
     for (auto vc_it = ovmMesh.vc_iter(vh); vc_it.valid(); vc_it++) {
-        int i = 0;
+        //auto incidentVertices = ovmMesh.get_cell_vertices(*vc_it, vh);
+
+        auto tt = OpenVolumeMesh::TetTopology(ovmMesh, *vc_it, vh); // vertex a == vh
+        vhes[0] = edgeToNewVertexMap.find(tt.ab().edge_handle())->second;
+        vhbs[0] = tt.b();
+        vhes[1] = edgeToNewVertexMap.find(tt.ac().edge_handle())->second;
+        vhbs[1] = tt.c();
+        vhes[2] = edgeToNewVertexMap.find(tt.ad().edge_handle())->second;
+        vhbs[2] = tt.d();
+
+        // Iterate over all edges incident with the cell.
+        /*int i = 0;
         for (auto ce_it = ovmMesh.ce_iter(vc_it.cur_handle()); ce_it.valid(); ce_it++) {
             auto vhs = ovmMesh.edge_vertices(ce_it.cur_handle());
             auto ev_it = edgeToNewVertexMap.find(ce_it.cur_handle());
@@ -609,8 +649,9 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
             vhes[i] = ev_it->second;
             vhbs[i] = vh == vh0 ? vh1 : vh0;
             i++;
-        }
+        }*/
 
+        // Collect the new cell vertex indices subdividing the currently iterated cell.
         newCells.push_back(vh);
         newCells.push_back(vhes[0]);
         newCells.push_back(vhes[1]);
@@ -631,6 +672,7 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
         newCells.push_back(vhes[2]);
         newCells.push_back(vhbs[2]);
 
+        // Test: Add new cells before deleting old ones.
         //ovmMesh.add_cell(vh,      vhes[0], vhes[1], vhes[2]);
         //ovmMesh.add_cell(vhes[0], vhbs[0], vhbs[1], vhbs[2]);
         //ovmMesh.add_cell(vhes[0], vhes[1], vhbs[2], vhbs[1]);
@@ -654,85 +696,50 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
     }
 
     // If we sort from largest to smallest, there shouldn't be a problem with invalid handles.
-    std::sort(edgesToDelete.rbegin(), edgesToDelete.rend());
+    //std::sort(edgesToDelete.rbegin(), edgesToDelete.rend());
     for (const auto& eh : edgesToDelete) {
-        for (OpenVolumeMesh::CellIter c_it = ovmMesh.cells_begin(); c_it != ovmMesh.cells_end(); c_it++) {
-            auto ch = *c_it;
-            int vidx = 0;
-            for (auto cv_it = ovmMesh.cv_iter(ch); cv_it.valid(); cv_it++) {
-                if (vidx >= 4) {
-                    int i = 0;
-                    for (auto cv_it = ovmMesh.cv_iter(ch); cv_it.valid(); cv_it++) {
-                        std::cout << "v" << i << ": " << cv_it->uidx() << std::endl;
-                        i++;
-                    }
-                }
-                assert(vidx < 4);
-                vidx++;
-            }
-        }
-
         ovmMesh.delete_edge(eh);
-
-        for (OpenVolumeMesh::CellIter c_it = ovmMesh.cells_begin(); c_it != ovmMesh.cells_end(); c_it++) {
-            auto ch = *c_it;
-            int vidx = 0;
-            for (auto cv_it = ovmMesh.cv_iter(ch); cv_it.valid(); cv_it++) {
-                if (vidx >= 4) {
-                    int i = 0;
-                    for (auto cv_it = ovmMesh.cv_iter(ch); cv_it.valid(); cv_it++) {
-                        std::cout << "v" << i << ": " << cv_it->uidx() << std::endl;
-                        i++;
-                    }
-                }
-                assert(vidx < 4);
-                vidx++;
-            }
-        }
     }
-
     ovmMesh.collect_garbage();
 
+    // Add the new cells after the old ones have been deleted.
     for (size_t i = 0; i < newCells.size(); i += 4) {
-        for (OpenVolumeMesh::CellIter c_it = ovmMesh.cells_begin(); c_it != ovmMesh.cells_end(); c_it++) {
-            auto ch = *c_it;
-            int vidx = 0;
-            for (auto cv_it = ovmMesh.cv_iter(ch); cv_it.valid(); cv_it++) {
-                if (vidx >= 4) {
-                    int i = 0;
-                    for (auto cv_it = ovmMesh.cv_iter(ch); cv_it.valid(); cv_it++) {
-                        std::cout << "v" << i << ": " << cv_it->uidx() << std::endl;
-                        i++;
-                    }
-                }
-                assert(vidx < 4);
-                vidx++;
-            }
-        }
-
         ovmMesh.add_cell(newCells.at(i), newCells.at(i + 1), newCells.at(i + 2), newCells.at(i + 3), true);
+    }
+#endif
 
-        for (OpenVolumeMesh::CellIter c_it = ovmMesh.cells_begin(); c_it != ovmMesh.cells_end(); c_it++) {
-            auto ch = *c_it;
-            int vidx = 0;
-            for (auto cv_it = ovmMesh.cv_iter(ch); cv_it.valid(); cv_it++) {
-                if (vidx >= 4) {
-                    int i = 0;
-                    for (auto cv_it = ovmMesh.cv_iter(ch); cv_it.valid(); cv_it++) {
-                        std::cout << "v" << i << ": " << cv_it->uidx() << std::endl;
-                        i++;
-                    }
+    // Sanity check: Every tetrahedral cell may only have 4 vertices.
+    for (OpenVolumeMesh::CellIter c_it = ovmMesh.cells_begin(); c_it != ovmMesh.cells_end(); c_it++) {
+        auto ch = *c_it;
+        int vidx = 0;
+        for (auto cv_it = ovmMesh.cv_iter(ch); cv_it.valid(); cv_it++) {
+            if (vidx >= 4) {
+                int i = 0;
+                for (auto cv_it = ovmMesh.cv_iter(ch); cv_it.valid(); cv_it++) {
+                    std::cout << "v" << i << ": " << cv_it->uidx() << std::endl;
+                    i++;
                 }
-                assert(vidx < 4);
-                vidx++;
             }
+            assert(vidx < 4);
+            vidx++;
         }
     }
 
-    /*for (auto vc_it = ovmMesh.vc_iter(vh); vc_it.valid(); vc_it++) {
-        // TODO: Is it OK to delete in this loop?
-        ovmMesh.delete_cell(vc_it.cur_handle());
-    }*/
+    // Sanity check: Winding.
+    for (OpenVolumeMesh::CellIter c_it = ovmMesh.cells_begin(); c_it != ovmMesh.cells_end(); c_it++) {
+        auto ch = *c_it;
+        auto cellVertices = ovmMesh.get_cell_vertices(ch);
+        auto& p0Ovm = vertexPositionsOvm.at(cellVertices.at(0));
+        auto& p1Ovm = vertexPositionsOvm.at(cellVertices.at(1));
+        auto& p2Ovm = vertexPositionsOvm.at(cellVertices.at(2));
+        auto& p3Ovm = vertexPositionsOvm.at(cellVertices.at(3));
+        glm::vec3 p0(p0Ovm[0], p0Ovm[1], p0Ovm[2]);
+        glm::vec3 p1(p1Ovm[0], p1Ovm[1], p1Ovm[2]);
+        glm::vec3 p2(p2Ovm[0], p2Ovm[1], p2Ovm[2]);
+        glm::vec3 p3(p3Ovm[0], p3Ovm[1], p3Ovm[2]);
+        float volumeSign = -glm::sign(glm::dot(glm::cross(p1 - p0, p2 - p0), p3 - p0));
+        assert(volumeSign > 0.0f && "Invalid winding");
+    }
 
     verticesDirty = true;
     facesDirty = true;
@@ -742,7 +749,7 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
 void TetMesh::updateVerticesIfNecessary() {
     if (useOvmRepresentation && verticesDirty) {
         // Update vertex data.
-        OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
+        auto& ovmMesh = ovmRepresentationData->ovmMesh;
         auto& vertexColorProp = ovmRepresentationData->vertexColorProp;
         vertexPositions.resize(ovmMesh.n_vertices());
         vertexColors.resize(ovmMesh.n_vertices());
@@ -765,7 +772,7 @@ void TetMesh::updateVerticesIfNecessary() {
 void TetMesh::updateFacesIfNecessary() {
     if (useOvmRepresentation && facesDirty) {
         // Update face data.
-        OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
+        auto& ovmMesh = ovmRepresentationData->ovmMesh;
         facesSlim.resize(ovmMesh.n_faces());
         facesBoundarySlim.resize(ovmMesh.n_faces());
         verticesBoundarySlim.clear();
@@ -795,16 +802,21 @@ void TetMesh::updateFacesIfNecessary() {
 void TetMesh::updateCellIndicesIfNecessary() {
     if (useOvmRepresentation && cellsDirty) {
         // Update cell indices.
-        OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh = ovmRepresentationData->ovmMesh;
+        auto& ovmMesh = ovmRepresentationData->ovmMesh;
         cellIndices.resize(4 * ovmMesh.n_cells());
         for (OpenVolumeMesh::CellIter c_it = ovmMesh.cells_begin(); c_it != ovmMesh.cells_end(); c_it++) {
             auto ch = *c_it;
-            int vidx = 0;
+            auto cellVertices = ovmMesh.get_cell_vertices(ch);
+            assert(cellVertices.size() == 4);
+            for (int vidx = 0; vidx < int(cellVertices.size()); vidx++) {
+                cellIndices.at(ch.idx() * 4 + vidx) = cellVertices.at(vidx).uidx();
+            }
+            /*int vidx = 0;
             for (auto cv_it = ovmMesh.cv_iter(ch); cv_it.valid(); cv_it++) {
                 assert(vidx < 4);
                 cellIndices.at(ch.idx() * 4 + vidx) = cv_it->uidx();
                 vidx++;
-            }
+            }*/
         }
         meshNumCells = cellIndices.size() / 4;
     }
