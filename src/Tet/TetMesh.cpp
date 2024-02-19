@@ -45,6 +45,8 @@
 
 #include "Loaders/BinTetLoader.hpp"
 #include "Loaders/TxtTetLoader.hpp"
+#include "CSP/CSPSolver.hpp"
+#include "CSP/FlipSolver.hpp"
 #include "TetQualityFunctions.hpp"
 #include "TetMesh.hpp"
 
@@ -561,17 +563,62 @@ void TetMesh::rebuildInternalRepresentationIfNecessary_Ovm() {
     return { v[0], v[1], v[2] };
 }*/
 
-#define USE_SPLIT_EDGE
+/*
+ * b: 0, c: 1, d: 2, b': 3, c': 4, d': 5
+ * abc: R(0) -> (b, c'), F(1) -> (c, b')
+ * acd: R(0) -> (c, d'), F(1) -> (d, c')
+ * abd: R(0) -> (d, b'), F(1) -> (b, d')
+ */
+const uint32_t PRISM_TO_TET_TABLE[8][12] = {
+        // RRR, invalid
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+        // RRF, splits: (b, c'), (c, d'), (b, d'); meets in: b, d'
+        { 0, 1, 5, 2, 3, 4, 5, 0, 0, 1, 4, 5 },
+        // RFR, splits: (b, c'), (d, c'), (d, b'); meets in: d, c'
+        { 0, 1, 4, 2, 3, 4, 5, 2, 0, 2, 4, 3 },
+        // RFF, splits: (b, c'), (d, c'), (b, d'); meets in: b, c'
+        { 0, 1, 4, 2, 3, 4, 5, 0, 0, 2, 4, 5 },
+        // FRR, splits: (c, b'), (c, d'), (d, b'); meets in: c, b'
+        { 0, 1, 3, 2, 3, 4, 5, 1, 1, 2, 5, 3 },
+        // FRF, splits: (c, b'), (c, d'), (b, d'); meets in: c, d'
+        { 0, 1, 5, 2, 3, 4, 5, 1, 0, 1, 3, 5 },
+        // FFR, splits: (c, b'), (d, c'), (d, b'); meets in: d, b'
+        { 0, 1, 3, 2, 3, 4, 5, 2, 1, 2, 4, 3 },
+        // FFF, invalid
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+// Original before swaps for winding:
+/*const uint32_t PRISM_TO_TET_TABLE[8][12] = {
+        // RRR, invalid
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+        // RRF, splits: (b, c'), (c, d'), (b, d'); meets in: b, d'
+        { 0, 1, 2, 5, 3, 4, 5, 0, 0, 1, 4, 5 },
+        // RFR, splits: (b, c'), (d, c'), (d, b'); meets in: d, c'
+        { 0, 1, 2, 4, 3, 4, 5, 2, 0, 2, 3, 4 },
+        // RFF, splits: (b, c'), (d, c'), (b, d'); meets in: b, c'
+        { 0, 1, 2, 4, 3, 4, 5, 0, 0, 2, 4, 5 },
+        // FRR, splits: (c, b'), (c, d'), (d, b'); meets in: c, b'
+        { 0, 1, 2, 3, 3, 4, 5, 1, 1, 2, 3, 5 },
+        // FRF, splits: (c, b'), (c, d'), (b, d'); meets in: c, d'
+        { 0, 1, 2, 5, 3, 4, 5, 1, 0, 1, 3, 5 },
+        // FFR, splits: (c, b'), (d, c'), (d, b'); meets in: d, b'
+        { 0, 1, 2, 3, 3, 4, 5, 2, 1, 2, 3, 4 },
+        // FFF, invalid
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};*/
+
+//#define USE_SPLIT_EDGE
+#define USE_OVM_SANITY_CHECK
 
 void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
     auto& ovmMesh = ovmRepresentationData->ovmMesh;
     auto& vertexPositionsOvm = ovmMesh.vertex_positions();
     auto& vertexColorProp = ovmRepresentationData->vertexColorProp;
+    OpenVolumeMesh::VertexHandle vh((int)vertexIndex);
 
 #ifdef USE_SPLIT_EDGE
     // Add new vertices along the incident edges & collect old edges to delete.
     std::vector<OpenVolumeMesh::EdgeHandle> edgesToDelete;
-    OpenVolumeMesh::VertexHandle vh((int)vertexIndex);
     for (auto ve_it = ovmMesh.ve_iter(vh); ve_it.valid(); ve_it++) {
         const auto& eh = ve_it.cur_handle();
         edgesToDelete.push_back(eh);
@@ -596,9 +643,9 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
     // Add new vertices along the incident edges & collect old edges to delete.
     std::vector<OpenVolumeMesh::EdgeHandle> edgesToDelete;
     std::unordered_map<OpenVolumeMesh::EdgeHandle, OpenVolumeMesh::VertexHandle> edgeToNewVertexMap;
-    OpenVolumeMesh::VertexHandle vh((int)vertexIndex);
     for (auto ve_it = ovmMesh.ve_iter(vh); ve_it.valid(); ve_it++) {
         const auto& eh = ve_it.cur_handle();
+        edgesToDelete.push_back(eh);
         auto vhs = ovmMesh.edge_vertices(eh);
         auto vh0 = vhs.at(0);
         auto vh1 = vhs.at(1);
@@ -615,88 +662,87 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
         auto vhe = ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(vpe.x, vpe.y, vpe.z));
         vertexColorProp[vhe] = OpenVolumeMesh::Vec4f(vce.x, vce.y, vce.z, vce.w);
         edgeToNewVertexMap.insert(std::make_pair(eh, vhe));
-        edgesToDelete.push_back(eh);
     }
+
+    // Iterate over all cells incident with the vertex.
+    int numIncidentTets = 0;
+    for (auto vc_it = ovmMesh.vc_iter(vh); vc_it.valid(); vc_it++) {
+        numIncidentTets++;
+    }
+    auto** tetTopologies = new OpenVolumeMesh::TetTopology*[numIncidentTets];
+    int tetIdx = 0;
+    std::unordered_map<OpenVolumeMesh::HFH, int> halffaceToIndexMap;
+    std::unordered_map<OpenVolumeMesh::CH, int> cellToIndexMap;
+    for (auto vc_it = ovmMesh.vc_iter(vh); vc_it.valid(); vc_it++) {
+        auto* tt = new OpenVolumeMesh::TetTopology(ovmMesh, *vc_it, vh); // vertex a == vh
+        tetTopologies[tetIdx] = tt;
+        halffaceToIndexMap.insert(std::make_pair(tt->abc(), tetIdx * 3));
+        halffaceToIndexMap.insert(std::make_pair(tt->acd(), tetIdx * 3 + 1));
+        halffaceToIndexMap.insert(std::make_pair(tt->adb(), tetIdx * 3 + 2));
+        cellToIndexMap.insert(std::make_pair(*vc_it, tetIdx));
+        tetIdx++;
+    }
+
+    // Build neighborhood graph.
+    std::vector<Prism> prisms(numIncidentTets);
+    for (tetIdx = 0; tetIdx < numIncidentTets; tetIdx++) {
+        auto& prism = prisms.at(tetIdx);
+        auto& tt = *tetTopologies[tetIdx]; // vertex a == vh
+        std::array<OpenVolumeMesh::HFH, 3> hfhs = {
+                tt.abc().opposite_handle(), tt.acd().opposite_handle(), tt.adb().opposite_handle()
+        };
+        for (int faceIdx = 0; faceIdx < 3; faceIdx++) {
+            if (hfhs.at(faceIdx).is_valid()) {
+                auto itFace = halffaceToIndexMap.find(hfhs.at(faceIdx));
+                auto ch = ovmMesh.incident_cell(hfhs.at(faceIdx));
+                auto itCell = cellToIndexMap.find(ch);
+                prism.neighborFaceIndices.at(faceIdx) = itFace != halffaceToIndexMap.end() ? itFace->second : -1;
+                prism.neighbors.at(faceIdx) = itCell != cellToIndexMap.end() ? itCell->second : -1;
+            }
+        }
+    }
+
+    // Solve constraint satisfaction problem.
+    auto* cspSolver = new FlipSolver();
+    if (!cspSolver->solve(prisms)) {
+        throw std::runtime_error("Error: CSP solver failed!");
+    }
+    if (!checkIsCspFulfilled(prisms)) {
+        throw std::runtime_error("Error: CSP condition not fulfilled!");
+    }
+    delete cspSolver;
 
     // Collect the new indices of the new cells. Only add them after deleting the old cells.
     std::vector<OpenVolumeMesh::VertexHandle> newCells;
+    // Prism vertex handles.
+    std::array<OpenVolumeMesh::VertexHandle, 6> pvhs;
+    for (tetIdx = 0; tetIdx < numIncidentTets; tetIdx++) {
+        auto& prism = prisms.at(tetIdx);
+        auto& tt = *tetTopologies[tetIdx]; // vertex a == vh
+        pvhs[0] = tt.b();
+        pvhs[1] = tt.c();
+        pvhs[2] = tt.d();
+        pvhs[3] = edgeToNewVertexMap.find(tt.ab().edge_handle())->second;
+        pvhs[4] = edgeToNewVertexMap.find(tt.ac().edge_handle())->second;
+        pvhs[5] = edgeToNewVertexMap.find(tt.ad().edge_handle())->second;
 
-    // Each cell has 3 subdivided edges. 'vhes' stores the 3 subdivision points.
-    std::array<OpenVolumeMesh::VertexHandle, 3> vhes;
-    // 'vhbs' stores the end points of the 3 subdivided edges not equal to 'vh'.
-    std::array<OpenVolumeMesh::VertexHandle, 3> vhbs;
-    for (auto vc_it = ovmMesh.vc_iter(vh); vc_it.valid(); vc_it++) {
-        //auto incidentVertices = ovmMesh.get_cell_vertices(*vc_it, vh);
-
-        auto tt = OpenVolumeMesh::TetTopology(ovmMesh, *vc_it, vh); // vertex a == vh
-        vhes[0] = edgeToNewVertexMap.find(tt.ab().edge_handle())->second;
-        vhbs[0] = tt.b();
-        vhes[1] = edgeToNewVertexMap.find(tt.ac().edge_handle())->second;
-        vhbs[1] = tt.c();
-        vhes[2] = edgeToNewVertexMap.find(tt.ad().edge_handle())->second;
-        vhbs[2] = tt.d();
-
-        // Iterate over all edges incident with the cell.
-        /*int i = 0;
-        for (auto ce_it = ovmMesh.ce_iter(vc_it.cur_handle()); ce_it.valid(); ce_it++) {
-            auto vhs = ovmMesh.edge_vertices(ce_it.cur_handle());
-            auto ev_it = edgeToNewVertexMap.find(ce_it.cur_handle());
-            if (ev_it == edgeToNewVertexMap.end()) {
-                continue;
-            }
-            OpenVolumeMesh::VertexHandle vh0 = vhs[0];
-            OpenVolumeMesh::VertexHandle vh1 = vhs[1];
-            vhes[i] = ev_it->second;
-            vhbs[i] = vh == vh0 ? vh1 : vh0;
-            i++;
-        }*/
-
-        // Collect the new cell vertex indices subdividing the currently iterated cell.
+        // Add top.
         newCells.push_back(vh);
-        newCells.push_back(vhes[0]);
-        newCells.push_back(vhes[1]);
-        newCells.push_back(vhes[2]);
+        newCells.push_back(pvhs[3]);
+        newCells.push_back(pvhs[4]);
+        newCells.push_back(pvhs[5]);
 
-        newCells.push_back(vhes[0]);
-        newCells.push_back(vhbs[0]);
-        newCells.push_back(vhbs[1]);
-        newCells.push_back(vhbs[2]);
-
-        newCells.push_back(vhes[0]);
-        newCells.push_back(vhes[1]);
-        newCells.push_back(vhbs[2]);
-        newCells.push_back(vhbs[1]);
-
-        newCells.push_back(vhes[0]);
-        newCells.push_back(vhes[1]);
-        newCells.push_back(vhes[2]);
-        newCells.push_back(vhbs[2]);
-
-        // Test: Add new cells before deleting old ones.
-        //ovmMesh.add_cell(vh,      vhes[0], vhes[1], vhes[2]);
-        //ovmMesh.add_cell(vhes[0], vhbs[0], vhbs[1], vhbs[2]);
-        //ovmMesh.add_cell(vhes[0], vhes[1], vhbs[2], vhbs[1]);
-        //ovmMesh.add_cell(vhes[0], vhes[1], vhes[2], vhbs[2]);
-
-        /*glm::vec3 vhp = getPos(vertexPositionsOvm, vh);
-        glm::vec3 vhep[] = {
-                getPos(vertexPositionsOvm, vhes[0]),
-                getPos(vertexPositionsOvm, vhes[1]),
-                getPos(vertexPositionsOvm, vhes[2]),
-        };
-        glm::vec3 vhbp[] = {
-                getPos(vertexPositionsOvm, vhbs[0]),
-                getPos(vertexPositionsOvm, vhbs[1]),
-                getPos(vertexPositionsOvm, vhbs[2]),
-        };
-        std::cout << TetQualityMetrics::volumeSign(vhp, vhep[0], vhep[1], vhep[2]) << std::endl;
-        std::cout << TetQualityMetrics::volumeSign(vhep[0], vhbp[0], vhbp[1], vhbp[2]) << std::endl;
-        std::cout << TetQualityMetrics::volumeSign(vhep[0], vhep[1], vhbp[2], vhbp[1]) << std::endl;
-        std::cout << TetQualityMetrics::volumeSign(vhep[0], vhep[1], vhep[2], vhbp[2]) << std::endl;*/
+        uint32_t splits = prism.cuts.bitfield;
+        for (int i = 0; i < 12; i++) {
+            newCells.push_back(pvhs[PRISM_TO_TET_TABLE[splits][i]]);
+        }
     }
 
-    // If we sort from largest to smallest, there shouldn't be a problem with invalid handles.
-    //std::sort(edgesToDelete.rbegin(), edgesToDelete.rend());
+    for (tetIdx = 0; tetIdx < numIncidentTets; tetIdx++) {
+        delete tetTopologies[tetIdx];
+    }
+    delete[] tetTopologies;
+
     for (const auto& eh : edgesToDelete) {
         ovmMesh.delete_edge(eh);
     }
@@ -704,10 +750,21 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
 
     // Add the new cells after the old ones have been deleted.
     for (size_t i = 0; i < newCells.size(); i += 4) {
+        auto& p0Ovm = vertexPositionsOvm.at(newCells.at(i));
+        auto& p1Ovm = vertexPositionsOvm.at(newCells.at(i + 1));
+        auto& p2Ovm = vertexPositionsOvm.at(newCells.at(i + 2));
+        auto& p3Ovm = vertexPositionsOvm.at(newCells.at(i + 3));
+        glm::vec3 p0(p0Ovm[0], p0Ovm[1], p0Ovm[2]);
+        glm::vec3 p1(p1Ovm[0], p1Ovm[1], p1Ovm[2]);
+        glm::vec3 p2(p2Ovm[0], p2Ovm[1], p2Ovm[2]);
+        glm::vec3 p3(p3Ovm[0], p3Ovm[1], p3Ovm[2]);
+        float volumeSign = -glm::sign(glm::dot(glm::cross(p1 - p0, p2 - p0), p3 - p0));
+        assert(volumeSign > 0.0f && "Invalid winding");
         ovmMesh.add_cell(newCells.at(i), newCells.at(i + 1), newCells.at(i + 2), newCells.at(i + 3), true);
     }
 #endif
 
+#ifdef USE_OVM_SANITY_CHECK
     // Sanity check: Every tetrahedral cell may only have 4 vertices.
     for (OpenVolumeMesh::CellIter c_it = ovmMesh.cells_begin(); c_it != ovmMesh.cells_end(); c_it++) {
         auto ch = *c_it;
@@ -740,6 +797,7 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
         float volumeSign = -glm::sign(glm::dot(glm::cross(p1 - p0, p2 - p0), p3 - p0));
         assert(volumeSign > 0.0f && "Invalid winding");
     }
+#endif
 
     verticesDirty = true;
     facesDirty = true;
