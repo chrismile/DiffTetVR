@@ -801,6 +801,7 @@ void TetMeshOptimizer::updateRequest() {
             renderer->syncWithCpu();
             auto* vertexPositionGradients = reinterpret_cast<glm::vec3*>(vertexPositionGradientStagingBuffer->mapMemory());
             auto* vertexColorGradients = reinterpret_cast<glm::vec4*>(vertexColorGradientStagingBuffer->mapMemory());
+            tetMeshOpt->setVerticesChangedOnDevice(true);
             coarseToFineSubdivide(vertexPositionGradients, vertexColorGradients);
             vertexPositionGradientStagingBuffer->unmapMemory();
             vertexColorGradientStagingBuffer->unmapMemory();

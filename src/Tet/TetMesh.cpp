@@ -572,18 +572,18 @@ void TetMesh::rebuildInternalRepresentationIfNecessary_Ovm() {
 const uint32_t PRISM_TO_TET_TABLE[8][12] = {
         // RRR, invalid
         { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-        // RRF, splits: (b, c'), (c, d'), (b, d'); meets in: b, d'
-        { 0, 1, 5, 2, 3, 4, 5, 0, 0, 1, 4, 5 },
-        // RFR, splits: (b, c'), (d, c'), (d, b'); meets in: d, c'
-        { 0, 1, 4, 2, 3, 4, 5, 2, 0, 2, 4, 3 },
-        // RFF, splits: (b, c'), (d, c'), (b, d'); meets in: b, c'
-        { 0, 1, 4, 2, 3, 4, 5, 0, 0, 2, 4, 5 },
         // FRR, splits: (c, b'), (c, d'), (d, b'); meets in: c, b'
         { 0, 1, 3, 2, 3, 4, 5, 1, 1, 2, 5, 3 },
-        // FRF, splits: (c, b'), (c, d'), (b, d'); meets in: c, d'
-        { 0, 1, 5, 2, 3, 4, 5, 1, 0, 1, 3, 5 },
+        // RFR, splits: (b, c'), (d, c'), (d, b'); meets in: d, c'
+        { 0, 1, 4, 2, 3, 4, 5, 2, 0, 2, 4, 3 },
         // FFR, splits: (c, b'), (d, c'), (d, b'); meets in: d, b'
         { 0, 1, 3, 2, 3, 4, 5, 2, 1, 2, 4, 3 },
+        // RRF, splits: (b, c'), (c, d'), (b, d'); meets in: b, d'
+        { 0, 1, 5, 2, 3, 4, 5, 0, 0, 1, 4, 5 },
+        // FRF, splits: (c, b'), (c, d'), (b, d'); meets in: c, d'
+        { 0, 1, 5, 2, 3, 4, 5, 1, 0, 1, 3, 5 },
+        // RFF, splits: (b, c'), (d, c'), (b, d'); meets in: b, c'
+        { 0, 1, 4, 2, 3, 4, 5, 0, 0, 2, 4, 5 },
         // FFF, invalid
         { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -591,18 +591,18 @@ const uint32_t PRISM_TO_TET_TABLE[8][12] = {
 /*const uint32_t PRISM_TO_TET_TABLE[8][12] = {
         // RRR, invalid
         { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-        // RRF, splits: (b, c'), (c, d'), (b, d'); meets in: b, d'
-        { 0, 1, 2, 5, 3, 4, 5, 0, 0, 1, 4, 5 },
-        // RFR, splits: (b, c'), (d, c'), (d, b'); meets in: d, c'
-        { 0, 1, 2, 4, 3, 4, 5, 2, 0, 2, 3, 4 },
-        // RFF, splits: (b, c'), (d, c'), (b, d'); meets in: b, c'
-        { 0, 1, 2, 4, 3, 4, 5, 0, 0, 2, 4, 5 },
         // FRR, splits: (c, b'), (c, d'), (d, b'); meets in: c, b'
         { 0, 1, 2, 3, 3, 4, 5, 1, 1, 2, 3, 5 },
-        // FRF, splits: (c, b'), (c, d'), (b, d'); meets in: c, d'
-        { 0, 1, 2, 5, 3, 4, 5, 1, 0, 1, 3, 5 },
+        // RFR, splits: (b, c'), (d, c'), (d, b'); meets in: d, c'
+        { 0, 1, 2, 4, 3, 4, 5, 2, 0, 2, 3, 4 },
         // FFR, splits: (c, b'), (d, c'), (d, b'); meets in: d, b'
         { 0, 1, 2, 3, 3, 4, 5, 2, 1, 2, 3, 4 },
+        // RRF, splits: (b, c'), (c, d'), (b, d'); meets in: b, d'
+        { 0, 1, 2, 5, 3, 4, 5, 0, 0, 1, 4, 5 },
+        // FRF, splits: (c, b'), (c, d'), (b, d'); meets in: c, d'
+        { 0, 1, 2, 5, 3, 4, 5, 1, 0, 1, 3, 5 },
+        // RFF, splits: (b, c'), (d, c'), (b, d'); meets in: b, c'
+        { 0, 1, 2, 4, 3, 4, 5, 0, 0, 2, 4, 5 },
         // FFF, invalid
         { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };*/
@@ -797,6 +797,12 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
         float volumeSign = -glm::sign(glm::dot(glm::cross(p1 - p0, p2 - p0), p3 - p0));
         assert(volumeSign > 0.0f && "Invalid winding");
     }
+
+    // Sanity check: Genus doesn't change from subdivision.
+    int genus = ovmMesh.genus();
+    if (genus != 0) {
+        sgl::Logfile::get()->throwError("Error: genus (" + std::to_string(genus) + ") != 0 failed.");
+    }
 #endif
 
     verticesDirty = true;
@@ -907,6 +913,10 @@ void TetMesh::subdivideVertices(const std::vector<float>& gradientMagnitudes, ui
     if (!useOvmRepresentation) {
         sgl::Logfile::get()->throwError(
                 "Error in TetMesh::subdivideVertices: OpenVolumeMesh representation is not used.");
+    }
+
+    if (verticesChangedOnDevice) {
+        ;
     }
 
     std::vector<std::pair<float, uint32_t>> gradientMagnitudePairs;
