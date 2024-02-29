@@ -276,10 +276,14 @@ void TetMeshVolumeRenderer::onTransferFunctionMapRebuilt() {
 
 void TetMeshVolumeRenderer::updateLargeMeshMode() {
     // More than one million cells?
+    size_t numCells = tetMesh->getNumCells();
+    if (useCoarseToFine) {
+        numCells = std::max(numCells, size_t(coarseToFineMaxNumTets));
+    }
     LargeMeshMode newMeshLargeMeshMode = MESH_SIZE_SMALL;
-    if (tetMesh->getNumCells() > size_t(1e6)) { // > 1m cells
+    if (numCells > size_t(1e6)) { // > 1m cells
         newMeshLargeMeshMode = MESH_SIZE_LARGE;
-    } else if (tetMesh->getNumCells() > size_t(1e5)) { // > 1m cells
+    } else if (numCells > size_t(1e5)) { // > 1m cells
         newMeshLargeMeshMode = MESH_SIZE_MEDIUM;
     }
     if (newMeshLargeMeshMode != largeMeshMode) {
@@ -296,6 +300,11 @@ void TetMeshVolumeRenderer::updateLargeMeshMode() {
             adjointRasterPass->setShaderDirty();
         }
     }
+}
+
+void TetMeshVolumeRenderer::setCoarseToFineTargetNumTets(uint32_t _coarseToFineMaxNumTets) {
+    useCoarseToFine = true;
+    coarseToFineMaxNumTets = _coarseToFineMaxNumTets;
 }
 
 void TetMeshVolumeRenderer::setTetMeshData(const TetMeshPtr& _tetMesh) {
@@ -340,6 +349,7 @@ void TetMeshVolumeRenderer::setAdjointPassData(
     adjointPassBackbuffer = std::move(_adjointPassBackbuffer);
     vertexPositionGradientBuffer = std::move(_vertexPositionGradientBuffer);
     vertexColorGradientBuffer = std::move(_vertexColorGradientBuffer);
+    adjointRasterPass->setDataDirty();
 }
 
 void TetMeshVolumeRenderer::recreateSwapchain(uint32_t width, uint32_t height) {

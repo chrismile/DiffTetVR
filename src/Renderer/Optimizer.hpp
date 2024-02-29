@@ -95,6 +95,7 @@ private:
     bool hasRequest = false;
     sgl::TransferFunctionWindow* transferFunctionWindow;
 
+    void recreateGradientBuffers();
     void coarseToFineSubdivide(const glm::vec3* vertexPositionGradients, const glm::vec4* vertexColorGradients);
     const int COARSE_TO_FINE_EPOCH_COLOR = 0;
     const int COARSE_TO_FINE_EPOCH_COLOR_POS = 1;

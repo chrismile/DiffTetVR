@@ -249,23 +249,59 @@ void TetMesh::setTetQualityMetric(TetQualityMetric _tetQualityMetric) {
     }
 }
 
-sgl::vk::BufferPtr TetMesh::getTetQualityBuffer() {
+void TetMesh::fetchVertexDataFromDeviceIfNecessary() {
     if (verticesChangedOnDevice) {
         device->waitIdle();
         auto commandBuffer = device->beginSingleTimeCommands();
-        sgl::vk::BufferPtr stagingBuffer = std::make_shared<sgl::vk::Buffer>(
+        sgl::vk::BufferPtr stagingBufferPosition = std::make_shared<sgl::vk::Buffer>(
                 device, vertexPositionBuffer->getSizeInBytes(),
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
-        vertexPositionBuffer->copyDataTo(stagingBuffer, commandBuffer);
+        sgl::vk::BufferPtr stagingBufferColor = std::make_shared<sgl::vk::Buffer>(
+                device, vertexColorBuffer->getSizeInBytes(),
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        vertexPositionBuffer->copyDataTo(stagingBufferPosition, commandBuffer);
+        vertexColorBuffer->copyDataTo(stagingBufferColor, commandBuffer);
         device->endSingleTimeCommands(commandBuffer);
-        auto* dataPtr = reinterpret_cast<glm::vec3*>(stagingBuffer->mapMemory());
+        auto* positionsPtr = reinterpret_cast<glm::vec3*>(stagingBufferPosition->mapMemory());
+        auto* colorsPtr = reinterpret_cast<glm::vec4*>(stagingBufferColor->mapMemory());
         for (size_t i = 0; i < vertexPositions.size(); i++) {
-            vertexPositions.at(i) = dataPtr[i];
+            vertexPositions.at(i) = positionsPtr[i];
+            vertexColors.at(i) = colorsPtr[i];
         }
-        stagingBuffer->unmapMemory();
+        stagingBufferPosition->unmapMemory();
+        stagingBufferColor->unmapMemory();
+
+#ifdef USE_OPEN_VOLUME_MESH
+        if (useOvmRepresentation) {
+            // Update OpenVolumeMesh data structure.
+            auto& ovmMesh = ovmRepresentationData->ovmMesh;
+            auto& vertexPositionsOvm = ovmMesh.vertex_positions();
+            auto& vertexColorProp = ovmRepresentationData->vertexColorProp;
+            for (size_t vertexIdx = 0; vertexIdx < vertexPositions.size(); vertexIdx++) {
+                OpenVolumeMesh::VertexHandle vh((int)vertexIdx);
+                auto& vp = vertexPositions.at(vertexIdx);
+                auto& vc = vertexColors.at(vertexIdx);
+                auto& vpo = vertexPositionsOvm.at(vh);
+                auto& vco = vertexColorProp.at(vh);
+                vpo = OpenVolumeMesh::Vec3f(vp.x, vp.y, vp.z);
+                vco = OpenVolumeMesh::Vec4f(vc.x, vc.y, vc.z, vc.w);
+            }
+        }
+#endif
+
+        boundingBox = {};
+        for (const glm::vec3& pt : vertexPositions) {
+            boundingBox.combine(pt);
+        }
+
         verticesChangedOnDevice = false;
         isTetQualityDataDirty = true;
+        verticesDirty = false;
     }
+}
+
+sgl::vk::BufferPtr TetMesh::getTetQualityBuffer() {
+    fetchVertexDataFromDeviceIfNecessary();
 
     const size_t numCells = cellIndices.size() / 4;
     if (!tetQualityBuffer || sizeof(float) * numCells != tetQualityBuffer->getSizeInBytes()) {
@@ -692,6 +728,7 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
                 tt.abc().opposite_handle(), tt.acd().opposite_handle(), tt.adb().opposite_handle()
         };
         for (int faceIdx = 0; faceIdx < 3; faceIdx++) {
+            // ovmMesh.incident_cell(hfhs.at(faceIdx)).is_valid()
             if (hfhs.at(faceIdx).is_valid()) {
                 auto itFace = halffaceToIndexMap.find(hfhs.at(faceIdx));
                 auto ch = ovmMesh.incident_cell(hfhs.at(faceIdx));
@@ -830,6 +867,7 @@ void TetMesh::updateVerticesIfNecessary() {
             boundingBox.combine(pt);
         }
         meshNumVertices = vertexPositions.size();
+        verticesDirty = false;
     }
 }
 
@@ -844,7 +882,9 @@ void TetMesh::updateFacesIfNecessary() {
         FaceSlim faceSlim{};
         for (OpenVolumeMesh::FaceIter f_it = ovmMesh.faces_begin(); f_it != ovmMesh.faces_end(); f_it++) {
             auto fh = *f_it;
-            bool isBoundary = !fh.halfface_handle(0).is_valid() || !fh.halfface_handle(1).is_valid();
+            bool isBoundary =
+                    !ovmMesh.incident_cell(fh.halfface_handle(0)).is_valid()
+                    || !ovmMesh.incident_cell(fh.halfface_handle(1)).is_valid();
             facesBoundarySlim.at(fh.idx()) = isBoundary;
             int vidx = 0;
             for (auto fv_it = ovmMesh.fv_iter(fh); fv_it.valid(); fv_it++) {
@@ -860,6 +900,7 @@ void TetMesh::updateFacesIfNecessary() {
             faceSlim.tetId1 = faceCells.at(1).is_valid() ? faceCells.at(1).idx() : INVALID_TET;
             facesSlim.at(fh.idx()) = faceSlim;
         }
+        facesDirty = false;
     }
 }
 
@@ -883,6 +924,7 @@ void TetMesh::updateCellIndicesIfNecessary() {
             }*/
         }
         meshNumCells = cellIndices.size() / 4;
+        cellsDirty = false;
     }
 }
 #else
@@ -915,9 +957,7 @@ void TetMesh::subdivideVertices(const std::vector<float>& gradientMagnitudes, ui
                 "Error in TetMesh::subdivideVertices: OpenVolumeMesh representation is not used.");
     }
 
-    if (verticesChangedOnDevice) {
-        ;
-    }
+    fetchVertexDataFromDeviceIfNecessary();
 
     std::vector<std::pair<float, uint32_t>> gradientMagnitudePairs;
     for (uint32_t i = 0; i < uint32_t(gradientMagnitudes.size()); i++) {

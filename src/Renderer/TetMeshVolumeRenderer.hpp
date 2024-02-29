@@ -92,6 +92,7 @@ public:
     void setOutputImage(sgl::vk::ImageViewPtr& colorImage);
     void recreateSwapchain(uint32_t width, uint32_t height);
     void setUseLinearRGB(bool _useLinearRGB);
+    void setCoarseToFineTargetNumTets(uint32_t _coarseToFineMaxNumTets);
     void setTetMeshData(const TetMeshPtr& _tetMesh);
     void setAttenuationCoefficient(float _attenuationCoefficient) { attenuationCoefficient = _attenuationCoefficient; reRender = true; }
     void setClearColor(const sgl::Color& _clearColor);
@@ -235,6 +236,8 @@ private:
     int expectedAvgDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[0][0];
     int expectedMaxDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[0][1];
     float attenuationCoefficient = 100.0f;
+    bool useCoarseToFine = false;
+    uint32_t coarseToFineMaxNumTets = 0;
 
     // Depth complexity information mode.
     bool showDepthComplexity = false;

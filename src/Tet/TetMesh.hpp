@@ -163,6 +163,7 @@ private:
     void updateVerticesIfNecessary();
     void updateFacesIfNecessary();
     void updateCellIndicesIfNecessary();
+    void fetchVertexDataFromDeviceIfNecessary();
 
     // GPU data.
     void uploadDataToDevice();

@@ -237,6 +237,7 @@ void TetMeshOptimizer::renderGuiDialog() {
             const float progressBarWidth = settings.useCoarseToFine ? 400 : 300;
             if (settings.useCoarseToFine) {
                 auto progress = float(double(tetMeshOpt->getNumCells()) / double(settings.maxNumTets));
+                progress = std::min(progress, 1.0f);
                 ImGui::Text("Progress: #Tets %u of %u...", uint32_t(tetMeshOpt->getNumCells()), settings.maxNumTets);
                 ImGui::ProgressSpinner(
                         "##progress-spinner-tets", -1.0f, -1.0f, 4.0f,
@@ -416,23 +417,13 @@ void TetMeshOptimizer::startRequest() {
     }
     numCellsInit = uint32_t(tetMeshOpt->getNumCells());
 
-    auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
-    auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
-    auto vertexBoundaryBitBuffer = tetMeshOpt->getVertexBoundaryBitBuffer();
-    sgl::vk::BufferSettings bufferSettings{};
-    bufferSettings.usage =
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    bufferSettings.sizeInBytes = vertexPositionBuffer->getSizeInBytes();
-    vertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
-    bufferSettings.sizeInBytes = vertexColorBuffer->getSizeInBytes();
-    vertexColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
-    optimizerPassPositions->setBuffers(vertexPositionBuffer, vertexPositionGradientBuffer, vertexBoundaryBitBuffer);
-    optimizerPassColors->setBuffers(vertexColorBuffer, vertexColorGradientBuffer, vertexBoundaryBitBuffer);
-    auto cellIndicesBuffer = tetMeshOpt->getCellIndicesBuffer();
-    tetRegularizerPass->setBuffers(cellIndicesBuffer, vertexPositionBuffer, vertexPositionGradientBuffer);
+    recreateGradientBuffers();
 
     // TODO: Make sure data is freed before allocating new data.
     tetMeshVolumeRendererGT->setClearColor(sgl::Color(0, 0, 0, 0));
+    if (settings.useCoarseToFine) {
+        tetMeshVolumeRendererGT->setCoarseToFineTargetNumTets(settings.maxNumTets);
+    }
     tetMeshVolumeRendererGT->setTetMeshData(tetMeshGT);
     tetMeshVolumeRendererGT->setAttenuationCoefficient(settings.attenuationCoefficient);
     tetMeshVolumeRendererGT->setOutputImage(colorImageGT->getImageView());
@@ -465,6 +456,24 @@ void TetMeshOptimizer::startRequest() {
     usePreviewCached = showPreview;
 }
 
+void TetMeshOptimizer::recreateGradientBuffers() {
+    auto* device = renderer->getDevice();
+    auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
+    auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
+    auto vertexBoundaryBitBuffer = tetMeshOpt->getVertexBoundaryBitBuffer();
+    sgl::vk::BufferSettings bufferSettings{};
+    bufferSettings.usage =
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bufferSettings.sizeInBytes = vertexPositionBuffer->getSizeInBytes();
+    vertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
+    bufferSettings.sizeInBytes = vertexColorBuffer->getSizeInBytes();
+    vertexColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
+    optimizerPassPositions->setBuffers(vertexPositionBuffer, vertexPositionGradientBuffer, vertexBoundaryBitBuffer);
+    optimizerPassColors->setBuffers(vertexColorBuffer, vertexColorGradientBuffer, vertexBoundaryBitBuffer);
+    auto cellIndicesBuffer = tetMeshOpt->getCellIndicesBuffer();
+    tetRegularizerPass->setBuffers(cellIndicesBuffer, vertexPositionBuffer, vertexPositionGradientBuffer);
+}
+
 bool TetMeshOptimizer::getHasResult() {
     if (!hasRequest) {
         return false;
@@ -472,7 +481,7 @@ bool TetMeshOptimizer::getHasResult() {
     if (!settings.useCoarseToFine) {
         return currentEpoch == settings.maxNumEpochs;
     }
-    return tetMeshOpt->getNumCells() >= size_t(settings.maxNumTets);
+    return tetMeshOpt->getNumCells() >= size_t(settings.maxNumTets) && coarseToFineEpoch % 3 == 2;
 }
 
 void TetMeshOptimizer::sampleCameraPoses() {
@@ -665,7 +674,7 @@ void TetMeshOptimizer::updateRequest() {
         vertexColorGradientStagingBuffer->unmapMemory();
     }
 
-    /*bool debugOutput = false;
+    /*bool debugOutput = true;
     if (debugOutput) {
         auto vertexPositionGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
                 renderer->getDevice(), vertexPositionGradientBuffer->getSizeInBytes(),
@@ -696,30 +705,11 @@ void TetMeshOptimizer::updateRequest() {
         std::cout << std::endl;
         vertexPositionGradientStagingBuffer->unmapMemory();
         vertexColorGradientStagingBuffer->unmapMemory();
-    }*/
-
-    // Run the optimizer.
-    bool optimizePos =
-            !settings.useCoarseToFine || coarseToFineEpochIndex == COARSE_TO_FINE_EPOCH_COLOR_POS;
-    bool optimizeCol =
-            !settings.useCoarseToFine || coarseToFineEpochIndex != COARSE_TO_FINE_EPOCH_GATHER;
-    if (settings.optimizePositions && optimizePos) {
-        const int epochNum = (coarseToFineEpoch / 3) * settings.maxNumEpochs + currentEpoch;
-        optimizerPassPositions->setEpochIndex(epochNum);
-        optimizerPassPositions->render();
     }
-    if (settings.optimizeColors && optimizeCol) {
-        const int epochNum = (coarseToFineEpoch / 3 * 2 + coarseToFineEpochIndex) * settings.maxNumEpochs + currentEpoch;
-        optimizerPassColors->setEpochIndex(epochNum);
-        optimizerPassColors->render();
-    }
-    renderer->insertMemoryBarrier(
-            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
-    /*if (debugOutput) {
-        auto vertexPositionBuffer = tetMeshGT->getVertexPositionBuffer();
-        auto vertexColorBuffer = tetMeshGT->getVertexColorBuffer();
+    if (debugOutput) {
+        auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
+        auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
         auto vertexPositionStagingBuffer = std::make_shared<sgl::vk::Buffer>(
                 renderer->getDevice(), vertexPositionBuffer->getSizeInBytes(),
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
@@ -738,11 +728,68 @@ void TetMeshOptimizer::updateRequest() {
         uint32_t numEntriesCol = vertexColorBuffer->getSizeInBytes() / sizeof(float);
         auto* vertexPositions = reinterpret_cast<float*>(vertexPositionStagingBuffer->mapMemory());
         auto* vertexColors = reinterpret_cast<float*>(vertexColorStagingBuffer->mapMemory());
-        std::cout << "vertexPositions:" << std::endl;
+        std::cout << "vertexPositions (A):" << std::endl;
         for (uint32_t i = 0; i < numEntriesPos; i++) {
             std::cout << vertexPositions[i] << std::endl;
         }
-        std::cout << std::endl << "vertexColors:" << std::endl;
+        std::cout << std::endl << "vertexColors (A):" << std::endl;
+        for (uint32_t i = 0; i < numEntriesCol; i++) {
+            std::cout << vertexColors[i] << std::endl;
+        }
+        std::cout << std::endl;
+        vertexPositionStagingBuffer->unmapMemory();
+        vertexColorStagingBuffer->unmapMemory();
+    }*/
+
+    // Run the optimizer.
+    bool optimizePos =
+            !settings.useCoarseToFine || coarseToFineEpochIndex == COARSE_TO_FINE_EPOCH_COLOR_POS;
+    bool optimizeCol =
+            !settings.useCoarseToFine || coarseToFineEpochIndex != COARSE_TO_FINE_EPOCH_GATHER;
+    if (settings.optimizePositions && optimizePos) {
+        //const int epochNum = (coarseToFineEpoch / 3) * settings.maxNumEpochs + currentEpoch;
+        // Restart from epoch 0 when buffers are recreated.
+        const int epochNum = currentEpoch;
+        optimizerPassPositions->setEpochIndex(epochNum);
+        optimizerPassPositions->render();
+    }
+    if (settings.optimizeColors && optimizeCol) {
+        // Restart from epoch 0 when buffers are recreated.
+        //const int epochNum = (coarseToFineEpoch / 3 * 2 + coarseToFineEpochIndex) * settings.maxNumEpochs + currentEpoch;
+        const int epochNum = currentEpoch;
+        optimizerPassColors->setEpochIndex(epochNum);
+        optimizerPassColors->render();
+    }
+    renderer->insertMemoryBarrier(
+            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+    /*if (debugOutput) {
+        auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
+        auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
+        auto vertexPositionStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                renderer->getDevice(), vertexPositionBuffer->getSizeInBytes(),
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        auto vertexColorStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                renderer->getDevice(), vertexColorBuffer->getSizeInBytes(),
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        vertexPositionBuffer->copyDataTo(
+                vertexPositionStagingBuffer, 0, 0, vertexPositionBuffer->getSizeInBytes(),
+                renderer->getVkCommandBuffer());
+        vertexColorBuffer->copyDataTo(
+                vertexColorStagingBuffer, 0, 0, vertexColorBuffer->getSizeInBytes(),
+                renderer->getVkCommandBuffer());
+        renderer->syncWithCpu();
+
+        uint32_t numEntriesPos = vertexPositionBuffer->getSizeInBytes() / sizeof(float);
+        uint32_t numEntriesCol = vertexColorBuffer->getSizeInBytes() / sizeof(float);
+        auto* vertexPositions = reinterpret_cast<float*>(vertexPositionStagingBuffer->mapMemory());
+        auto* vertexColors = reinterpret_cast<float*>(vertexColorStagingBuffer->mapMemory());
+        std::cout << "vertexPositions (B):" << std::endl;
+        for (uint32_t i = 0; i < numEntriesPos; i++) {
+            std::cout << vertexPositions[i] << std::endl;
+        }
+        std::cout << std::endl << "vertexColors (B):" << std::endl;
         for (uint32_t i = 0; i < numEntriesCol; i++) {
             std::cout << vertexColors[i] << std::endl;
         }
@@ -754,7 +801,7 @@ void TetMeshOptimizer::updateRequest() {
     currentEpoch++;
 
     if (settings.useCoarseToFine && currentEpoch == settings.maxNumEpochs
-            && tetMeshOpt->getNumCells() < size_t(settings.maxNumTets)) {
+            && (tetMeshOpt->getNumCells() < size_t(settings.maxNumTets) || coarseToFineEpoch % 3 < 2)) {
         coarseToFineEpoch++;
         currentEpoch = 0;
         if (coarseToFineEpochIndex == 0) {
@@ -765,6 +812,7 @@ void TetMeshOptimizer::updateRequest() {
             float lrCol = settings.optimizerSettingsColors.learningRate;
             lrCol *= std::pow(settings.optimizerSettingsColors.lrDecayRate, float(coarseToFineEpoch / 3));
             lrCol *= tetFactor;
+            std::cout << "lrCol: " << lrCol << ", lrPos: " << lrPos << std::endl;
             optimizerPassPositions->setSettings(
                     settings.lossType, lrPos,
                     settings.optimizerSettingsPositions.beta1, settings.optimizerSettingsPositions.beta2,
@@ -805,11 +853,19 @@ void TetMeshOptimizer::updateRequest() {
             coarseToFineSubdivide(vertexPositionGradients, vertexColorGradients);
             vertexPositionGradientStagingBuffer->unmapMemory();
             vertexColorGradientStagingBuffer->unmapMemory();
+
+            // Set new vertex and color and respective gradient buffers.
+            std::cout << "Recreate" << std::endl;
+            recreateGradientBuffers();
+            tetMeshVolumeRendererOpt->setAdjointPassData(
+                    colorAdjointTexture->getImageView(), adjointPassBackbuffer,
+                    vertexPositionGradientBuffer, vertexColorGradientBuffer);
         }
     }
     if (!settings.useCoarseToFine && settings.optimizerSettingsPositions.lrDecayRate != 1.0f) {
         float lrPos = settings.optimizerSettingsPositions.learningRate;
         lrPos *= std::pow(settings.optimizerSettingsPositions.lrDecayRate, float(currentEpoch));
+        std::cout << "lrPos: " << lrPos << std::endl;
         optimizerPassPositions->setSettings(
                 settings.lossType, lrPos,
                 settings.optimizerSettingsPositions.beta1, settings.optimizerSettingsPositions.beta2,
@@ -819,6 +875,7 @@ void TetMeshOptimizer::updateRequest() {
     if (!settings.useCoarseToFine && settings.optimizerSettingsColors.lrDecayRate != 1.0f) {
         float lrCol = settings.optimizerSettingsColors.learningRate;
         lrCol *= std::pow(settings.optimizerSettingsColors.lrDecayRate, float(currentEpoch));
+        std::cout << "lrCol: " << lrCol << std::endl;
         optimizerPassColors->setSettings(
                 settings.lossType, lrCol,
                 settings.optimizerSettingsColors.beta1, settings.optimizerSettingsColors.beta2,
