@@ -891,7 +891,7 @@ void TetMesh::updateFacesIfNecessary() {
                 assert(vidx < 3);
                 faceSlim.vs[vidx] = fv_it->idx();
                 if (isBoundary) {
-                    verticesBoundarySlim[vidx] = true;
+                    verticesBoundarySlim[fv_it->uidx()] = true;
                 }
                 vidx++;
             }
