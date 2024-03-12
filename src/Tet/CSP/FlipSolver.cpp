@@ -162,7 +162,7 @@ void doRippling(std::vector<Prism>& prisms, int startIdx, const std::vector<bool
                             cutNeig = itNeig->second;
                         }
                         cutSelf.setCut(neighborIdxLocal, 1u - cutSelf.getCut(neighborIdxLocal));
-                        cutNeig.setCut(neighborFaceIdx, 1u - cutSelf.getCut(neighborFaceIdx));
+                        cutNeig.setCut(neighborFaceIdx, 1u - cutNeig.getCut(neighborFaceIdx));
 
                         auto neighborRippleEntry = std::make_shared<BfsEntry>(*currBfsEntry);
                         neighborRippleEntry->currIdx = neighborIdx;
