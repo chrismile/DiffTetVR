@@ -826,6 +826,8 @@ void TetMeshVolumeRenderer::renderGuiPropertyEditorNodes(sgl::PropertyEditor& pr
                 sgl::getNiceMemoryString(totalNumFragments * 12ull, 2) + " / "
                 + sgl::getNiceMemoryString(fragmentBufferSize * 12ull, 2));
     }
+    propertyEditor.addText("#Tets", std::to_string(tetMesh->getNumCells()));
+    propertyEditor.addText("#Vertices", std::to_string(tetMesh->getNumVertices()));
 }
 
 bool TetMeshVolumeRenderer::selectTilingModeUI(sgl::PropertyEditor& propertyEditor) {

@@ -94,6 +94,7 @@ private:
     std::function<std::string()> renderGuiDataSetSelectionMenuCallback;
     bool hasRequest = false;
     sgl::TransferFunctionWindow* transferFunctionWindow;
+    uint32_t numCellsGT = 0, numCellsOpt = 0;
 
     void recreateGradientBuffers();
     void coarseToFineSubdivide(const glm::vec3* vertexPositionGradients, const glm::vec4* vertexColorGradients);

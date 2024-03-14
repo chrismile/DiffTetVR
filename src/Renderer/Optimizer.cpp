@@ -121,13 +121,22 @@ void TetMeshOptimizer::renderGuiDialog() {
                 TetMeshLoader* tetMeshLoader = tetMeshTest->createTetMeshLoaderByExtension(fileExtension);
                 size_t numCells = 0, numVertices = 0;
                 if (tetMeshLoader && tetMeshLoader->peekSizes(settings.dataSetFileNameGT, numCells, numVertices)) {
-                    settings.maxNumTets = uint32_t(std::ceil(0.1 * double(numCells)));
+                    numCellsGT = numCells;
                 }
+                delete tetMeshLoader;
             }
             ImGui::EndPopup();
         }
         ImGui::SameLine();
         ImGui::InputText("Data Set (GT)", &settings.dataSetFileNameGT);
+        if (numCellsGT > 0) {
+            ImGui::SameLine();
+            if (numCellsGT == 1) {
+                ImGui::Text("1 tet");
+            } else {
+                ImGui::Text("%u tets", numCellsGT);
+            }
+        }
 
         if (hasDataSets && ImGui::Button("...##opt-sel")) {
             ImGui::OpenPopup("SelectDataSetPopupOpt");
@@ -136,11 +145,27 @@ void TetMeshOptimizer::renderGuiDialog() {
             std::string selection = renderGuiDataSetSelectionMenuCallback();
             if (!selection.empty()) {
                 settings.dataSetFileNameOpt = selection;
+                std::string fileExtension = sgl::FileUtils::get()->getFileExtensionLower(settings.dataSetFileNameOpt);
+                auto tetMeshTest = std::make_shared<TetMesh>(renderer->getDevice(), transferFunctionWindow);
+                TetMeshLoader* tetMeshLoader = tetMeshTest->createTetMeshLoaderByExtension(fileExtension);
+                size_t numCells = 0, numVertices = 0;
+                if (tetMeshLoader && tetMeshLoader->peekSizes(settings.dataSetFileNameOpt, numCells, numVertices)) {
+                    numCellsOpt = numCells;
+                }
+                delete tetMeshLoader;
             }
             ImGui::EndPopup();
         }
         ImGui::SameLine();
         ImGui::InputText("Data Set (Opt.)", &settings.dataSetFileNameOpt);
+        if (numCellsOpt > 0) {
+            ImGui::SameLine();
+            if (numCellsOpt == 1) {
+                ImGui::Text("1 tet");
+            } else {
+                ImGui::Text("%u tets", numCellsOpt);
+            }
+        }
 
         ImGui::Combo(
                 "Optimizer", (int*)&settings.optimizerType, OPTIMIZER_TYPE_NAMES, IM_ARRAYSIZE(OPTIMIZER_TYPE_NAMES));
