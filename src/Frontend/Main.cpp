@@ -52,6 +52,7 @@ int main(int argc, char *argv[]) {
     sgl::AppSettings::get()->initializeDataDirectory();
 
     std::string iconPath = sgl::AppSettings::get()->getDataDirectory() + "Fonts/icon_256.png";
+    sgl::AppSettings::get()->setApplicationDescription("Differentiable volume renderer for tetrahedral meshes");
     sgl::AppSettings::get()->loadApplicationIconFromFile(iconPath);
 
     // Load the file containing the app settings
