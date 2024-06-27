@@ -344,17 +344,9 @@ void MainApp::renderGui() {
             }
             IGFD_Selection_DestroyContent(&selection);
 
-            fileDialogDirectory = sgl::FileUtils::get()->getPathToFile(filename);
-
             std::string filenameLower = boost::to_lower_copy(filename);
-
-            if (boost::ends_with(filenameLower, ".bintet")
-#ifdef USE_OPEN_VOLUME_MESH
-                    || boost::ends_with(filenameLower, ".ovm")
-                    || boost::ends_with(filenameLower, ".ovmb")
-                    || boost::ends_with(filenameLower, ".vtk")
-#endif
-                    || boost::ends_with(filenameLower, ".txt")) {
+            if (checkHasValidExtension(filenameLower)) {
+                fileDialogDirectory = sgl::FileUtils::get()->getPathToFile(filename);
                 selectedDataSetIndex = 0;
                 customDataSetFileName = filename;
                 loadTetMeshDataSet(getSelectedDataSetFilename());
@@ -873,6 +865,35 @@ void MainApp::hasMoved() {
 
 void MainApp::onCameraReset() {
 }
+
+bool MainApp::checkHasValidExtension(const std::string& filenameLower) {
+    if (boost::ends_with(filenameLower, ".bintet")
+#ifdef USE_OPEN_VOLUME_MESH
+            || boost::ends_with(filenameLower, ".ovm")
+            || boost::ends_with(filenameLower, ".ovmb")
+            || boost::ends_with(filenameLower, ".vtk")
+#endif
+            || boost::ends_with(filenameLower, ".txt")) {
+        return true;
+    }
+    return false;
+}
+
+void MainApp::onFileDropped(const std::string& droppedFileName) {
+    std::string filenameLower = boost::to_lower_copy(droppedFileName);
+    if (checkHasValidExtension(filenameLower)) {
+        device->waitIdle();
+        fileDialogDirectory = sgl::FileUtils::get()->getPathToFile(droppedFileName);
+        selectedDataSetIndex = 0;
+        customDataSetFileName = droppedFileName;
+        loadTetMeshDataSet(getSelectedDataSetFilename());
+    } else {
+        sgl::Logfile::get()->writeError(
+                "The dropped file name has an unknown extension \""
+                + sgl::FileUtils::get()->getFileExtension(filenameLower) + "\".");
+    }
+}
+
 
 
 // --- Visualization pipeline ---

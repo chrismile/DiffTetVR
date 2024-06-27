@@ -77,6 +77,9 @@ private:
     void hasMoved() override;
     /// Callback when the camera was reset.
     void onCameraReset() override;
+    /// Callback when a file has been dropped on the program.
+    void onFileDropped(const std::string& droppedFileName) override;
+    bool checkHasValidExtension(const std::string& filenameLower);
     /// Called when the clear color was changed.
     void onClearColorChanged() override;
 
