@@ -66,17 +66,17 @@ option(SUPPORT_PYTORCH "Build the PyTorch module." ON)
 set(DATA_PATH "${CMAKE_SOURCE_DIR}/Data" CACHE PATH "Location of folder 'Data'")
 add_definitions(-DDATA_PATH=\"${DATA_PATH}\")
 
-if ((UNIX OR MSYS) AND (NOT APPLE OR NOT VCPKG_TOOLCHAIN))
+if ((UNIX OR MSYS OR MINGW) AND (NOT APPLE OR NOT VCPKG_TOOLCHAIN))
     find_package(PkgConfig REQUIRED)
 endif()
 
 # CUDA nvcc does not support MSYS/MinGW.
-if (MSYS)
+if (MSYS OR MINGW)
     set(SUPPORT_PYTORCH OFF)
 endif()
 
 
-if((MSYS OR (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")) AND ${USE_GLIBCXX_DEBUG})
+if((MSYS OR MINGW OR (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")) AND ${USE_GLIBCXX_DEBUG})
     add_compile_definitions(_GLIBCXX_DEBUG)
 endif()
 
@@ -138,6 +138,19 @@ else()
     MESSAGE(STATUS "sgl was not built with CUDA interoperability support.")
 endif()
 
+set(CUDA_HOST_COMPILER_COMPATIBLE true)
+if (CUDA_ENABLED)
+    include(CheckLanguage)
+    check_language(CUDA)
+    if(CMAKE_CUDA_COMPILER)
+        MESSAGE(STATUS "CUDA was found and is compatible with the host compiler.")
+    else()
+        set(CUDA_ENABLED false)
+        set(CUDA_HOST_COMPILER_COMPATIBLE false)
+        MESSAGE(WARNING "CUDA was found, but the compiler cannot be enabled. Please check if CUDA is compatible with the used host compiler.")
+    endif()
+endif()
+
 if (NOT ${USE_OVM})
     list(REMOVE_ITEM SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Tet/Loaders/OvmLoader.hpp)
     list(REMOVE_ITEM SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Tet/Loaders/OvmLoader.cpp)
@@ -152,7 +165,7 @@ else()
     add_executable(DiffTetVR ${SOURCES} ${CUDA_SOURCES})
 endif()
 
-if((MSYS OR (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")) AND ${USE_STATIC_STD_LIBRARIES})
+if((MSYS OR MINGW OR (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")) AND ${USE_STATIC_STD_LIBRARIES})
     target_link_options(DiffTetVR PRIVATE -static-libgcc -static-libstdc++)
 endif()
 
@@ -202,7 +215,7 @@ if (NOT MSVC)
     endif()
 endif()
 
-if((${CMAKE_GENERATOR} STREQUAL "MinGW Makefiles") OR (${CMAKE_GENERATOR} STREQUAL "MSYS Makefiles"))
+if(MSYS OR MINGW OR (${CMAKE_GENERATOR} STREQUAL "MinGW Makefiles") OR (${CMAKE_GENERATOR} STREQUAL "MSYS Makefiles"))
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mconsole")
     else()
@@ -368,19 +381,6 @@ else()
 endif()
 
 
-# Compile all CUDA modules if sgl is built with CUDA support.
-if ("SUPPORT_CUDA_INTEROP" IN_LIST SGL_INTERFACE_COMPILE_DEFINITIONS AND NOT MSYS)
-    if(${CMAKE_VERSION} VERSION_LESS "3.18.0")
-        # https://cmake.org/cmake/help/git-stage/module/FindCUDA.html
-        find_package(CUDA QUIET)
-    else()
-        # https://cmake.org/cmake/help/git-stage/module/FindCUDAToolkit.html
-        find_package(CUDAToolkit QUIET)
-    endif()
-    file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/Data/__cudacache__")
-    MESSAGE(STATUS "Adding CUDA module compile commands.")
-endif()
-
 function(compile_fatbin SRC OUTPUT)
     add_custom_command(
             OUTPUT "${OUTPUT}"
@@ -390,7 +390,7 @@ function(compile_fatbin SRC OUTPUT)
     )
 endfunction()
 
-if ("SUPPORT_CUDA_INTEROP" IN_LIST SGL_INTERFACE_COMPILE_DEFINITIONS AND NOT MSYS)
+if ("SUPPORT_CUDA_INTEROP" IN_LIST SGL_INTERFACE_COMPILE_DEFINITIONS AND NOT MSYS AND NOT MINGW AND ${CUDA_HOST_COMPILER_COMPATIBLE})
     foreach(CUDA_MODULE IN LISTS CUDA_MODULES)
         get_filename_component(CUDA_MODULE_NAME "${CUDA_MODULE}" NAME_WE)
         set(DEST "${CUDA_MODULE_NAME}.fatbin")
