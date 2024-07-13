@@ -29,8 +29,6 @@
 #include <stack>
 #include <csignal>
 
-#include <boost/algorithm/string.hpp>
-
 #include <Utils/StringUtils.hpp>
 #include <Utils/AppSettings.hpp>
 #include <Utils/Dialog.hpp>
@@ -344,7 +342,7 @@ void MainApp::renderGui() {
             }
             IGFD_Selection_DestroyContent(&selection);
 
-            std::string filenameLower = boost::to_lower_copy(filename);
+            std::string filenameLower = sgl::toLowerCopy(filename);
             if (checkHasValidExtension(filenameLower)) {
                 fileDialogDirectory = sgl::FileUtils::get()->getPathToFile(filename);
                 selectedDataSetIndex = 0;
@@ -394,13 +392,13 @@ void MainApp::renderGui() {
 
             saveTestMeshFileDialogDirectory = sgl::FileUtils::get()->getPathToFile(filename);
 
-            std::string filenameLower = boost::to_lower_copy(filename);
-            if (boost::ends_with(filenameLower, ".bintet")
+            std::string filenameLower = sgl::toLowerCopy(filename);
+            if (sgl::endsWith(filenameLower, ".bintet")
 #ifdef USE_OPEN_VOLUME_MESH
-                    || boost::ends_with(filenameLower, ".ovm")
-                    || boost::ends_with(filenameLower, ".ovmb")
+                    || sgl::endsWith(filenameLower, ".ovm")
+                    || sgl::endsWith(filenameLower, ".ovmb")
 #endif
-                    || boost::ends_with(filenameLower, ".txt")) {
+                    || sgl::endsWith(filenameLower, ".txt")) {
                 tetMesh->saveToFile(filename);
             } else {
                 sgl::Logfile::get()->writeError(
@@ -867,20 +865,20 @@ void MainApp::onCameraReset() {
 }
 
 bool MainApp::checkHasValidExtension(const std::string& filenameLower) {
-    if (boost::ends_with(filenameLower, ".bintet")
+    if (sgl::endsWith(filenameLower, ".bintet")
 #ifdef USE_OPEN_VOLUME_MESH
-            || boost::ends_with(filenameLower, ".ovm")
-            || boost::ends_with(filenameLower, ".ovmb")
-            || boost::ends_with(filenameLower, ".vtk")
+            || sgl::endsWith(filenameLower, ".ovm")
+            || sgl::endsWith(filenameLower, ".ovmb")
+            || sgl::endsWith(filenameLower, ".vtk")
 #endif
-            || boost::ends_with(filenameLower, ".txt")) {
+            || sgl::endsWith(filenameLower, ".txt")) {
         return true;
     }
     return false;
 }
 
 void MainApp::onFileDropped(const std::string& droppedFileName) {
-    std::string filenameLower = boost::to_lower_copy(droppedFileName);
+    std::string filenameLower = sgl::toLowerCopy(droppedFileName);
     if (checkHasValidExtension(filenameLower)) {
         device->waitIdle();
         fileDialogDirectory = sgl::FileUtils::get()->getPathToFile(droppedFileName);
