@@ -59,6 +59,17 @@ DataView::~DataView() {
     }
 }
 
+void DataView::setTetMeshVolumeRenderer(
+        const std::shared_ptr<TetMeshVolumeRenderer>& _tetMeshVolumeRenderer) {
+    tetMeshVolumeRenderer = _tetMeshVolumeRenderer;
+
+    if (viewportWidth == 0 || viewportHeight == 0) {
+        return;
+    }
+    tetMeshVolumeRenderer->setOutputImage(dataViewTexture->getImageView());
+    tetMeshVolumeRenderer->recreateSwapchain(viewportWidth, viewportHeight);
+}
+
 void DataView::resize(int newWidth, int newHeight) {
     viewportWidth = uint32_t(std::max(newWidth, 0));
     viewportHeight = uint32_t(std::max(newHeight, 0));

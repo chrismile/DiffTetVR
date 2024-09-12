@@ -29,8 +29,7 @@
 #ifndef DIFFTETVR_TETMESHVOLUMERENDERER_HPP
 #define DIFFTETVR_TETMESHVOLUMERENDERER_HPP
 
-#include "PPLL.hpp"
-
+#include <map>
 #include <memory>
 
 #include <Graphics/Color.hpp>
@@ -40,9 +39,14 @@
 
 namespace sgl { namespace vk {
 class Renderer;
+class Buffer;
+typedef std::shared_ptr<Buffer> BufferPtr;
 class ImageView;
+typedef std::shared_ptr<ImageView> ImageViewPtr;
 class RenderData;
 typedef std::shared_ptr<RenderData> RenderDataPtr;
+class Framebuffer;
+typedef std::shared_ptr<Framebuffer> FramebufferPtr;
 }}
 
 namespace sgl {
@@ -53,65 +57,50 @@ class TransferFunctionWindow;
 class TetMesh;
 typedef std::shared_ptr<TetMesh> TetMeshPtr;
 
-class GatherRasterPass;
-class ResolveRasterPass;
-class ClearRasterPass;
-class AdjointRasterPass;
-
-enum class FragmentBufferMode {
-    BUFFER, BUFFER_ARRAY, BUFFER_REFERENCE_ARRAY
-};
-const char* const FRAGMENT_BUFFER_MODE_NAMES[3] = {
-        "Buffer", "Buffer Array", "Buffer Reference Array"
-};
-
-const int MESH_MODE_DEPTH_COMPLEXITIES_PPLL[3][2] = {
-        {20, 100}, // avg and max depth complexity medium
-        //{80, 256}, // avg and max depth complexity medium
-        //{120, 380} // avg and max depth complexity very large
-        {100, 520}, // avg and max depth complexity very large
-        {400, 900} // avg and max depth complexity very large
-};
-
 enum class AlphaMode {
     PREMUL, STRAIGHT
 };
 
-/**
- * The order-independent transparency (OIT) technique per-pixel linked lists is used.
- * For more details see: Yang, J. C., Hensley, J., Grün, H. and Thibieroz, N., "Real-Time Concurrent
- * Linked List Construction on the GPU", Computer Graphics Forum, 29, 2010.
+/*
+ * Mainly for specifying which shaders to reload.
  */
+enum class VolumeRendererPassType {
+    GATHER = 1, // Render the geometry into a buffer
+    RESOLVE = 2, // Take the buffer and produce the final image
+    OTHER = 4, // Other passes
+    ALL = int(GATHER) | int(RESOLVE) | int(OTHER)
+};
+
 class TetMeshVolumeRenderer {
 public:
     explicit TetMeshVolumeRenderer(
             sgl::vk::Renderer* renderer, sgl::CameraPtr* camera, sgl::TransferFunctionWindow* transferFunctionWindow);
-    ~TetMeshVolumeRenderer();
+    virtual ~TetMeshVolumeRenderer();
 
     // Public interface.
     void setOutputImage(sgl::vk::ImageViewPtr& colorImage);
-    void recreateSwapchain(uint32_t width, uint32_t height);
-    void setUseLinearRGB(bool _useLinearRGB);
+    virtual void recreateSwapchain(uint32_t width, uint32_t height);
+    virtual void setUseLinearRGB(bool _useLinearRGB);
     void setCoarseToFineTargetNumTets(uint32_t _coarseToFineMaxNumTets);
-    void setTetMeshData(const TetMeshPtr& _tetMesh);
+    virtual void setTetMeshData(const TetMeshPtr& _tetMesh);
     void setAttenuationCoefficient(float _attenuationCoefficient) { attenuationCoefficient = _attenuationCoefficient; reRender = true; }
-    void setClearColor(const sgl::Color& _clearColor);
+    virtual void setClearColor(const sgl::Color& _clearColor);
     void setNewTilingMode(int newTileWidth, int newTileHeight, bool useMortonCode = false);
 
     // Public interface, only for backward pass.
-    void setAdjointPassData(
+    virtual void setAdjointPassData(
             sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer,
             sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer);
     void setUseExternalFragmentBuffer(bool _useExternal) { useExternalFragmentBuffer = _useExternal; }
-    void recreateSwapchainExternal(
+    virtual void recreateSwapchainExternal(
             uint32_t width, uint32_t height, size_t _fragmentBufferSize, sgl::vk::BufferPtr _fragmentBuffer,
             sgl::vk::BufferPtr _startOffsetBuffer, sgl::vk::BufferPtr _fragmentCounterBuffer);
 
-    void getVulkanShaderPreprocessorDefines(std::map<std::string, std::string>& preprocessorDefines);
-    void setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData);
-    void setFramebufferAttachments(sgl::vk::FramebufferPtr& framebuffer, VkAttachmentLoadOp loadOp);
-    void render();
-    void renderAdjoint();
+    virtual void getVulkanShaderPreprocessorDefines(std::map<std::string, std::string>& preprocessorDefines);
+    virtual void setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData);
+    virtual void setFramebufferAttachments(sgl::vk::FramebufferPtr& framebuffer, VkAttachmentLoadOp loadOp);
+    virtual void render()=0;
+    virtual void renderAdjoint()=0;
 
     [[nodiscard]] inline sgl::vk::Renderer* getRenderer() const { return renderer; }
     [[nodiscard]] inline const TetMeshPtr& getTetMesh() const { return tetMesh; }
@@ -131,22 +120,23 @@ public:
     /// Returns if the data needs to be re-rendered, but the visualization mapping is valid.
     bool needsReRender();
     /// Called when the camera has moved.
-    void onHasMoved();
+    virtual void onHasMoved();
     /// Called when the transfer function (for tet quality analysis) has been rebuilt.
-    void onTransferFunctionMapRebuilt();
+    virtual void onTransferFunctionMapRebuilt() {}
     /// Renders the GUI. The "reRender" flag might be set depending on the user's actions.
-    void renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor);
+    virtual void renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor)=0;
 
     /// Returns screen width and screen height padded for tile size
     void getScreenSizeWithTiling(int& screenWidth, int& screenHeight);
 
-private:
-    void onClearColorChanged();
-    void updateLargeMeshMode();
-    void reallocateFragmentBuffer();
-    void clear();
-    void gather();
-    void resolve();
+protected:
+    virtual void onClearColorChanged()=0;
+    virtual void reallocateFragmentBuffer() {}
+    virtual void setShadersDirty(VolumeRendererPassType passType)=0;
+
+    void renderGuiShared(sgl::PropertyEditor& propertyEditor);
+    virtual void renderGuiMemory(sgl::PropertyEditor& propertyEditor);
+    virtual std::string getMaxDepthComplexityString() { return "unlimited"; }
 
     sgl::vk::Renderer* renderer;
     sgl::CameraPtr* camera;
@@ -158,29 +148,6 @@ private:
 
     // Only for tests.
     glm::mat4 projMat;
-
-    // Render passes.
-    std::shared_ptr<GatherRasterPass> gatherRasterPass;
-    std::shared_ptr<ResolveRasterPass> resolveRasterPass;
-    std::shared_ptr<ClearRasterPass> clearRasterPass;
-    std::shared_ptr<AdjointRasterPass> adjointRasterPass; // only for optimization
-
-    // Sorting algorithm for PPLL.
-    SortingAlgorithmMode sortingAlgorithmMode = SORTING_ALGORITHM_MODE_PRIORITY_QUEUE;
-
-    // Per-pixel linked list data.
-    FragmentBufferMode fragmentBufferMode = FragmentBufferMode::BUFFER;
-    bool useExternalFragmentBuffer = false;
-    size_t maxStorageBufferSize = 0;
-    size_t maxDeviceMemoryBudget = 0;
-    size_t fragmentBufferSize = 0;
-    size_t numFragmentBuffers = 1;
-    size_t cachedNumFragmentBuffers = 1;
-    sgl::vk::BufferPtr fragmentBuffer; //< if fragmentBufferMode == FragmentBufferMode::BUFFER
-    std::vector<sgl::vk::BufferPtr> fragmentBuffers; //< if fragmentBufferMode != FragmentBufferMode::BUFFER
-    sgl::vk::BufferPtr fragmentBufferReferenceBuffer; //< if fragmentBufferMode == FragmentBufferMode::BUFFER_REFERENCE_ARRAY
-    sgl::vk::BufferPtr startOffsetBuffer;
-    sgl::vk::BufferPtr fragmentCounterBuffer;
 
     // For showing tet mesh quality metrics.
     bool showTetQuality = false;
@@ -194,50 +161,9 @@ private:
     sgl::vk::BufferPtr vertexPositionGradientBuffer;
     sgl::vk::BufferPtr vertexColorGradientBuffer;
 
-    // Uniform data buffer shared by all shaders.
-    struct UniformData {
-        // Inverse of (projectionMatrix * viewMatrix).
-        glm::mat4 inverseViewProjectionMatrix;
-
-        // Number of fragments we can store in total.
-        uint32_t linkedListSize;
-        // Size of the viewport in x direction (in pixels).
-        int viewportW;
-        // Camera near/far plane distance.
-        float zNear, zFar;
-
-        // Camera front vector.
-        glm::vec3 cameraFront;
-        // Volume attenuation.
-        float attenuationCoefficient;
-
-        glm::vec3 cameraPosition;
-        float cameraPositionPadding{};
-
-        // Viewport size in x/y direction.
-        glm::uvec2 viewportSize;
-
-        // Size of the viewport in x direction (in pixels) without padding.
-        int viewportLinearW;
-        int paddingUniform{};
-    };
-    UniformData uniformData = {};
-    sgl::vk::BufferPtr uniformDataBuffer;
-
     // Window data.
     int windowWidth = 0, windowHeight = 0;
     int paddedWindowWidth = 0, paddedWindowHeight = 0;
-
-    // Per-pixel linked list settings.
-    enum LargeMeshMode {
-        MESH_SIZE_SMALL, MESH_SIZE_MEDIUM, MESH_SIZE_LARGE
-    };
-    LargeMeshMode largeMeshMode = MESH_SIZE_SMALL;
-    int expectedAvgDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[0][0];
-    int expectedMaxDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[0][1];
-    float attenuationCoefficient = 100.0f;
-    bool useCoarseToFine = false;
-    uint32_t coarseToFineMaxNumTets = 0;
 
     // Depth complexity information mode.
     bool showDepthComplexity = false;
@@ -252,6 +178,19 @@ private:
     uint64_t usedLocations = 1;
     uint64_t maxComplexity = 0;
     uint64_t bufferSize = 1;
+
+    float attenuationCoefficient = 100.0f;
+    bool useCoarseToFine = false;
+    uint32_t coarseToFineMaxNumTets = 0;
+
+    // Per-pixel linked list data (only written to in subclass TetMeshRendererPPLL).
+    bool useExternalFragmentBuffer = false;
+    size_t fragmentBufferSize = 0;
+    sgl::vk::BufferPtr fragmentBuffer; //< if fragmentBufferMode == FragmentBufferMode::BUFFER
+    std::vector<sgl::vk::BufferPtr> fragmentBuffers; //< if fragmentBufferMode != FragmentBufferMode::BUFFER
+    sgl::vk::BufferPtr fragmentBufferReferenceBuffer; //< if fragmentBufferMode == FragmentBufferMode::BUFFER_REFERENCE_ARRAY
+    sgl::vk::BufferPtr startOffsetBuffer;
+    sgl::vk::BufferPtr fragmentCounterBuffer;
 
     // Tiling mode.
     int tilingModeIndex = 2;

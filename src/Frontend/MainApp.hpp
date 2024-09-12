@@ -37,6 +37,7 @@
 #include <ImGui/Widgets/TransferFunctionWindow.hpp>
 
 #include "SceneData.hpp"
+#include "Renderer/TetMeshRendererType.hpp"
 
 namespace sgl { namespace dialog {
 class MsgBoxHandle;
@@ -96,6 +97,8 @@ private:
     DataViewPtr dataView;
     sgl::CameraPtr cameraHandle;
 
+    void createTetMeshRenderer();
+    TetMeshRendererType tetMeshRendererType = TetMeshRendererType::PPLL;
     std::shared_ptr<TetMeshVolumeRenderer> tetMeshVolumeRenderer;
     bool usesNewState = true;
 

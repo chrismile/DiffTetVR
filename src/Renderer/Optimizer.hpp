@@ -32,6 +32,7 @@
 #include <Graphics/Vulkan/Render/Renderer.hpp>
 
 #include "OptimizerDefines.hpp"
+#include "Renderer/TetMeshRendererType.hpp"
 
 namespace sgl {
 class Camera;
@@ -75,6 +76,8 @@ public:
     void startRequest();
     bool getHasResult();
     void updateRequest();
+
+    void setTetMeshRendererType(TetMeshRendererType _tetMeshRendererType);
 
 private:
     void sampleCameraPoses();
@@ -138,6 +141,7 @@ private:
     sgl::vk::BufferPtr secondMomentEstimateBuffer;
 
     // Compute passes.
+    TetMeshRendererType tetMeshRendererType = TetMeshRendererType::PPLL;
     std::shared_ptr<TetMeshVolumeRenderer> tetMeshVolumeRendererGT;
     std::shared_ptr<TetMeshVolumeRenderer> tetMeshVolumeRendererOpt;
     std::shared_ptr<LossPass> lossPass;

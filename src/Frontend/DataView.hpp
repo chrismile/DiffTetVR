@@ -51,6 +51,7 @@ public:
     void syncCamera();
     void saveScreenshot(const std::string& filename);
     void saveScreenshotDataIfAvailable();
+    void setTetMeshVolumeRenderer(const std::shared_ptr<TetMeshVolumeRenderer>& _tetMeshVolumeRenderer);
     [[nodiscard]] ImTextureID getImGuiTextureId() const;
 
     sgl::CameraPtr parentCamera;

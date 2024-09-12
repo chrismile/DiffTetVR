@@ -50,7 +50,8 @@
 #include "Tet/TetMesh.hpp"
 #include "Tet/Loaders/DataSetList.hpp"
 #include "Renderer/Optimizer.hpp"
-#include "Renderer/TetMeshVolumeRenderer.hpp"
+#include "Renderer/TetMeshRendererPPLL.hpp"
+#include "Renderer/TetMeshRendererProjection.hpp"
 #include "DataView.hpp"
 #include "MainApp.hpp"
 
@@ -137,11 +138,7 @@ MainApp::MainApp()
     useLinearRGB = false;
     onClearColorChanged();
 
-    tetMeshVolumeRenderer = std::make_shared<TetMeshVolumeRenderer>(
-            rendererVk, &cameraHandle, &transferFunctionWindow);
-    tetMeshVolumeRenderer->setUseLinearRGB(useLinearRGB);
-    tetMeshVolumeRenderer->setClearColor(clearColor);
-    //tetMeshVolumeRenderer->setFileDialogInstance(fileDialogInstance);
+    createTetMeshRenderer();
     dataView = std::make_shared<DataView>(camera, rendererVk, tetMeshVolumeRenderer);
     dataView->useLinearRGB = useLinearRGB;
     if (useDockSpaceMode) {
@@ -181,6 +178,7 @@ MainApp::MainApp()
                     return "";
                 }
             }, &transferFunctionWindow);
+    tetMeshOptimizer->setTetMeshRendererType(tetMeshRendererType);
 
 #ifdef __linux__
     signal(SIGSEGV, signalHandler);
@@ -241,6 +239,38 @@ MainApp::~MainApp() {
     }
     sgl::AppSettings::get()->getSettings().addKeyValue("showFpsOverlay", showFpsOverlay);
     sgl::AppSettings::get()->getSettings().addKeyValue("showCoordinateAxesOverlay", showCoordinateAxesOverlay);
+}
+
+void MainApp::createTetMeshRenderer() {
+    tetMeshVolumeRenderer = {};
+    if (tetMeshRendererType == TetMeshRendererType::PPLL) {
+        tetMeshVolumeRenderer = std::make_shared<TetMeshRendererPPLL>(
+                rendererVk, &cameraHandle, &transferFunctionWindow);
+    } else if (tetMeshRendererType == TetMeshRendererType::PROJECTION) {
+        tetMeshVolumeRenderer = std::make_shared<TetMeshRendererProjection>(
+                rendererVk, &cameraHandle, &transferFunctionWindow);
+    }
+    tetMeshVolumeRenderer->setUseLinearRGB(useLinearRGB);
+    tetMeshVolumeRenderer->setClearColor(clearColor);
+    //tetMeshVolumeRenderer->setFileDialogInstance(fileDialogInstance);
+    if (tetMesh) {
+        tetMeshVolumeRenderer->setTetMeshData(tetMesh);
+    }
+    if (!useDockSpaceMode) {
+        sgl::Window *window = sgl::AppSettings::get()->getMainWindow();
+        auto width = uint32_t(window->getWidth());
+        auto height = uint32_t(window->getHeight());
+        if (width > 0 && height > 0 && sceneTextureVk) {
+            tetMeshVolumeRenderer->setOutputImage(sceneTextureVk->getImageView());
+            tetMeshVolumeRenderer->recreateSwapchain(width, height);
+        }
+    }
+    if (dataView) {
+        dataView->setTetMeshVolumeRenderer(tetMeshVolumeRenderer);
+    }
+    if (tetMeshOptimizer) {
+        tetMeshOptimizer->setTetMeshRendererType(tetMeshRendererType);
+    }
 }
 
 void MainApp::resolutionChanged(sgl::EventPtr event) {
@@ -836,6 +866,12 @@ void MainApp::renderGuiPropertyEditorBegin() {
 
 void MainApp::renderGuiPropertyEditorCustomNodes() {
     if (propertyEditor.beginNode("Tet Mesh Volume Renderer")) {
+        if (propertyEditor.addCombo(
+                "Renderer", (int*)&tetMeshRendererType,
+                TET_MESH_RENDERER_TYPES, IM_ARRAYSIZE(TET_MESH_RENDERER_TYPES))) {
+            rendererVk->getDevice()->waitIdle();
+            createTetMeshRenderer();
+        }
         tetMeshVolumeRenderer->renderGuiPropertyEditorNodes(propertyEditor);
         propertyEditor.endNode();
     }

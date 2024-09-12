@@ -47,7 +47,8 @@
 #include "Tet/Loaders/LoadersUtil.hpp"
 #include "Tet/Loaders/TetMeshLoader.hpp"
 #include "Tet/Writers/VtkWriter.hpp"
-#include "Renderer/TetMeshVolumeRenderer.hpp"
+#include "Renderer/TetMeshRendererPPLL.hpp"
+#include "Renderer/TetMeshRendererProjection.hpp"
 #include "LossPass.hpp"
 #include "OptimizerPass.hpp"
 #include "TetRegularizerPass.hpp"
@@ -90,12 +91,23 @@ TetMeshOptimizer::TetMeshOptimizer(
           renderGuiDataSetSelectionMenuCallback(std::move(renderGuiDataSetSelectionMenuCallback)),
           transferFunctionWindow(transferFunctionWindow) {
     camera = std::make_shared<sgl::Camera>();
-    tetMeshVolumeRendererGT = std::make_shared<TetMeshVolumeRenderer>(renderer, &camera, transferFunctionWindow);
-    tetMeshVolumeRendererOpt = std::make_shared<TetMeshVolumeRenderer>(renderer, &camera, transferFunctionWindow);
     lossPass = std::make_shared<LossPass>(renderer);
     tetRegularizerPass = std::make_shared<TetRegularizerPass>(renderer);
     optimizerPassPositions = std::make_shared<OptimizerPass>(renderer);
     optimizerPassColors = std::make_shared<OptimizerPass>(renderer);
+}
+
+void TetMeshOptimizer::setTetMeshRendererType(TetMeshRendererType _tetMeshRendererType) {
+    if (tetMeshRendererType != _tetMeshRendererType || !tetMeshVolumeRendererGT) {
+        tetMeshRendererType = _tetMeshRendererType;
+        if (tetMeshRendererType == TetMeshRendererType::PPLL) {
+            tetMeshVolumeRendererGT = std::make_shared<TetMeshRendererPPLL>(renderer, &camera, transferFunctionWindow);
+            tetMeshVolumeRendererOpt = std::make_shared<TetMeshRendererPPLL>(renderer, &camera, transferFunctionWindow);
+        } else if (tetMeshRendererType == TetMeshRendererType::PROJECTION) {
+            tetMeshVolumeRendererGT = std::make_shared<TetMeshRendererProjection>(renderer, &camera, transferFunctionWindow);
+            tetMeshVolumeRendererOpt = std::make_shared<TetMeshRendererProjection>(renderer, &camera, transferFunctionWindow);
+        }
+    }
 }
 
 void TetMeshOptimizer::openDialog() {
