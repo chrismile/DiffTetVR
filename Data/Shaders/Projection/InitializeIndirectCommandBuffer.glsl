@@ -26,39 +26,46 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
--- Vertex
+-- Compute
 
 #version 450
 
-struct TriangleKeyValue {
-    uint index;
-    float depth;
-};
-layout(binding = 0, std430) readonly buffer TriangleKeyValueBuffer {
-    TriangleKeyValue triangleKeyValues[];
-};
-layout(binding = 1, std430) readonly buffer TriangleVertexPositionBuffer {
-    uint vertexPositions[];
-};
-layout(binding = 2, std430) readonly buffer TriangleVertexColorBuffer {
-    uint vertexColors[];
+layout(local_size_x = 1) in;
+
+struct VkDrawIndirectCommand {
+    uint vertexCount;
+    uint instanceCount;
+    uint firstVertex;
+    uint firstInstance;
 };
 
-void main() {
-    uint triangleIdx = triangleKeyValues[gl_VertexIndex / 3u].index;
-    uint vertexIdx = triangleIdx * 3u + (gl_VertexIndex % 3u);
-    fragmentColor = vertexColors[vertexIdx];
-    gl_Position = vertexPositions[vertexIdx];
+struct VkDispatchIndirectCommand {
+    uint x;
+    uint y;
+    uint z;
+};
+
+layout(binding = 0) uniform TriangleCounterBuffer {
+    uint numTriangles;
+};
+layout(binding = 1, std430) readonly buffer DrawIndirectCommandBuffer {
+    VkDrawIndirectCommand drawIndirectCommandData;
+};
+layout(binding = 2, std430) readonly buffer DispatchIndirectCommandBuffer {
+    VkDispatchIndirectCommand dispatchIndirectCommandData;
+};
+
+uint uiceil(uint x, uint y) {
+    return x > 0u ? (x - 1u) / y + 1u : 0u;
 }
 
-
--- Fragment
-
-#version 450
-
-in vec4 fragmentColor;
-out vec4 outputColor;
-
 void main() {
-    outputColor = fragmentColor;
+    drawIndirectCommandData.vertexCount = numTriangles * 3u;
+    drawIndirectCommandData.instanceCount = 1u;
+    drawIndirectCommandData.firstVertex = 0u;
+    drawIndirectCommandData.firstInstance = 0u;
+
+    dispatchIndirectCommandData.x = uiceil(numTriangles, BLOCK_SIZE);
+    dispatchIndirectCommandData.y = 1u;
+    dispatchIndirectCommandData.z = 1u;
 }

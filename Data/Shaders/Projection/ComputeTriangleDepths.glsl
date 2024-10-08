@@ -32,7 +32,7 @@
 
 layout(local_size_x = BLOCK_SIZE) in;
 
-layout(binding = 0) uniform UniformDataBuffer {
+layout(binding = 0) uniform TriangleCounterBuffer {
     uint numTriangles;
 };
 

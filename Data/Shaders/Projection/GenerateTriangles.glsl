@@ -35,8 +35,11 @@
 layout(local_size_x = BLOCK_SIZE) in;
 
 layout(binding = 0) uniform UniformDataBuffer {
+    mat4 viewProjMat;
+    mat4 invProjMat;
     vec3 cameraPosition;
     float attenuationCoefficient;
+    uint numTets;
 };
 
 // Atomically increased linear append index.
@@ -56,10 +59,10 @@ layout(binding = 4, scalar) writeonly buffer TetVertexColorBuffer {
 };
 
 // Output triangle data.
-layout(binding = 5, scalar) writeonly buffer VertexPositionBuffer {
+layout(binding = 5, scalar) writeonly buffer TriangleVertexPositionBuffer {
     vec4 vertexPositions[];
 };
-layout(binding = 6, std430) writeonly buffer VertexColorBuffer {
+layout(binding = 6, std430) writeonly buffer TriangleVertexColorBuffer {
     vec4 vertexColors[];
 };
 
@@ -88,6 +91,9 @@ void pushTri(inout uint triOffset, vec3 pF, vec3 pB, vec3 pC, float alpha) {
 
 void main() {
     const uint tetIdx = gl_GlobalInvocationID.x;
+    if (tetIdx >= numTets) {
+        return;
+    }
 
     // Read the tet vertex positions and colors from the global buffer.
     vec3 tetVertexPosition[4];

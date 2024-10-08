@@ -357,14 +357,11 @@ void TetMeshRendererPPLL::recreateSwapchain(uint32_t width, uint32_t height) {
 }
 
 void TetMeshRendererPPLL::recreateSwapchainExternal(
-        uint32_t width, uint32_t height, size_t _fragmentBufferSize, sgl::vk::BufferPtr _fragmentBuffer,
-        sgl::vk::BufferPtr _startOffsetBuffer, sgl::vk::BufferPtr _fragmentCounterBuffer) {
+        uint32_t width, uint32_t height, size_t _fragmentBufferSize, const sgl::vk::BufferPtr& _fragmentBuffer,
+        const sgl::vk::BufferPtr& _startOffsetBuffer, const sgl::vk::BufferPtr& _fragmentCounterBuffer) {
     useExternalFragmentBuffer = true;
     TetMeshVolumeRenderer::recreateSwapchainExternal(
-            width, height, _fragmentBufferSize,
-            std::move(_fragmentBuffer),
-            std::move(_startOffsetBuffer),
-            std::move(_fragmentCounterBuffer));
+            width, height, _fragmentBufferSize, _fragmentBuffer, _startOffsetBuffer, _fragmentCounterBuffer);
 
     fragmentBufferMode = FragmentBufferMode::BUFFER;
     numFragmentBuffers = 1;
@@ -372,9 +369,9 @@ void TetMeshRendererPPLL::recreateSwapchainExternal(
     fragmentBuffers = {};
     fragmentBufferReferenceBuffer = {};
     fragmentBufferSize = _fragmentBufferSize;
-    fragmentBuffer = std::move(_fragmentBuffer);
-    startOffsetBuffer = std::move(_startOffsetBuffer);
-    fragmentCounterBuffer = std::move(_fragmentCounterBuffer);
+    fragmentBuffer = _fragmentBuffer;
+    startOffsetBuffer = _startOffsetBuffer;
+    fragmentCounterBuffer = _fragmentCounterBuffer;
 
     gatherRasterPass->recreateSwapchain(width, height);
 

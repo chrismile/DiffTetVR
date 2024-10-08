@@ -31,8 +31,8 @@
 
 #include "TetMeshVolumeRenderer.hpp"
 
-class SortPass;
 class GenerateTrianglesPass;
+class InitializeIndirectCommandBufferPass;
 class ComputeTrianglesDepthPass;
 class ProjectedRasterPass;
 class AdjointProjectedRasterPass;
@@ -50,6 +50,7 @@ public:
     explicit TetMeshRendererProjection(
             sgl::vk::Renderer* renderer, sgl::CameraPtr* camera, sgl::TransferFunctionWindow* transferFunctionWindow);
     ~TetMeshRendererProjection() override;
+    [[nodiscard]] RendererType getRendererType() const override { return RendererType::PROJECTION; }
 
     // Public interface.
     void recreateSwapchain(uint32_t width, uint32_t height) override;
@@ -60,8 +61,16 @@ public:
             sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer,
             sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer) override;
     virtual void recreateSwapchainExternal(
-            uint32_t width, uint32_t height, size_t _fragmentBufferSize, sgl::vk::BufferPtr _fragmentBuffer,
-            sgl::vk::BufferPtr _startOffsetBuffer, sgl::vk::BufferPtr _fragmentCounterBuffer);
+            uint32_t width, uint32_t height, size_t _fragmentBufferSize, const sgl::vk::BufferPtr& _fragmentBuffer,
+            const sgl::vk::BufferPtr& _startOffsetBuffer, const sgl::vk::BufferPtr& _fragmentCounterBuffer);
+
+    [[nodiscard]] sgl::vk::BufferPtr getUniformDataBuffer() { return uniformDataBuffer; }
+    [[nodiscard]] sgl::vk::BufferPtr getTriangleCounterBuffer() { return triangleCounterBuffer; }
+    [[nodiscard]] sgl::vk::BufferPtr getTriangleVertexPositionBuffer() { return triangleVertexPositionBuffer; }
+    [[nodiscard]] sgl::vk::BufferPtr getTriangleVertexColorBuffer() { return triangleVertexColorBuffer; }
+    [[nodiscard]] sgl::vk::BufferPtr getDrawIndirectBuffer() { return drawIndirectBuffer; }
+    [[nodiscard]] sgl::vk::BufferPtr getDispatchIndirectBuffer() { return dispatchIndirectBuffer; }
+    [[nodiscard]] sgl::vk::BufferPtr getTriangleKeyValueBuffer() { return triangleKeyValueBuffer; }
 
     void getVulkanShaderPreprocessorDefines(std::map<std::string, std::string>& preprocessorDefines) override;
     void setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData) override;
@@ -77,41 +86,31 @@ private:
     void setShadersDirty(VolumeRendererPassType passType) override;
 
     // Render passes.
-    std::shared_ptr<SortPass> sortPass;
     std::shared_ptr<GenerateTrianglesPass> generateTrianglesPass;
+    std::shared_ptr<InitializeIndirectCommandBufferPass> initializeIndirectCommandBufferPass;
+    std::shared_ptr<ComputeTrianglesDepthPass> computeTrianglesDepthPass;
     std::shared_ptr<ProjectedRasterPass> projectedRasterPass;
     // TODO, use fragment shader interlock for adjoint pass.
     std::shared_ptr<AdjointProjectedRasterPass> adjointProjectedRasterPass; // only for optimization
 
     // Uniform data buffer shared by all shaders.
     struct UniformData {
-        // Inverse of (projectionMatrix * viewMatrix).
-        glm::mat4 inverseViewProjectionMatrix;
-
-        // Number of fragments we can store in total.
-        uint32_t linkedListSize;
-        // Size of the viewport in x direction (in pixels).
-        int viewportW;
-        // Camera near/far plane distance.
-        float zNear, zFar;
-
-        // Camera front vector.
-        glm::vec3 cameraFront;
-        // Volume attenuation.
-        float attenuationCoefficient;
-
+        glm::mat4 viewProjMat;
+        glm::mat4 invProjMat;
         glm::vec3 cameraPosition;
-        float cameraPositionPadding{};
-
-        // Viewport size in x/y direction.
-        glm::uvec2 viewportSize;
-
-        // Size of the viewport in x direction (in pixels) without padding.
-        int viewportLinearW;
-        int paddingUniform{};
+        float attenuationCoefficient;
+        uint32_t numTets;
+        uint32_t pad0, pad1, pad2;
     };
     UniformData uniformData = {};
     sgl::vk::BufferPtr uniformDataBuffer;
+
+    sgl::vk::BufferPtr triangleCounterBuffer; // 1x uint
+    sgl::vk::BufferPtr triangleVertexPositionBuffer; // ?x vec4
+    sgl::vk::BufferPtr triangleVertexColorBuffer; // ?x vec4
+    sgl::vk::BufferPtr drawIndirectBuffer; // 1x VkDrawIndirectCommand (4x uint32_t)
+    sgl::vk::BufferPtr dispatchIndirectBuffer; // 1x VkDispatchIndirectCommand (3x uint32_t)
+    sgl::vk::BufferPtr triangleKeyValueBuffer; // ?x uint64_t
 };
 
 #endif //DIFFTETVR_TETMESHRENDERERPROJECTION_HPP

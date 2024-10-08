@@ -91,8 +91,8 @@ void TetMeshVolumeRenderer::recreateSwapchain(uint32_t width, uint32_t height) {
 }
 
 void TetMeshVolumeRenderer::recreateSwapchainExternal(
-        uint32_t width, uint32_t height, size_t _fragmentBufferSize, sgl::vk::BufferPtr _fragmentBuffer,
-        sgl::vk::BufferPtr _startOffsetBuffer, sgl::vk::BufferPtr _fragmentCounterBuffer) {
+        uint32_t width, uint32_t height, size_t _fragmentBufferSize, const sgl::vk::BufferPtr& _fragmentBuffer,
+        const sgl::vk::BufferPtr& _startOffsetBuffer, const sgl::vk::BufferPtr& _fragmentCounterBuffer) {
     windowWidth = int(width);
     windowHeight = int(height);
     paddedWindowWidth = windowWidth, paddedWindowHeight = windowHeight;
@@ -166,14 +166,24 @@ void TetMeshVolumeRenderer::setFramebufferAttachments(sgl::vk::FramebufferPtr& f
 }
 
 void TetMeshVolumeRenderer::renderGuiShared(sgl::PropertyEditor& propertyEditor) {
+    auto rendererType = getRendererType();
+    /*
+     * Currently, quality metrics and shading are not yet supported for projection renderer.
+     * - VolumeRendererPassType::RESOLVE is only for PPLL, otherwise triangle generation pass needs to be adapted
+     *   for quality metric.
+     * - Shading is not easy to implement with the projection pass at all.
+     */
     if (propertyEditor.addCheckbox("Use Quality Metric", &showTetQuality)) {
         tetMesh->setTetQualityMetric(tetQualityMetric);
-        setShadersDirty(VolumeRendererPassType::RESOLVE);
+        setShadersDirty(
+                rendererType == RendererType::PPLL ? VolumeRendererPassType::RESOLVE : VolumeRendererPassType::GATHER);
         reRender = true;
     }
-    if (showTetQuality && propertyEditor.addCheckbox("Use Shading", &useShading)) {
-        setShadersDirty(VolumeRendererPassType::RESOLVE);
-        reRender = true;
+    if (rendererType == RendererType::PPLL) {
+        if (showTetQuality && propertyEditor.addCheckbox("Use Shading", &useShading)) {
+            setShadersDirty(VolumeRendererPassType::RESOLVE);
+            reRender = true;
+        }
     }
     if (showTetQuality && propertyEditor.addCombo(
             "Tet Quality Metric", (int*)&tetQualityMetric,

@@ -63,6 +63,7 @@ public:
     explicit TetMeshRendererPPLL(
             sgl::vk::Renderer* renderer, sgl::CameraPtr* camera, sgl::TransferFunctionWindow* transferFunctionWindow);
     ~TetMeshRendererPPLL() override;
+    [[nodiscard]] RendererType getRendererType() const override { return RendererType::PPLL; }
 
     // Public interface.
     void recreateSwapchain(uint32_t width, uint32_t height) override;
@@ -73,8 +74,8 @@ public:
             sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer,
             sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer) override;
     virtual void recreateSwapchainExternal(
-            uint32_t width, uint32_t height, size_t _fragmentBufferSize, sgl::vk::BufferPtr _fragmentBuffer,
-            sgl::vk::BufferPtr _startOffsetBuffer, sgl::vk::BufferPtr _fragmentCounterBuffer);
+            uint32_t width, uint32_t height, size_t _fragmentBufferSize, const sgl::vk::BufferPtr& _fragmentBuffer,
+            const sgl::vk::BufferPtr& _startOffsetBuffer, const sgl::vk::BufferPtr& _fragmentCounterBuffer);
 
     void getVulkanShaderPreprocessorDefines(std::map<std::string, std::string>& preprocessorDefines) override;
     void setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData) override;

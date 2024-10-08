@@ -71,11 +71,16 @@ enum class VolumeRendererPassType {
     ALL = int(GATHER) | int(RESOLVE) | int(OTHER)
 };
 
+enum class RendererType {
+    PPLL, PROJECTION
+};
+
 class TetMeshVolumeRenderer {
 public:
     explicit TetMeshVolumeRenderer(
             sgl::vk::Renderer* renderer, sgl::CameraPtr* camera, sgl::TransferFunctionWindow* transferFunctionWindow);
     virtual ~TetMeshVolumeRenderer();
+    [[nodiscard]] virtual RendererType getRendererType() const = 0;
 
     // Public interface.
     void setOutputImage(sgl::vk::ImageViewPtr& colorImage);
@@ -93,8 +98,8 @@ public:
             sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer);
     void setUseExternalFragmentBuffer(bool _useExternal) { useExternalFragmentBuffer = _useExternal; }
     virtual void recreateSwapchainExternal(
-            uint32_t width, uint32_t height, size_t _fragmentBufferSize, sgl::vk::BufferPtr _fragmentBuffer,
-            sgl::vk::BufferPtr _startOffsetBuffer, sgl::vk::BufferPtr _fragmentCounterBuffer);
+            uint32_t width, uint32_t height, size_t _fragmentBufferSize, const sgl::vk::BufferPtr& _fragmentBuffer,
+            const sgl::vk::BufferPtr& _startOffsetBuffer, const sgl::vk::BufferPtr& _fragmentCounterBuffer);
 
     virtual void getVulkanShaderPreprocessorDefines(std::map<std::string, std::string>& preprocessorDefines);
     virtual void setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData);
