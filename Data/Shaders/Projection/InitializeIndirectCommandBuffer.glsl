@@ -48,10 +48,10 @@ struct VkDispatchIndirectCommand {
 layout(binding = 0) uniform TriangleCounterBuffer {
     uint numTriangles;
 };
-layout(binding = 1, std430) readonly buffer DrawIndirectCommandBuffer {
+layout(binding = 1, std430) writeonly buffer DrawIndirectCommandBuffer {
     VkDrawIndirectCommand drawIndirectCommandData;
 };
-layout(binding = 2, std430) readonly buffer DispatchIndirectCommandBuffer {
+layout(binding = 2, std430) writeonly buffer DispatchIndirectCommandBuffer {
     VkDispatchIndirectCommand dispatchIndirectCommandData;
 };
 

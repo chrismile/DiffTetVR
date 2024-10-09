@@ -26,11 +26,16 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <Utils/File/Logfile.hpp>
 #include <Graphics/Vulkan/Utils/Device.hpp>
 #include <Graphics/Vulkan/Buffers/Framebuffer.hpp>
 #include <Graphics/Vulkan/Render/Renderer.hpp>
 #include <Graphics/Vulkan/Render/Passes/BlitRenderPass.hpp>
 #include <ImGui/Widgets/PropertyEditor.hpp>
+
+#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
+#include <radix_sort/radix_sort_vk.h>
+#endif
 
 #include "Tet/TetMesh.hpp"
 #include "TetMeshRendererProjection.hpp"
@@ -45,7 +50,7 @@ protected:
     void loadShader() override {
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
-        preprocessorDefines.insert(std::make_pair("BLOCK_SIZE", ""));
+        preprocessorDefines.insert(std::make_pair("BLOCK_SIZE", std::to_string(BLOCK_SIZE)));
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
                 { "GenerateTriangles.Compute" }, preprocessorDefines);
@@ -93,10 +98,10 @@ protected:
     void loadShader() override {
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
-        preprocessorDefines.insert(std::make_pair("BLOCK_SIZE", ""));
+        preprocessorDefines.insert(std::make_pair("BLOCK_SIZE", std::to_string(BLOCK_SIZE)));
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
-                { "ComputeTriangleDepths.Compute" }, preprocessorDefines);
+                { "InitializeIndirectCommandBuffer.Compute" }, preprocessorDefines);
     }
     void createComputeData(sgl::vk::Renderer* renderer, sgl::vk::ComputePipelinePtr& computePipeline) override {
         computeData = std::make_shared<sgl::vk::ComputeData>(renderer, computePipeline);
@@ -138,7 +143,7 @@ protected:
     void loadShader() override {
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
-        preprocessorDefines.insert(std::make_pair("BLOCK_SIZE", ""));
+        preprocessorDefines.insert(std::make_pair("BLOCK_SIZE", std::to_string(BLOCK_SIZE)));
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
                 { "ComputeTriangleDepths.Compute" }, preprocessorDefines);
@@ -196,14 +201,13 @@ protected:
     void loadShader() override {
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
-        preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
-                { "LinkedListGather.Vertex", "LinkedListGather.Fragment" }, preprocessorDefines);
+                { "ProjectedRasterization.Vertex", "ProjectedRasterization.Fragment" }, preprocessorDefines);
     }
     void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) {
         rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
-        rasterData->setStaticBuffer(volumeRenderer->getTriangleKeyValueBuffer(), "TriangleKeyValueBuffer");
+        rasterData->setStaticBuffer(volumeRenderer->getSortedTriangleKeyValueBuffer(), "TriangleKeyValueBuffer");
         rasterData->setStaticBuffer(volumeRenderer->getTriangleVertexPositionBuffer(), "TriangleVertexPositionBuffer");
         rasterData->setStaticBuffer(volumeRenderer->getTriangleVertexColorBuffer(), "TriangleVertexColorBuffer");
         rasterData->setIndirectDrawBuffer(volumeRenderer->getDrawIndirectBuffer(), sizeof(VkDrawIndirectCommand));
@@ -233,7 +237,8 @@ TetMeshRendererProjection::TetMeshRendererProjection(
 
     triangleCounterBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(uint32_t),
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+            | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY);
     drawIndirectBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(VkDrawIndirectCommand),
@@ -249,10 +254,31 @@ TetMeshRendererProjection::TetMeshRendererProjection(
     computeTrianglesDepthPass = std::make_shared<ComputeTrianglesDepthPass>(this);
     projectedRasterPass = std::make_shared<ProjectedRasterPass>(this);
 
+#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
+    const auto& physicalDeviceProperties = device->getPhysicalDeviceProperties();
+    const auto& subgroupProperties = device->getPhysicalDeviceSubgroupProperties();
+    radixSortVkTarget = radix_sort_vk_target_auto_detect(&physicalDeviceProperties, &subgroupProperties, 2u);
+    if (!radixSortVkTarget) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMeshRendererProjection::TetMeshRendererProjection: Could not detect radix sort target.");
+    }
+    radixSortVk = radix_sort_vk_create(device->getVkDevice(), nullptr, VK_NULL_HANDLE, radixSortVkTarget);
+    if (!radixSortVk) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMeshRendererProjection::TetMeshRendererProjection: Could not fetch radix sort implementation.");
+    }
+#endif
+
     TetMeshRendererProjection::onClearColorChanged();
 }
 
 TetMeshRendererProjection::~TetMeshRendererProjection() {
+#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
+    sgl::vk::Device* device = renderer->getDevice();
+    if (radixSortVk) {
+        radix_sort_vk_destroy(radixSortVk, device->getVkDevice(), nullptr);
+    }
+#endif
 }
 
 void TetMeshRendererProjection::setTetMeshData(const TetMeshPtr& _tetMesh) {
@@ -270,6 +296,32 @@ void TetMeshRendererProjection::setTetMeshData(const TetMeshPtr& _tetMesh) {
     triangleKeyValueBuffer = std::make_shared<sgl::vk::Buffer>(
             device, maxNumProjectedTriangles * sizeof(uint64_t),
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+
+#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
+    radix_sort_vk_memory_requirements memoryRequirements{};
+    radix_sort_vk_get_memory_requirements(radixSortVk, uint32_t(maxNumProjectedTriangles), &memoryRequirements);
+
+    assert(memoryRequirements.keyval_size == sizeof(uint64_t));
+    sgl::vk::BufferSettings bufferSettings{};
+    bufferSettings.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+    bufferSettings.sizeInBytes = memoryRequirements.keyvals_size;
+    bufferSettings.alignment = memoryRequirements.keyvals_alignment;
+    bufferSettings.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    sortingBufferEven = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
+    sortingBufferOdd = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
+    sortedTriangleKeyValueBuffer = {};
+
+    bufferSettings.sizeInBytes = memoryRequirements.internal_size;
+    bufferSettings.alignment = memoryRequirements.internal_alignment;
+    bufferSettings.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    sortingInternalBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
+
+    bufferSettings.sizeInBytes = memoryRequirements.indirect_size;
+    bufferSettings.alignment = memoryRequirements.indirect_alignment;
+    bufferSettings.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    sortingIndirectBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
+#endif
 
     generateTrianglesPass->setDataDirty();
     computeTrianglesDepthPass->setDataDirty();
@@ -374,8 +426,50 @@ void TetMeshRendererProjection::render() {
 
     generateTrianglesPass->render();
     initializeIndirectCommandBufferPass->render();
-    // TODO: Sort.
     computeTrianglesDepthPass->render();
+
+#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
+    radix_sort_vk_sort_indirect_info sortInfo{};
+    sortInfo.ext = nullptr;
+    sortInfo.key_bits = 32u;
+
+    VkDescriptorBufferInfo descriptorBufferInfo{};
+    descriptorBufferInfo.buffer = triangleCounterBuffer->getVkBuffer();
+    descriptorBufferInfo.range = triangleCounterBuffer->getSizeInBytes();
+    sortInfo.count = descriptorBufferInfo;
+
+    descriptorBufferInfo.buffer = sortingBufferEven->getVkBuffer();
+    descriptorBufferInfo.range = sortingBufferEven->getSizeInBytes();
+    sortInfo.keyvals_even = descriptorBufferInfo;
+
+    descriptorBufferInfo.buffer = sortingBufferOdd->getVkBuffer();
+    descriptorBufferInfo.range = sortingBufferOdd->getSizeInBytes();
+    sortInfo.keyvals_odd = descriptorBufferInfo;
+
+    descriptorBufferInfo.buffer = sortingInternalBuffer->getVkBuffer();
+    descriptorBufferInfo.range = sortingInternalBuffer->getSizeInBytes();
+    sortInfo.internal = descriptorBufferInfo;
+
+    descriptorBufferInfo.buffer = sortingIndirectBuffer->getVkBuffer();
+    descriptorBufferInfo.range = sortingIndirectBuffer->getSizeInBytes();
+    sortInfo.indirect = descriptorBufferInfo;
+
+    radix_sort_vk_sort_indirect(
+            radixSortVk, &sortInfo, renderer->getDevice()->getVkDevice(), renderer->getVkCommandBuffer(),
+            &descriptorBufferInfo);
+    if (!sortedTriangleKeyValueBuffer || descriptorBufferInfo.buffer != sortedTriangleKeyValueBuffer->getVkBuffer()) {
+        if (sortedTriangleKeyValueBuffer) {
+            renderer->getDevice()->waitIdle();
+            projectedRasterPass->setDataDirty();
+        }
+        if (descriptorBufferInfo.buffer == sortingBufferEven->getVkBuffer()) {
+            sortedTriangleKeyValueBuffer = sortingBufferEven;
+        } else {
+            sortedTriangleKeyValueBuffer = sortingBufferOdd;
+        }
+    }
+#endif
+
     projectedRasterPass->render();
 }
 

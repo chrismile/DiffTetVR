@@ -308,6 +308,11 @@ endif()
 #target_link_libraries(DiffTetVR PUBLIC ${CURL_LIBRARIES})  # CURL::libcurl, since CMake 3.12
 #target_include_directories(DiffTetVR PUBLIC ${CURL_INCLUDES} ${CURL_INCLUDE_DIRS})
 
+# TODO: Make this optional?
+add_subdirectory(third_party/fuchsia_radix_sort)
+target_link_libraries(DiffTetVR PRIVATE vk-radix-sort)
+target_compile_definitions(DiffTetVR PRIVATE USE_FUCHSIA_RADIX_SORT_CMAKE)
+
 if (${USE_OVM})
     add_subdirectory(third_party/OpenVolumeMesh)
     target_link_libraries(DiffTetVR PRIVATE OpenVolumeMesh::OpenVolumeMesh)

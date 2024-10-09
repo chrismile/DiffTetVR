@@ -31,6 +31,7 @@
 #version 450
 
 #extension GL_EXT_control_flow_attributes : require
+#extension GL_EXT_scalar_block_layout : require
 
 layout(local_size_x = BLOCK_SIZE) in;
 
@@ -51,10 +52,10 @@ layout(binding = 1, std430) buffer TriangleCounterBuffer {
 layout(binding = 2, std430) readonly buffer TetIndexBuffer {
     uint tetsIndices[];
 };
-layout(binding = 3, scalar) writeonly buffer TetVertexPositionBuffer {
+layout(binding = 3, scalar) readonly buffer TetVertexPositionBuffer {
     vec3 tetsVertexPositions[];
 };
-layout(binding = 4, scalar) writeonly buffer TetVertexColorBuffer {
+layout(binding = 4, scalar) readonly buffer TetVertexColorBuffer {
     vec4 tetsVertexColors[];
 };
 
@@ -103,7 +104,7 @@ void main() {
         uint tetGlobalVertIdx = tetsIndices[tetIdx * 4 + tetVertIdx];
         tetVertexPosition[tetVertIdx] = tetsVertexPositions[tetGlobalVertIdx];
         tetVertexColors[tetVertIdx] = tetsVertexColors[tetGlobalVertIdx];
-        vec4 vertexPosNdc = viewProjMat * vec4(tetsVertexPositions[tetGlobalVertIdx]);
+        vec4 vertexPosNdc = viewProjMat * vec4(tetsVertexPositions[tetGlobalVertIdx], 1.0);
         vertexPosNdc.xyz /= vertexPosNdc.w;
         tetVertexPositionNdc[tetVertIdx] = vertexPosNdc;
     }
@@ -119,7 +120,7 @@ void main() {
         vec3 p2 = tetVertexPosition[tetFaceTable[tetFaceIdx][2]];
         vec3 p3 = tetVertexPosition[tetFaceTable[tetFaceIdx][3]];
         vec3 n = cross(p1 - p0, p2 - p0);
-        float d = -dot(normal, point);
+        float d = -dot(n, p0);
         float signValCam = sign(dot(cameraPosition, n) + d);
         float signValOpposite = sign(dot(p3, n) + d);
         int signVal = 0;
@@ -153,7 +154,7 @@ void main() {
     }
 
     // Generate the projected triangles.
-    const uint triOffset = atomicAdd(globalTriangleCounter, numGeneratedTris);
+    uint triOffset = atomicAdd(globalTriangleCounter, numGeneratedTris);
 
     if (caseIdx == 1) {
         // 3 triangles; find vertex shared by all three (pI), and 3x not shared by all three (pA, pB, pC).
@@ -175,7 +176,9 @@ void main() {
         // Solve for pT.z, pT.{x,y} == pI.{x,y}: pT = pA + u(pB - pA) + v(pC - pA)
         vec2 uv = inverse(mat2(pB - pA, pC - pA)) * (pI.xy - pA.xy);
         vec3 pT = vec3(pI.x, pI.y, pA.z + uv.x * (pB.z - pA.z) + uv.y * (pC.z - pA.z));
-        float thickness = distance(invProjMat * pT, invProjMat * pI);
+        vec4 pTW = invProjMat * vec4(pT, 1.0);
+        vec4 pIW = invProjMat * vec4(pI, 1.0);
+        float thickness = distance(pTW.xyz / pTW.w, pIW.xyz / pIW.w);
         float alpha = computeAlpha(thickness);
 
         pushTri(triOffset, pT, pA, pB, alpha);
@@ -219,10 +222,12 @@ void main() {
         vec3 pIntersectScreen = cross(lf, lb);
         pIntersectScreen.xy /= pIntersectScreen.z;
 
-        // Get pF (point on lf in world space) and pB (point on lb in world space)
+        // TODO: Get pF (point on lf in world space) and pB (point on lb in world space)
         vec3 pF = vec3(0.0);
         vec3 pB = vec3(0.0);
-        float thickness = distance(invProjMat * pT, invProjMat * pI);
+        vec4 pFW = invProjMat * vec4(pF, 1.0);
+        vec4 pBW = invProjMat * vec4(pB, 1.0);
+        float thickness = distance(pFW.xyz / pFW.w, pBW.xyz / pBW.w);
 
         float alpha = computeAlpha(thickness);
         pushTri(triOffset, pF, pf0, pb0, alpha);

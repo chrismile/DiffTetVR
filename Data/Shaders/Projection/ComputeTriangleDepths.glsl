@@ -36,7 +36,7 @@ layout(binding = 0) uniform TriangleCounterBuffer {
     uint numTriangles;
 };
 
-layout(binding = 1, std430) readonly buffer VertexPositionBuffer {
+layout(binding = 1, std430) readonly buffer TriangleVertexPositionBuffer {
     vec4 vertexPositions[];
 };
 

@@ -7,3 +7,7 @@
 [submodule "third_party/OpenVolumeMesh"]
 	path = third_party/OpenVolumeMesh
 	url = https://www.graphics.rwth-aachen.de:9000/OpenVolumeMesh/OpenVolumeMesh.git
+[submodule "third_party/fuchsia_radix_sort"]
+	path = third_party/fuchsia_radix_sort
+	url = https://github.com/chrismile/fuchsia_radix_sort.git
+	branch = sgl

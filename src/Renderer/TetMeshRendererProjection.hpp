@@ -31,6 +31,11 @@
 
 #include "TetMeshVolumeRenderer.hpp"
 
+#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
+typedef struct radix_sort_vk_target radix_sort_vk_target_t;
+typedef struct radix_sort_vk radix_sort_vk_t;
+#endif
+
 class GenerateTrianglesPass;
 class InitializeIndirectCommandBufferPass;
 class ComputeTrianglesDepthPass;
@@ -71,6 +76,7 @@ public:
     [[nodiscard]] sgl::vk::BufferPtr getDrawIndirectBuffer() { return drawIndirectBuffer; }
     [[nodiscard]] sgl::vk::BufferPtr getDispatchIndirectBuffer() { return dispatchIndirectBuffer; }
     [[nodiscard]] sgl::vk::BufferPtr getTriangleKeyValueBuffer() { return triangleKeyValueBuffer; }
+    [[nodiscard]] sgl::vk::BufferPtr getSortedTriangleKeyValueBuffer() { return sortedTriangleKeyValueBuffer; }
 
     void getVulkanShaderPreprocessorDefines(std::map<std::string, std::string>& preprocessorDefines) override;
     void setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData) override;
@@ -84,6 +90,12 @@ public:
 private:
     void onClearColorChanged() override;
     void setShadersDirty(VolumeRendererPassType passType) override;
+
+    // For sorting.
+#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
+    radix_sort_vk_target* radixSortVkTarget = nullptr;
+    radix_sort_vk* radixSortVk = nullptr;
+#endif
 
     // Render passes.
     std::shared_ptr<GenerateTrianglesPass> generateTrianglesPass;
@@ -111,6 +123,13 @@ private:
     sgl::vk::BufferPtr drawIndirectBuffer; // 1x VkDrawIndirectCommand (4x uint32_t)
     sgl::vk::BufferPtr dispatchIndirectBuffer; // 1x VkDispatchIndirectCommand (3x uint32_t)
     sgl::vk::BufferPtr triangleKeyValueBuffer; // ?x uint64_t
+
+    // For sorting.
+    sgl::vk::BufferPtr sortingBufferEven;
+    sgl::vk::BufferPtr sortingBufferOdd;
+    sgl::vk::BufferPtr sortedTriangleKeyValueBuffer; // One of the two buffers above.
+    sgl::vk::BufferPtr sortingInternalBuffer;
+    sgl::vk::BufferPtr sortingIndirectBuffer;
 };
 
 #endif //DIFFTETVR_TETMESHRENDERERPROJECTION_HPP

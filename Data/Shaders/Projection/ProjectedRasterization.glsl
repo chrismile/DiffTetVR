@@ -38,11 +38,13 @@ layout(binding = 0, std430) readonly buffer TriangleKeyValueBuffer {
     TriangleKeyValue triangleKeyValues[];
 };
 layout(binding = 1, std430) readonly buffer TriangleVertexPositionBuffer {
-    uint vertexPositions[];
+    vec4 vertexPositions[];
 };
 layout(binding = 2, std430) readonly buffer TriangleVertexColorBuffer {
-    uint vertexColors[];
+    vec4 vertexColors[];
 };
+
+layout(location = 0) out vec4 fragmentColor;
 
 void main() {
     uint triangleIdx = triangleKeyValues[gl_VertexIndex / 3u].index;
@@ -56,8 +58,8 @@ void main() {
 
 #version 450
 
-in vec4 fragmentColor;
-out vec4 outputColor;
+layout(location = 0) in vec4 fragmentColor;
+layout(location = 0) out vec4 outputColor;
 
 void main() {
     outputColor = fragmentColor;

@@ -38,6 +38,10 @@
 #include <Graphics/Vulkan/Shader/ShaderManager.hpp>
 #include <ImGui/imgui.h>
 
+#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
+#include <radix_sort/radix_sort_vk.h>
+#endif
+
 #include "MainApp.hpp"
 
 int main(int argc, char *argv[]) {
@@ -96,6 +100,72 @@ int main(int argc, char *argv[]) {
     requestedDeviceFeatures.optionalVulkan12Features.descriptorBindingVariableDescriptorCount = VK_TRUE;
     requestedDeviceFeatures.optionalVulkan12Features.runtimeDescriptorArray = VK_TRUE;
     requestedDeviceFeatures.optionalVulkan12Features.shaderStorageBufferArrayNonUniformIndexing = VK_TRUE;
+
+#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
+    auto physicalDeviceCheckCallback = [](
+            VkPhysicalDevice physicalDevice,
+            VkPhysicalDeviceProperties physicalDeviceProperties,
+            std::vector<const char*>& requiredDeviceExtensions,
+            std::vector<const char*>& optionalDeviceExtensions,
+            sgl::vk::DeviceFeatures& requestedDeviceFeatures) {
+        if (physicalDeviceProperties.apiVersion < VK_API_VERSION_1_1) {
+            return false;
+        }
+
+        VkPhysicalDeviceSubgroupProperties subgroupProperties{};
+        subgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+        VkPhysicalDeviceProperties2 deviceProperties2 = {};
+        deviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        deviceProperties2.pNext = &subgroupProperties;
+        sgl::vk::getPhysicalDeviceProperties2(physicalDevice, deviceProperties2);
+
+        auto* target = radix_sort_vk_target_auto_detect(&physicalDeviceProperties, &subgroupProperties, 2u);
+        if (!target) {
+            return false;
+        }
+        VkPhysicalDeviceFeatures physicalDeviceFeatures{};
+        VkPhysicalDeviceVulkan11Features physicalDeviceVulkan11Features{};
+        physicalDeviceVulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+        VkPhysicalDeviceVulkan12Features physicalDeviceVulkan12Features{};
+        physicalDeviceVulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        radix_sort_vk_target_requirements_t targetRequirements{};
+        targetRequirements.pdf = &physicalDeviceFeatures;
+        targetRequirements.pdf11 = &physicalDeviceVulkan11Features;
+        targetRequirements.pdf12 = &physicalDeviceVulkan12Features;
+        radix_sort_vk_target_get_requirements(target, &targetRequirements);
+        if (targetRequirements.ext_name_count > 0) {
+            targetRequirements.ext_names = new const char*[targetRequirements.ext_name_count];
+        }
+        if (!radix_sort_vk_target_get_requirements(target, &targetRequirements)) {
+            return false;
+        }
+
+        for (uint32_t i = 0; i < targetRequirements.ext_name_count; i++) {
+            requiredDeviceExtensions.push_back(targetRequirements.ext_names[i]);
+        }
+        if (targetRequirements.pdf) {
+            sgl::vk::mergePhysicalDeviceFeatures(
+                    requestedDeviceFeatures.requestedPhysicalDeviceFeatures,
+                    *targetRequirements.pdf);
+        }
+        if (targetRequirements.pdf11) {
+            sgl::vk::mergePhysicalDeviceFeatures11(
+                    requestedDeviceFeatures.requestedVulkan11Features,
+                    *targetRequirements.pdf11);
+        }
+        if (targetRequirements.pdf12) {
+            sgl::vk::mergePhysicalDeviceFeatures12(
+                    requestedDeviceFeatures.requestedVulkan12Features,
+                    *targetRequirements.pdf12);
+        }
+
+        if (targetRequirements.ext_name_count > 0) {
+            delete[] targetRequirements.ext_names;
+        }
+        return true;
+    };
+    device->setPhysicalDeviceCheckCallback(physicalDeviceCheckCallback);
+#endif
 
     device->createDeviceSwapchain(
             instance, window, {
