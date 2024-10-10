@@ -42,6 +42,13 @@ class ComputeTrianglesDepthPass;
 class ProjectedRasterPass;
 class AdjointProjectedRasterPass;
 
+enum class SortingAlgorithm {
+    FUCHSIA_RADIX_SORT, CPU_STD_SORT
+};
+const char* const SORTING_ALGORITHM_NAMES[] = {
+        "Radix Sort (Fuchsia)", "CPU std::sort"
+};
+
 /**
  * The tetrahedral elements are projected to triangles in a preprocess pass.
  * For more details see:
@@ -69,14 +76,14 @@ public:
             uint32_t width, uint32_t height, size_t _fragmentBufferSize, const sgl::vk::BufferPtr& _fragmentBuffer,
             const sgl::vk::BufferPtr& _startOffsetBuffer, const sgl::vk::BufferPtr& _fragmentCounterBuffer);
 
-    [[nodiscard]] sgl::vk::BufferPtr getUniformDataBuffer() { return uniformDataBuffer; }
-    [[nodiscard]] sgl::vk::BufferPtr getTriangleCounterBuffer() { return triangleCounterBuffer; }
-    [[nodiscard]] sgl::vk::BufferPtr getTriangleVertexPositionBuffer() { return triangleVertexPositionBuffer; }
-    [[nodiscard]] sgl::vk::BufferPtr getTriangleVertexColorBuffer() { return triangleVertexColorBuffer; }
-    [[nodiscard]] sgl::vk::BufferPtr getDrawIndirectBuffer() { return drawIndirectBuffer; }
-    [[nodiscard]] sgl::vk::BufferPtr getDispatchIndirectBuffer() { return dispatchIndirectBuffer; }
-    [[nodiscard]] sgl::vk::BufferPtr getTriangleKeyValueBuffer() { return triangleKeyValueBuffer; }
-    [[nodiscard]] sgl::vk::BufferPtr getSortedTriangleKeyValueBuffer() { return sortedTriangleKeyValueBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getUniformDataBuffer() { return uniformDataBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getTriangleCounterBuffer() { return triangleCounterBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexPositionBuffer() { return triangleVertexPositionBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexColorBuffer() { return triangleVertexColorBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getDrawIndirectBuffer() { return drawIndirectBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getDispatchIndirectBuffer() { return dispatchIndirectBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getTriangleKeyValueBuffer() { return triangleKeyValueBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getSortedTriangleKeyValueBuffer() { return sortedTriangleKeyValueBuffer; }
 
     void getVulkanShaderPreprocessorDefines(std::map<std::string, std::string>& preprocessorDefines) override;
     void setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData) override;
@@ -90,6 +97,8 @@ public:
 private:
     void onClearColorChanged() override;
     void setShadersDirty(VolumeRendererPassType passType) override;
+    void createTriangleCounterBuffer();
+    void recreateSortingBuffers();
 
     // For sorting.
 #ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
@@ -124,12 +133,18 @@ private:
     sgl::vk::BufferPtr dispatchIndirectBuffer; // 1x VkDispatchIndirectCommand (3x uint32_t)
     sgl::vk::BufferPtr triangleKeyValueBuffer; // ?x uint64_t
 
-    // For sorting.
+    SortingAlgorithm sortingAlgorithm = SortingAlgorithm::CPU_STD_SORT;
+
+    // For sorting with radix sort.
     sgl::vk::BufferPtr sortingBufferEven;
     sgl::vk::BufferPtr sortingBufferOdd;
     sgl::vk::BufferPtr sortedTriangleKeyValueBuffer; // One of the two buffers above.
     sgl::vk::BufferPtr sortingInternalBuffer;
     sgl::vk::BufferPtr sortingIndirectBuffer;
+
+    // For sorting on the CPU.
+    sgl::vk::BufferPtr triangleCounterBufferCpu;
+    sgl::vk::BufferPtr triangleKeyValueBufferCpu;
 };
 
 #endif //DIFFTETVR_TETMESHRENDERERPROJECTION_HPP
