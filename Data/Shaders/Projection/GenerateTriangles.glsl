@@ -90,6 +90,12 @@ void pushTri(inout uint triOffset, vec3 pF, vec3 pB, vec3 pC, float alpha) {
     triOffset++;
 }
 
+float solveLineT(vec2 p0, vec2 p1, vec2 pt) {
+    vec2 num = pt - p0;
+    vec2 denom = p1 - p0;
+    return abs(denom.x) > abs(denom.y) ? num.x / denom.x : num.y / denom.y;
+}
+
 void main() {
     const uint tetIdx = gl_GlobalInvocationID.x;
     if (tetIdx >= numTets) {
@@ -106,6 +112,7 @@ void main() {
         tetVertexColors[tetVertIdx] = tetsVertexColors[tetGlobalVertIdx];
         vec4 vertexPosNdc = viewProjMat * vec4(tetsVertexPositions[tetGlobalVertIdx], 1.0);
         vertexPosNdc.xyz /= vertexPosNdc.w;
+        vertexPosNdc.w = 1.0;
         tetVertexPositionNdc[tetVertIdx] = vertexPosNdc;
     }
 
@@ -174,8 +181,8 @@ void main() {
 
         // Solve Barycentric interpolation equation described in Sec. 2.4 of paper by Shirley and Tuchmann.
         // Solve for pT.z, pT.{x,y} == pI.{x,y}: pT = pA + u(pB - pA) + v(pC - pA)
-        vec2 uv = inverse(mat2(pB - pA, pC - pA)) * (pI.xy - pA.xy);
-        vec3 pT = vec3(pI.x, pI.y, pA.z + uv.x * (pB.z - pA.z) + uv.y * (pC.z - pA.z));
+        vec2 uv = inverse(mat2(pB.xy - pA.xy, pC.xy - pA.xy)) * (pI.xy - pA.xy);
+        vec3 pT = vec3(pI.xy, pA.z + uv.x * (pB.z - pA.z) + uv.y * (pC.z - pA.z));
         vec4 pTW = invProjMat * vec4(pT, 1.0);
         vec4 pIW = invProjMat * vec4(pI, 1.0);
         float thickness = distance(pTW.xyz / pTW.w, pIW.xyz / pIW.w);
@@ -203,18 +210,20 @@ void main() {
                 }
             }
         }
-        uint bvf = 0x7u; // vertices bits plus/front
-        uint bvb = 0x7u; // vertices bits minus/back
+        uint bvf0 = 0, bvf1 = 0; // vertices bits plus/front
+        uint bvb0 = 0, bvb1 = 0; // vertices bits minus/back
         [[unroll]] for (uint vertexIdx = 0; vertexIdx < 3; vertexIdx++) {
-            bvf &= 1u << tetFaceTable[ff0][vertexIdx];
-            bvf &= 1u << tetFaceTable[ff1][vertexIdx];
-            bvb &= 1u << tetFaceTable[fb0][vertexIdx];
-            bvb &= 1u << tetFaceTable[fb1][vertexIdx];
+            bvf0 |= 1u << tetFaceTable[ff0][vertexIdx];
+            bvf1 |= 1u << tetFaceTable[ff1][vertexIdx];
+            bvb0 |= 1u << tetFaceTable[fb0][vertexIdx];
+            bvb1 |= 1u << tetFaceTable[fb1][vertexIdx];
         }
-        vec3 pf0 = vec3(tetVertexPositionNdc[findLSB(bvf)].xyz);
-        vec3 pf1 = vec3(tetVertexPositionNdc[findMSB(bvf)].xyz);
-        vec3 pb0 = vec3(tetVertexPositionNdc[findLSB(bvb)].xyz);
-        vec3 pb1 = vec3(tetVertexPositionNdc[findMSB(bvb)].xyz);
+        uint bvf = bvf0 & bvf1; // vertices bits plus/front
+        uint bvb = bvb0 & bvb1; // vertices bits minus/back
+        vec3 pf0 = tetVertexPositionNdc[findLSB(bvf)].xyz;
+        vec3 pf1 = tetVertexPositionNdc[findMSB(bvf)].xyz;
+        vec3 pb0 = tetVertexPositionNdc[findLSB(bvb)].xyz;
+        vec3 pb1 = tetVertexPositionNdc[findMSB(bvb)].xyz;
 
         // Compute the perspective formula for the lines and compute their intersection in screen coordinates.
         vec3 lf = cross(pf0, pf1);
@@ -222,9 +231,11 @@ void main() {
         vec3 pIntersectScreen = cross(lf, lb);
         pIntersectScreen.xy /= pIntersectScreen.z;
 
-        // TODO: Get pF (point on lf in world space) and pB (point on lb in world space)
-        vec3 pF = vec3(0.0);
-        vec3 pB = vec3(0.0);
+        // Get pF (point on lf in clip space) and pB (point on lb in clip space)
+        float tf = solveLineT(pf0.xy, pf1.xy, pIntersectScreen.xy);
+        float tb = solveLineT(pb0.xy, pb1.xy, pIntersectScreen.xy);
+        vec3 pF = vec3(pIntersectScreen.xy, pf0.z + tf * (pf1.z - pf0.z));
+        vec3 pB = vec3(pIntersectScreen.xy, pb0.z + tf * (pb1.z - pb0.z));
         vec4 pFW = invProjMat * vec4(pF, 1.0);
         vec4 pBW = invProjMat * vec4(pB, 1.0);
         float thickness = distance(pFW.xyz / pFW.w, pBW.xyz / pBW.w);
