@@ -84,7 +84,8 @@ void pushTri(inout uint triOffset, vec3 pF, vec3 pB, vec3 pC, float alpha) {
     vertexPositions[idx0] = vec4(pF, 1.0);
     vertexPositions[idx0 + 1] = vec4(pB, 1.0);
     vertexPositions[idx0 + 2] = vec4(pC, 1.0);
-    vertexColors[idx0] = vec4(1.0, 1.0, 1.0, alpha);
+    //vertexColors[idx0] = vec4(1.0, 1.0, 1.0, alpha);
+    vertexColors[idx0] = vec4(alpha, alpha, alpha, alpha);
     vertexColors[idx0 + 1] = vec4(0.0, 0.0, 0.0, 0.0);
     vertexColors[idx0 + 2] = vec4(0.0, 0.0, 0.0, 0.0);
     triOffset++;

@@ -133,7 +133,7 @@ private:
     sgl::vk::BufferPtr dispatchIndirectBuffer; // 1x VkDispatchIndirectCommand (3x uint32_t)
     sgl::vk::BufferPtr triangleKeyValueBuffer; // ?x uint64_t
 
-    SortingAlgorithm sortingAlgorithm = SortingAlgorithm::CPU_STD_SORT;
+    SortingAlgorithm sortingAlgorithm = SortingAlgorithm::FUCHSIA_RADIX_SORT;
 
     // For sorting with radix sort.
     sgl::vk::BufferPtr sortingBufferEven;

@@ -310,18 +310,14 @@ void TetMeshRendererProjection::createTriangleCounterBuffer() {
     }
     triangleCounterBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(uint32_t), usage, VMA_MEMORY_USAGE_GPU_ONLY);
+    if (initializeIndirectCommandBufferPass) {
+        initializeIndirectCommandBufferPass->setDataDirty();
+    }
 }
 
 void TetMeshRendererProjection::recreateSortingBuffers() {
     sgl::vk::Device* device = renderer->getDevice();
     size_t maxNumProjectedTriangles = tetMesh->getNumCells() * 4;
-    VkBufferUsageFlags usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    if (sortingAlgorithm == SortingAlgorithm::CPU_STD_SORT) {
-        usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    }
-    triangleKeyValueBuffer = std::make_shared<sgl::vk::Buffer>(
-            device, maxNumProjectedTriangles * sizeof(uint64_t),
-            usage, VMA_MEMORY_USAGE_GPU_ONLY);
 
     sortingBufferEven = {};
     sortingBufferOdd = {};
@@ -344,11 +340,12 @@ void TetMeshRendererProjection::recreateSortingBuffers() {
         bufferSettings.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         sortingBufferEven = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
         sortingBufferOdd = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
+        triangleKeyValueBuffer = sortingBufferEven;
         sortedTriangleKeyValueBuffer = {};
 
         bufferSettings.sizeInBytes = memoryRequirements.internal_size;
         bufferSettings.alignment = memoryRequirements.internal_alignment;
-        bufferSettings.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        bufferSettings.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
         sortingInternalBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
 
         bufferSettings.sizeInBytes = memoryRequirements.indirect_size;
@@ -357,13 +354,18 @@ void TetMeshRendererProjection::recreateSortingBuffers() {
         sortingIndirectBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
 #endif
     } else if (sortingAlgorithm == SortingAlgorithm::CPU_STD_SORT) {
+        triangleKeyValueBuffer = std::make_shared<sgl::vk::Buffer>(
+                device, maxNumProjectedTriangles * sizeof(uint64_t),
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                VMA_MEMORY_USAGE_GPU_ONLY);
+        sortedTriangleKeyValueBuffer = triangleKeyValueBuffer;
+
         triangleKeyValueBufferCpu = std::make_shared<sgl::vk::Buffer>(
                 device, maxNumProjectedTriangles * sizeof(uint64_t),
                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
         triangleCounterBufferCpu = std::make_shared<sgl::vk::Buffer>(
                 device, sizeof(uint32_t),
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
-        sortedTriangleKeyValueBuffer = triangleKeyValueBuffer;
     }
 
     generateTrianglesPass->setDataDirty();
@@ -455,6 +457,26 @@ void TetMeshRendererProjection::onClearColorChanged() {
     projectedRasterPass->setAttachmentClearColor(clearColor.getFloatColorRGBA());
 }
 
+/*template<class T>
+void printBuffer(const sgl::vk::BufferPtr& bufferGpu) {
+    auto bufferCpu = std::make_shared<sgl::vk::Buffer>(
+            bufferGpu->getDevice(), bufferGpu->getSizeInBytes(),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+    auto commandBuffer = bufferGpu->getDevice()->beginSingleTimeCommands();
+    bufferGpu->copyDataTo(bufferCpu, commandBuffer);
+    bufferGpu->getDevice()->endSingleTimeCommands(commandBuffer);
+    size_t numEntries = bufferGpu->getSizeInBytes() / sizeof(T);
+    auto* dataPtr = reinterpret_cast<T*>(bufferCpu->mapMemory());
+    for (size_t i = 0; i < numEntries; i++) {
+        std::cout << dataPtr[i];
+        if (i != numEntries - 1) {
+            std::cout << ", ";
+        }
+    }
+    std::cout << std::endl;
+    bufferCpu->unmapMemory();
+}*/
+
 void TetMeshRendererProjection::render() {
     uniformData.viewProjMat = (*camera)->getViewProjMatrix();
     uniformData.invProjMat = glm::inverse((*camera)->getProjectionMatrix());
@@ -516,6 +538,15 @@ void TetMeshRendererProjection::render() {
                 VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
                 sortedTriangleKeyValueBuffer);
+
+        // Debug code.
+        /*renderer->syncWithCpu();
+        printBuffer<uint32_t>(triangleCounterBuffer);
+        printBuffer<uint32_t>(sortingBufferEven);
+        printBuffer<uint32_t>(sortingBufferOdd);
+        printBuffer<uint32_t>(sortedTriangleKeyValueBuffer);
+        printBuffer<uint32_t>(sortingIndirectBuffer);
+        exit(1);*/
 #endif
     } else if (sortingAlgorithm == SortingAlgorithm::CPU_STD_SORT) {
         triangleCounterBuffer->copyDataTo(triangleCounterBufferCpu, renderer->getVkCommandBuffer());
