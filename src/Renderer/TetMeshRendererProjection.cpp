@@ -196,12 +196,6 @@ public:
             setDataDirty();
         }
     }
-    void clearFragmentBuffer() {
-        if (rasterData) {
-            rasterData->setStaticBufferOptional({}, "FragmentBuffer");
-            rasterData->setStaticBufferArrayOptional({}, "FragmentBuffer");
-        }
-    }
 
 protected:
     void loadShader() override {

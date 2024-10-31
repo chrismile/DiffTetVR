@@ -79,13 +79,15 @@ float computeAlpha(float thickness) {
     return alpha;
 }
 
-void pushTri(inout uint triOffset, vec3 pF, vec3 pB, vec3 pC, float alpha) {
+void pushTri(inout uint triOffset, vec3 pF, vec3 pB, vec3 pC, vec4 cF, vec4 cB, vec4 cC, float alpha) {
     uint idx0 = triOffset * 3u;
     vertexPositions[idx0] = vec4(pF, 1.0);
     vertexPositions[idx0 + 1] = vec4(pB, 1.0);
     vertexPositions[idx0 + 2] = vec4(pC, 1.0);
-    //vertexColors[idx0] = vec4(1.0, 1.0, 1.0, alpha);
-    vertexColors[idx0] = vec4(alpha, alpha, alpha, alpha);
+    //vertexColors[idx0] = vec4(alpha, alpha, alpha, alpha);
+    //vertexColors[idx0 + 1] = vec4(0.0, 0.0, 0.0, 0.0);
+    //vertexColors[idx0 + 2] = vec4(0.0, 0.0, 0.0, 0.0);
+    vertexColors[idx0] = alpha * cF;
     vertexColors[idx0 + 1] = vec4(0.0, 0.0, 0.0, 0.0);
     vertexColors[idx0 + 2] = vec4(0.0, 0.0, 0.0, 0.0);
     triOffset++;
@@ -179,19 +181,24 @@ void main() {
         vec3 pB = tetVertexPositionNdc[tetFaceTable[oppositeFaceIdx][1]].xyz;
         vec3 pC = tetVertexPositionNdc[tetFaceTable[oppositeFaceIdx][2]].xyz;
         vec3 pI = tetVertexPositionNdc[tetFaceTable[oppositeFaceIdx][3]].xyz;
+        vec4 cA = tetVertexColors[tetFaceTable[oppositeFaceIdx][0]];
+        vec4 cB = tetVertexColors[tetFaceTable[oppositeFaceIdx][1]];
+        vec4 cC = tetVertexColors[tetFaceTable[oppositeFaceIdx][2]];
+        vec4 cI = tetVertexColors[tetFaceTable[oppositeFaceIdx][3]];
 
         // Solve Barycentric interpolation equation described in Sec. 2.4 of paper by Shirley and Tuchmann.
         // Solve for pT.z, pT.{x,y} == pI.{x,y}: pT = pA + u(pB - pA) + v(pC - pA)
         vec2 uv = inverse(mat2(pB.xy - pA.xy, pC.xy - pA.xy)) * (pI.xy - pA.xy);
         vec3 pT = vec3(pI.xy, pA.z + uv.x * (pB.z - pA.z) + uv.y * (pC.z - pA.z));
+        vec4 cT = cA + uv.x * (cB - cA) + uv.y * (cC - cA);
         vec4 pTW = invProjMat * vec4(pT, 1.0);
         vec4 pIW = invProjMat * vec4(pI, 1.0);
         float thickness = distance(pTW.xyz / pTW.w, pIW.xyz / pIW.w);
         float alpha = computeAlpha(thickness);
 
-        pushTri(triOffset, pT, pA, pB, alpha);
-        pushTri(triOffset, pT, pB, pC, alpha);
-        pushTri(triOffset, pT, pC, pA, alpha);
+        pushTri(triOffset, pT, pA, pB, cT, cA, cB, alpha);
+        pushTri(triOffset, pT, pB, pC, cT, cB, cC, alpha);
+        pushTri(triOffset, pT, pC, pA, cT, cC, cA, alpha);
     } else if (caseIdx == 2) {
         // Find vertices forming lines lp and lm, which are formed by faces with sign (1, 1) and sign (-1, -1).
         uint ff0 = 4, ff1 = 4; // faces plus
@@ -221,10 +228,18 @@ void main() {
         }
         uint bvf = bvf0 & bvf1; // vertices bits plus/front
         uint bvb = bvb0 & bvb1; // vertices bits minus/back
-        vec3 pf0 = tetVertexPositionNdc[findLSB(bvf)].xyz;
-        vec3 pf1 = tetVertexPositionNdc[findMSB(bvf)].xyz;
-        vec3 pb0 = tetVertexPositionNdc[findLSB(bvb)].xyz;
-        vec3 pb1 = tetVertexPositionNdc[findMSB(bvb)].xyz;
+        uint idx = findLSB(bvf);
+        vec3 pf0 = tetVertexPositionNdc[idx].xyz;
+        vec4 cf0 = tetVertexColors[idx];
+        idx = findMSB(bvf);
+        vec3 pf1 = tetVertexPositionNdc[idx].xyz;
+        vec4 cf1 = tetVertexColors[idx];
+        idx = findLSB(bvb);
+        vec3 pb0 = tetVertexPositionNdc[idx].xyz;
+        vec4 cb0 = tetVertexColors[idx];
+        idx = findMSB(bvb);
+        vec3 pb1 = tetVertexPositionNdc[idx].xyz;
+        vec4 cb1 = tetVertexColors[idx];
 
         // Compute the perspective formula for the lines and compute their intersection in screen coordinates.
         vec3 lf = cross(pf0, pf1);
@@ -236,21 +251,22 @@ void main() {
         float tf = solveLineT(pf0.xy, pf1.xy, pIntersectScreen.xy);
         float tb = solveLineT(pb0.xy, pb1.xy, pIntersectScreen.xy);
         vec3 pF = vec3(pIntersectScreen.xy, pf0.z + tf * (pf1.z - pf0.z));
+        vec4 cF = cf0 + tf * (cf1 - cf0);
         vec3 pB = vec3(pIntersectScreen.xy, pb0.z + tf * (pb1.z - pb0.z));
         vec4 pFW = invProjMat * vec4(pF, 1.0);
         vec4 pBW = invProjMat * vec4(pB, 1.0);
         float thickness = distance(pFW.xyz / pFW.w, pBW.xyz / pBW.w);
 
         float alpha = computeAlpha(thickness);
-        pushTri(triOffset, pF, pf0, pb0, alpha);
-        pushTri(triOffset, pF, pf0, pb1, alpha);
-        pushTri(triOffset, pF, pf1, pb0, alpha);
-        pushTri(triOffset, pF, pf1, pb1, alpha);
+        pushTri(triOffset, pF, pf0, pb0, cF, cf0, cb0, alpha);
+        pushTri(triOffset, pF, pf0, pb1, cF, cf0, cb1, alpha);
+        pushTri(triOffset, pF, pf1, pb0, cF, cf1, cb0, alpha);
+        pushTri(triOffset, pF, pf1, pb1, cF, cf1, cb1, alpha);
     } else if (caseIdx == 3) {
         // 2 triangles; find the two tris formed by 2x negative or 2x positive faces.
         // TODO
-        //pushTri(triOffset, vec3(0.0), vec3(0.0), vec3(0.0), 0.0);
-        //pushTri(triOffset, vec3(0.0), vec3(0.0), vec3(0.0), 0.0);
+        //pushTri(triOffset, vec3(0.0), vec3(0.0), vec3(0.0), vec4(0.0), vec4(0.0), vec4(0.0), 0.0);
+        //pushTri(triOffset, vec3(0.0), vec3(0.0), vec3(0.0), vec4(0.0), vec4(0.0), vec4(0.0), 0.0);
     } else if (caseIdx == 4) {
         // The protruding vertex is not shared by front and back face.
         uint ff = 4, fb = 4; // face front, back
@@ -278,12 +294,16 @@ void main() {
         uint ivUnique0 = findLSB(vertexBits);
         uint ivUnique1 = findMSB(vertexBits);
 
-        vec3 pF = vec3(tetVertexPositionNdc[(vertexBitsFront & ivUnique0) != 0 ? ivUnique0 : ivUnique1].xyz);
+        uint idxf = (vertexBitsFront & ivUnique0) != 0 ? ivUnique0 : ivUnique1;
+        vec3 pF = vec3(tetVertexPositionNdc[idxf].xyz);
         vec3 pB = vec3(tetVertexPositionNdc[ivShared0].xyz);
         vec3 pC = vec3(tetVertexPositionNdc[ivShared1].xyz);
+        vec4 cF = tetVertexColors[idxf];
+        vec4 cB = tetVertexColors[ivShared0];
+        vec4 cC = tetVertexColors[ivShared0];
         float thickness = distance(tetVertexPosition[ivUnique0], tetVertexPosition[ivUnique1]);
 
         float alpha = computeAlpha(thickness);
-        pushTri(triOffset, pF, pB, pC, alpha);
+        pushTri(triOffset, pF, pB, pC, cF, cB, cC, alpha);
     }
 }
