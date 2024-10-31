@@ -32,6 +32,7 @@
 
 #extension GL_EXT_control_flow_attributes : require
 #extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_debug_printf : enable
 
 layout(local_size_x = BLOCK_SIZE) in;
 
@@ -264,9 +265,59 @@ void main() {
         pushTri(triOffset, pF, pf1, pb1, cF, cf1, cb1, alpha);
     } else if (caseIdx == 3) {
         // 2 triangles; find the two tris formed by 2x negative or 2x positive faces.
-        // TODO
-        //pushTri(triOffset, vec3(0.0), vec3(0.0), vec3(0.0), vec4(0.0), vec4(0.0), vec4(0.0), 0.0);
-        //pushTri(triOffset, vec3(0.0), vec3(0.0), vec3(0.0), vec4(0.0), vec4(0.0), vec4(0.0), 0.0);
+
+        int twoSign = numPositiveSigns > numNegativeSigns ? 1 : -1;
+        int singleSign = numPositiveSigns > numNegativeSigns ? -1 : 1;
+        uint zeroFace = 4, f20 = 4, f21 = 4, f10 = 4; // face with sign 0, faces with double sign, faces with single sign
+        [[unroll]] for (uint tetFaceIdx = 0; tetFaceIdx < 4; tetFaceIdx++) {
+            if (tetFaceSigns[tetFaceIdx] == 0) {
+                zeroFace = tetFaceIdx;
+            } else if (tetFaceSigns[tetFaceIdx] == singleSign) {
+                f10 = tetFaceIdx;
+            } else if (f20 == 4u) {
+                f20 = tetFaceIdx;
+            } else {
+                f21 = tetFaceIdx;
+            }
+        }
+
+        // Protruding: Shared by zero and two sign faces.
+        // Line: Shared by zero and single sign face.
+        uint vertexBitsZero = 0x0u;
+        //uint vertexBitsTwoSign0 = 0x0u;
+        //uint vertexBitsTwoSign1 = 0x0u;
+        uint vertexBitsSingleSign = 0x0u;
+        [[unroll]] for (uint vertexIdx = 0; vertexIdx < 3; vertexIdx++) {
+            vertexBitsZero |= 1u << tetFaceTable[zeroFace][vertexIdx];
+            //vertexBitsTwoSign0 |= 1u << tetFaceTable[f20][vertexIdx];
+            //vertexBitsTwoSign1 |= 1u << tetFaceTable[f21][vertexIdx];
+            vertexBitsSingleSign |= 1u << tetFaceTable[f10][vertexIdx];
+        }
+        uint ivProtruding = findLSB(vertexBitsSingleSign ^ 0xFu);
+        uint ivThin = findLSB(vertexBitsZero ^ 0xFu);
+        uint indicesLine = vertexBitsSingleSign & vertexBitsZero;
+        uint ivLine0 = findLSB(indicesLine);
+        uint ivLine1 = findMSB(indicesLine);
+
+        vec3 pF = vec3(tetVertexPositionNdc[ivProtruding].xyz);
+        vec3 pA = vec3(tetVertexPositionNdc[ivThin].xyz);
+        vec3 pB = vec3(tetVertexPositionNdc[ivLine0].xyz);
+        vec3 pC = vec3(tetVertexPositionNdc[ivLine1].xyz);
+        vec4 cF = tetVertexColors[ivProtruding];
+        vec4 cA = tetVertexColors[ivThin];
+        vec4 cB = tetVertexColors[ivLine0];
+        vec4 cC = tetVertexColors[ivLine1];
+
+        // Compute intersection of line (eye, pF) with line (pB, pC) to get thickness.
+        float t = solveLineT(pB.xy, pC.xy, pF.xy);
+        vec3 pT = pB + t * (pC - pB);
+        vec4 pFW = invProjMat * vec4(pF, 1.0);
+        vec4 pTW = invProjMat * vec4(pT, 1.0);
+        float thickness = distance(pFW, pTW);
+        float alpha = computeAlpha(thickness);
+
+        pushTri(triOffset, pF, pA, pB, cF, cA, cB, alpha);
+        pushTri(triOffset, pF, pA, pC, cF, cA, cC, alpha);
     } else if (caseIdx == 4) {
         // The protruding vertex is not shared by front and back face.
         uint ff = 4, fb = 4; // face front, back
@@ -279,18 +330,19 @@ void main() {
         }
 
         // Get index not shared by front and back face.
-        uint vertexBits = 0x7u; // vertices bits front/back
+        //uint vertexBits = 0xFu; // vertices bits front/back
         uint vertexBitsFront = 0x0u; // vertices bits front/back
         uint vertexBitsBack = 0x0u; // vertices bits front/back
         [[unroll]] for (uint vertexIdx = 0; vertexIdx < 3; vertexIdx++) {
-            vertexBits &= 1u << tetFaceTable[ff][vertexIdx];
-            vertexBits &= 1u << tetFaceTable[fb][vertexIdx];
+            //vertexBits &= 1u << tetFaceTable[ff][vertexIdx];
+            //vertexBits &= 1u << tetFaceTable[fb][vertexIdx];
             vertexBitsFront |= 1u << tetFaceTable[ff][vertexIdx];
             vertexBitsBack |= 1u << tetFaceTable[fb][vertexIdx];
         }
+        uint vertexBits = vertexBitsFront & vertexBitsBack; // vertices bits front/back
         uint ivShared0 = findLSB(vertexBits);
         uint ivShared1 = findMSB(vertexBits);
-        vertexBits = vertexBits ^ 0x7u; // invert bit mask.
+        vertexBits = vertexBits ^ 0xFu; // invert bit mask.
         uint ivUnique0 = findLSB(vertexBits);
         uint ivUnique1 = findMSB(vertexBits);
 
