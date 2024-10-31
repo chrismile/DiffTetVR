@@ -522,6 +522,14 @@ if [ $use_macos = false ] && ! command -v pkg-config &> /dev/null; then
     exit 1
 fi
 
+if [ ! -d "third_party/fuchsia_radix_sort/include" ] || [ ! -d "third_party/glm/glm" ] \
+        [ ! -d "third_party/OpenVolumeMesh/src" ] || [ ! -d "third_party/sgl/src" ]; then
+    echo "------------------------"
+    echo "initializing submodules "
+    echo "------------------------"
+    git submodule init
+    git submodule update
+fi
 
 [ -d "./third_party/" ] || mkdir "./third_party/"
 pushd third_party > /dev/null

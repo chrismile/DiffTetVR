@@ -96,6 +96,18 @@ if %debug% == true (
     set cmake_config_opposite="Debug"
 )
 
+if not exist .\third_party\fuchsia_radix_sort\include goto init_submodules
+if not exist .\third_party\glm\glm goto init_submodules
+if not exist .\third_party\OpenVolumeMesh\src goto init_submodules
+if not exist .\third_party\sgl\src goto init_submodules
+goto after_init_submodules
+:init_submodules
+echo ------------------------
+echo initializing submodules
+echo ------------------------
+git submodule init   || exit /b 1
+git submodule update || exit /b 1
+:after_init_submodules
 
 if not exist .\third_party\ mkdir .\third_party\
 set proj_dir=%~dp0
