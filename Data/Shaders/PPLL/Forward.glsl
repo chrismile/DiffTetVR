@@ -1,3 +1,5 @@
+#include "ForwardCommon.glsl"
+
 float erfi(float z) {
     float z2 = z * z;
     float z3 = z * z2;
@@ -19,23 +21,6 @@ float erf(float z) {
     float A = exp(-z * z);
     float B = sqrt(1.0 - A);
     return 2.0 * INV_PI_SQRT * sign(z) * B * (0.5 * PI_SQRT + 31.0 / 200.0 * A - 341.0 / 8000.0 * A * A);
-}
-
-/*vec4 accumulateLinearConst(float t, vec3 c0, vec3 c1, float a) {
-    vec3 p0 = a * c0;
-    vec3 p1 = a * (c1 - c0);
-    float A = exp(-a * t);
-    float B = -1.0 / a;
-    return vec4(B * ((A - 1.0) * p0 + ((t - B) * A + B) * p1), 1.0 - A);
-}*/
-
-vec4 accumulateLinearConst(float t, vec3 c0, vec3 c1, float a) {
-    if (a < 1e-6) {
-        // lim a->0 (t + 1.0 / a) * A - 1.0 / a) = 0
-        return vec4(0.0);
-    }
-    float A = exp(-a * t);
-    return vec4((1.0 - A) * c0 + ((t + 1.0 / a) * A - 1.0 / a) * (c0 - c1), 1.0 - A);
 }
 
 vec4 accumulateLinear(float t, vec3 c0, vec3 c1, float a0, float a1) {
