@@ -26,14 +26,4 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DIFFTETVR_TETMESHRENDERERTYPE_HPP
-#define DIFFTETVR_TETMESHRENDERERTYPE_HPP
-
-enum class TetMeshRendererType {
-    PPLL, PROJECTION, INTERSECTION
-};
-const char* const TET_MESH_RENDERER_TYPES[] = {
-        "Per-pixel linked lists", "Projection (Shirley-Tuchmann)", "Intersection"
-};
-
-#endif //DIFFTETVR_TETMESHRENDERERTYPE_HPP
+#include "RasterCommon.hpp"

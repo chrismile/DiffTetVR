@@ -72,7 +72,7 @@ enum class VolumeRendererPassType {
 };
 
 enum class RendererType {
-    PPLL, PROJECTION
+    PPLL, PROJECTION, INTERSECTION
 };
 
 class TetMeshVolumeRenderer {

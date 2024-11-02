@@ -52,6 +52,7 @@
 #include "Renderer/Optimizer.hpp"
 #include "Renderer/TetMeshRendererPPLL.hpp"
 #include "Renderer/TetMeshRendererProjection.hpp"
+#include "Renderer/TetMeshRendererIntersection.hpp"
 #include "DataView.hpp"
 #include "MainApp.hpp"
 
@@ -248,6 +249,9 @@ void MainApp::createTetMeshRenderer() {
                 rendererVk, &cameraHandle, &transferFunctionWindow);
     } else if (tetMeshRendererType == TetMeshRendererType::PROJECTION) {
         tetMeshVolumeRenderer = std::make_shared<TetMeshRendererProjection>(
+                rendererVk, &cameraHandle, &transferFunctionWindow);
+    } else if (tetMeshRendererType == TetMeshRendererType::INTERSECTION) {
+        tetMeshVolumeRenderer = std::make_shared<TetMeshRendererIntersection>(
                 rendererVk, &cameraHandle, &transferFunctionWindow);
     }
     tetMeshVolumeRenderer->setUseLinearRGB(useLinearRGB);

@@ -26,31 +26,23 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DIFFTETVR_TETMESHRENDERERPROJECTION_HPP
-#define DIFFTETVR_TETMESHRENDERERPROJECTION_HPP
+#ifndef DIFFTETVR_TETMESHRENDERERINTERSECTION_HPP
+#define DIFFTETVR_TETMESHRENDERERINTERSECTION_HPP
 
 #include "TetMeshVolumeRenderer.hpp"
 #include "RasterCommon.hpp"
 
-class GenerateTrianglesProjPass;
-class InitializeIndirectCommandBufferProjPass;
-class ComputeTrianglesDepthProjPass;
-class ProjectedRasterPass;
-class AdjointProjectedRasterPass;
+class GenerateTrianglesInterPass;
+class InitializeIndirectCommandBufferInterPass;
+class ComputeTrianglesDepthInterPass;
+class IntersectRasterPass;
+class AdjointIntersectRasterPass;
 
-/**
- * The tetrahedral elements are projected to triangles in a preprocess pass.
- * For more details see:
- * - Shirley, P., Tuchmann, A., "A Polygonal Approximation to Direct Scalar Volume Rendering",
- *   Proceedings of the 1990 Workshop on Volume Visualization.
- * - Kraus, M., Qiao, W., Ebert, D. S., "Projecting Tetrahedra without Rendering Artifacts",
- *   IEEE Visualization 2004.
- */
-class TetMeshRendererProjection : public TetMeshVolumeRenderer {
+class TetMeshRendererIntersection : public TetMeshVolumeRenderer {
 public:
-    explicit TetMeshRendererProjection(
+    explicit TetMeshRendererIntersection(
             sgl::vk::Renderer* renderer, sgl::CameraPtr* camera, sgl::TransferFunctionWindow* transferFunctionWindow);
-    ~TetMeshRendererProjection() override;
+    ~TetMeshRendererIntersection() override;
     [[nodiscard]] RendererType getRendererType() const override { return RendererType::PROJECTION; }
 
     // Public interface.
@@ -96,12 +88,12 @@ private:
 #endif
 
     // Render passes.
-    std::shared_ptr<GenerateTrianglesProjPass> generateTrianglesPass;
-    std::shared_ptr<InitializeIndirectCommandBufferProjPass> initializeIndirectCommandBufferPass;
-    std::shared_ptr<ComputeTrianglesDepthProjPass> computeTrianglesDepthPass;
-    std::shared_ptr<ProjectedRasterPass> projectedRasterPass;
+    std::shared_ptr<GenerateTrianglesInterPass> generateTrianglesPass;
+    std::shared_ptr<InitializeIndirectCommandBufferInterPass> initializeIndirectCommandBufferPass;
+    std::shared_ptr<ComputeTrianglesDepthInterPass> computeTrianglesDepthPass;
+    std::shared_ptr<IntersectRasterPass> intersectRasterPass;
     // TODO, use fragment shader interlock for adjoint pass.
-    std::shared_ptr<AdjointProjectedRasterPass> adjointProjectedRasterPass; // only for optimization
+    std::shared_ptr<AdjointIntersectRasterPass> adjointIntersectRasterPass; // only for optimization
 
     // Uniform data buffer shared by all shaders.
     struct UniformData {
@@ -136,4 +128,4 @@ private:
     sgl::vk::BufferPtr triangleKeyValueBufferCpu;
 };
 
-#endif //DIFFTETVR_TETMESHRENDERERPROJECTION_HPP
+#endif //DIFFTETVR_TETMESHRENDERERINTERSECTION_HPP

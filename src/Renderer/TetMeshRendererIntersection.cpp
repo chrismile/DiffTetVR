@@ -38,11 +38,11 @@
 #endif
 
 #include "Tet/TetMesh.hpp"
-#include "TetMeshRendererProjection.hpp"
+#include "TetMeshRendererIntersection.hpp"
 
-class GenerateTrianglesProjPass : public sgl::vk::ComputePass {
+class GenerateTrianglesInterPass : public sgl::vk::ComputePass {
 public:
-    explicit GenerateTrianglesProjPass(TetMeshRendererProjection* volumeRenderer)
+    explicit GenerateTrianglesInterPass(TetMeshRendererIntersection* volumeRenderer)
             : ComputePass(volumeRenderer->getRenderer()), volumeRenderer(volumeRenderer) {
     }
 
@@ -90,13 +90,13 @@ protected:
     }
 
 private:
-    TetMeshRendererProjection* volumeRenderer;
+    TetMeshRendererIntersection* volumeRenderer;
     const uint32_t BLOCK_SIZE = 256;
 };
 
-class InitializeIndirectCommandBufferProjPass : public sgl::vk::ComputePass {
+class InitializeIndirectCommandBufferInterPass : public sgl::vk::ComputePass {
 public:
-    explicit InitializeIndirectCommandBufferProjPass(TetMeshRendererProjection* volumeRenderer)
+    explicit InitializeIndirectCommandBufferInterPass(TetMeshRendererIntersection* volumeRenderer)
             : ComputePass(volumeRenderer->getRenderer()), volumeRenderer(volumeRenderer) {
     }
 
@@ -135,13 +135,13 @@ protected:
     }
 
 private:
-    TetMeshRendererProjection* volumeRenderer;
+    TetMeshRendererIntersection* volumeRenderer;
     const uint32_t BLOCK_SIZE = 256; // Value of ComputeTrianglesDepthPass; only used for computing #workgroups.
 };
 
-class ComputeTrianglesDepthProjPass : public sgl::vk::ComputePass {
+class ComputeTrianglesDepthInterPass : public sgl::vk::ComputePass {
 public:
-    explicit ComputeTrianglesDepthProjPass(TetMeshRendererProjection* volumeRenderer)
+    explicit ComputeTrianglesDepthInterPass(TetMeshRendererIntersection* volumeRenderer)
             : ComputePass(volumeRenderer->getRenderer()), volumeRenderer(volumeRenderer) {
     }
 
@@ -172,13 +172,13 @@ protected:
     }
 
 private:
-    TetMeshRendererProjection* volumeRenderer;
+    TetMeshRendererIntersection* volumeRenderer;
     const uint32_t BLOCK_SIZE = 256;
 };
 
-class ProjectedRasterPass : public sgl::vk::RasterPass {
+class IntersectRasterPass : public sgl::vk::RasterPass {
 public:
-    explicit ProjectedRasterPass(TetMeshRendererProjection* volumeRenderer)
+    explicit IntersectRasterPass(TetMeshRendererIntersection* volumeRenderer)
             : RasterPass(volumeRenderer->getRenderer()), volumeRenderer(volumeRenderer) {
     }
     void recreateSwapchain(uint32_t width, uint32_t height) override {
@@ -203,7 +203,7 @@ protected:
         std::map<std::string, std::string> preprocessorDefines;
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
-                { "ProjectedRasterization.Vertex", "ProjectedRasterization.Fragment" }, preprocessorDefines);
+                { "IntersectRasterization.Vertex", "IntersectRasterization.Fragment" }, preprocessorDefines);
     }
     void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) {
         rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
@@ -224,10 +224,10 @@ protected:
     }
 
 private:
-    TetMeshRendererProjection* volumeRenderer;
+    TetMeshRendererIntersection* volumeRenderer;
 };
 
-TetMeshRendererProjection::TetMeshRendererProjection(
+TetMeshRendererIntersection::TetMeshRendererIntersection(
         sgl::vk::Renderer* renderer, sgl::CameraPtr* camera, sgl::TransferFunctionWindow* transferFunctionWindow)
         : TetMeshVolumeRenderer(renderer, camera, transferFunctionWindow) {
     sgl::vk::Device* device = renderer->getDevice();
@@ -246,10 +246,10 @@ TetMeshRendererProjection::TetMeshRendererProjection(
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY);
 
-    generateTrianglesPass = std::make_shared<GenerateTrianglesProjPass>(this);
-    initializeIndirectCommandBufferPass = std::make_shared<InitializeIndirectCommandBufferProjPass>(this);
-    computeTrianglesDepthPass = std::make_shared<ComputeTrianglesDepthProjPass>(this);
-    projectedRasterPass = std::make_shared<ProjectedRasterPass>(this);
+    generateTrianglesPass = std::make_shared<GenerateTrianglesInterPass>(this);
+    initializeIndirectCommandBufferPass = std::make_shared<InitializeIndirectCommandBufferInterPass>(this);
+    computeTrianglesDepthPass = std::make_shared<ComputeTrianglesDepthInterPass>(this);
+    intersectRasterPass = std::make_shared<IntersectRasterPass>(this);
 
 #ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
     const auto& physicalDeviceProperties = device->getPhysicalDeviceProperties();
@@ -257,19 +257,19 @@ TetMeshRendererProjection::TetMeshRendererProjection(
     radixSortVkTarget = radix_sort_vk_target_auto_detect(&physicalDeviceProperties, &subgroupProperties, 2u);
     if (!radixSortVkTarget) {
         sgl::Logfile::get()->throwError(
-                "Error in TetMeshRendererProjection::TetMeshRendererProjection: Could not detect radix sort target.");
+                "Error in TetMeshIntersectionRenderer::TetMeshIntersectionRenderer: Could not detect radix sort target.");
     }
     radixSortVk = radix_sort_vk_create(device->getVkDevice(), nullptr, VK_NULL_HANDLE, radixSortVkTarget);
     if (!radixSortVk) {
         sgl::Logfile::get()->throwError(
-                "Error in TetMeshRendererProjection::TetMeshRendererProjection: Could not fetch radix sort implementation.");
+                "Error in TetMeshIntersectionRenderer::TetMeshIntersectionRenderer: Could not fetch radix sort implementation.");
     }
 #endif
 
-    TetMeshRendererProjection::onClearColorChanged();
+    TetMeshRendererIntersection::onClearColorChanged();
 }
 
-TetMeshRendererProjection::~TetMeshRendererProjection() {
+TetMeshRendererIntersection::~TetMeshRendererIntersection() {
 #ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
     sgl::vk::Device* device = renderer->getDevice();
     if (radixSortVk) {
@@ -278,7 +278,7 @@ TetMeshRendererProjection::~TetMeshRendererProjection() {
 #endif
 }
 
-void TetMeshRendererProjection::setTetMeshData(const TetMeshPtr& _tetMesh) {
+void TetMeshRendererIntersection::setTetMeshData(const TetMeshPtr& _tetMesh) {
     TetMeshVolumeRenderer::setTetMeshData(_tetMesh);
 
     sgl::vk::Device* device = renderer->getDevice();
@@ -294,7 +294,7 @@ void TetMeshRendererProjection::setTetMeshData(const TetMeshPtr& _tetMesh) {
     recreateSortingBuffers();
 }
 
-void TetMeshRendererProjection::createTriangleCounterBuffer() {
+void TetMeshRendererIntersection::createTriangleCounterBuffer() {
     sgl::vk::Device* device = renderer->getDevice();
     VkBufferUsageFlags usage =
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
@@ -309,7 +309,7 @@ void TetMeshRendererProjection::createTriangleCounterBuffer() {
     }
 }
 
-void TetMeshRendererProjection::recreateSortingBuffers() {
+void TetMeshRendererIntersection::recreateSortingBuffers() {
     sgl::vk::Device* device = renderer->getDevice();
     size_t maxNumProjectedTriangles = tetMesh->getNumCells() * 4;
 
@@ -364,10 +364,10 @@ void TetMeshRendererProjection::recreateSortingBuffers() {
 
     generateTrianglesPass->setDataDirty();
     computeTrianglesDepthPass->setDataDirty();
-    projectedRasterPass->setDataDirty();
+    intersectRasterPass->setDataDirty();
 }
 
-void TetMeshRendererProjection::setAdjointPassData(
+void TetMeshRendererIntersection::setAdjointPassData(
         sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer,
         sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer) {
     TetMeshVolumeRenderer::setAdjointPassData(
@@ -387,7 +387,7 @@ void TetMeshRendererProjection::setAdjointPassData(
     adjointRasterPass->setDataDirty();*/
 }
 
-void TetMeshRendererProjection::recreateSwapchain(uint32_t width, uint32_t height) {
+void TetMeshRendererIntersection::recreateSwapchain(uint32_t width, uint32_t height) {
     useExternalFragmentBuffer = false;
     TetMeshVolumeRenderer::recreateSwapchain(width, height);
 
@@ -405,8 +405,8 @@ void TetMeshRendererProjection::recreateSwapchain(uint32_t width, uint32_t heigh
 
     generateTrianglesPass->recreateSwapchain(width, height);
     computeTrianglesDepthPass->recreateSwapchain(width, height);
-    //projectedRasterPass->setOutputImage(outputImageView);
-    projectedRasterPass->recreateSwapchain(width, height);
+    //intersectRasterPass->setOutputImage(outputImageView);
+    intersectRasterPass->recreateSwapchain(width, height);
 
     /*if (adjointRasterPass) {
         //adjointRasterPass->setOutputImage(adjointPassBackbuffer);
@@ -414,7 +414,7 @@ void TetMeshRendererProjection::recreateSwapchain(uint32_t width, uint32_t heigh
     }*/
 }
 
-void TetMeshRendererProjection::recreateSwapchainExternal(
+void TetMeshRendererIntersection::recreateSwapchainExternal(
         uint32_t width, uint32_t height, size_t _fragmentBufferSize, const sgl::vk::BufferPtr& _fragmentBuffer,
         const sgl::vk::BufferPtr& _startOffsetBuffer, const sgl::vk::BufferPtr& _fragmentCounterBuffer) {
     useExternalFragmentBuffer = true;
@@ -423,8 +423,8 @@ void TetMeshRendererProjection::recreateSwapchainExternal(
 
     generateTrianglesPass->recreateSwapchain(width, height);
     computeTrianglesDepthPass->recreateSwapchain(width, height);
-    //projectedRasterPass->setOutputImage(outputImageView);
-    projectedRasterPass->recreateSwapchain(width, height);
+    //intersectRasterPass->setOutputImage(outputImageView);
+    intersectRasterPass->recreateSwapchain(width, height);
 
     /*if (adjointRasterPass) {
         adjointRasterPass->setOutputImage(adjointPassBackbuffer);
@@ -432,23 +432,23 @@ void TetMeshRendererProjection::recreateSwapchainExternal(
     }*/
 }
 
-void TetMeshRendererProjection::getVulkanShaderPreprocessorDefines(
+void TetMeshRendererIntersection::getVulkanShaderPreprocessorDefines(
         std::map<std::string, std::string>& preprocessorDefines) {
     TetMeshVolumeRenderer::getVulkanShaderPreprocessorDefines(preprocessorDefines);
 }
 
-void TetMeshRendererProjection::setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData) {
+void TetMeshRendererIntersection::setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData) {
     TetMeshVolumeRenderer::setRenderDataBindings(renderData);
 
     renderData->setStaticBufferOptional(uniformDataBuffer, "UniformDataBuffer");
 }
 
-void TetMeshRendererProjection::setFramebufferAttachments(sgl::vk::FramebufferPtr& framebuffer, VkAttachmentLoadOp loadOp) {
+void TetMeshRendererIntersection::setFramebufferAttachments(sgl::vk::FramebufferPtr& framebuffer, VkAttachmentLoadOp loadOp) {
     TetMeshVolumeRenderer::setFramebufferAttachments(framebuffer, loadOp);
 }
 
-void TetMeshRendererProjection::onClearColorChanged() {
-    projectedRasterPass->setAttachmentClearColor(clearColor.getFloatColorRGBA());
+void TetMeshRendererIntersection::onClearColorChanged() {
+    intersectRasterPass->setAttachmentClearColor(clearColor.getFloatColorRGBA());
 }
 
 /*template<class T>
@@ -471,7 +471,7 @@ void printBuffer(const sgl::vk::BufferPtr& bufferGpu) {
     bufferCpu->unmapMemory();
 }*/
 
-void TetMeshRendererProjection::render() {
+void TetMeshRendererIntersection::render() {
     uniformData.viewProjMat = (*camera)->getViewProjMatrix();
     uniformData.invProjMat = glm::inverse((*camera)->getProjectionMatrix());
     uniformData.cameraPosition = (*camera)->getPosition();
@@ -520,7 +520,7 @@ void TetMeshRendererProjection::render() {
         if (!sortedTriangleKeyValueBuffer || descriptorBufferInfo.buffer != sortedTriangleKeyValueBuffer->getVkBuffer()) {
             if (sortedTriangleKeyValueBuffer) {
                 renderer->getDevice()->waitIdle();
-                projectedRasterPass->setDataDirty();
+                intersectRasterPass->setDataDirty();
             }
             if (descriptorBufferInfo.buffer == sortingBufferEven->getVkBuffer()) {
                 sortedTriangleKeyValueBuffer = sortingBufferEven;
@@ -558,30 +558,30 @@ void TetMeshRendererProjection::render() {
                 sortedTriangleKeyValueBuffer);
     }
 
-    projectedRasterPass->render();
+    intersectRasterPass->render();
 }
 
-void TetMeshRendererProjection::renderAdjoint() {
+void TetMeshRendererIntersection::renderAdjoint() {
     //adjointRasterPass->render();
 }
 
-void TetMeshRendererProjection::setShadersDirty(VolumeRendererPassType passType) {
+void TetMeshRendererIntersection::setShadersDirty(VolumeRendererPassType passType) {
     if ((int(passType) & int(VolumeRendererPassType::GATHER)) != 0) {
         generateTrianglesPass->setShaderDirty();
         computeTrianglesDepthPass->setShaderDirty();
     }
     if ((int(passType) & int(VolumeRendererPassType::RESOLVE)) != 0) {
-        projectedRasterPass->setShaderDirty();
+        intersectRasterPass->setShaderDirty();
     }
     if ((int(passType) & int(VolumeRendererPassType::OTHER)) != 0) {
         //sortPass->setShaderDirty();
-        /*if (adjointProjectedRasterPass) {
-            adjointProjectedRasterPass->setShaderDirty();
+        /*if (adjointIntersectRasterPass) {
+            adjointIntersectRasterPass->setShaderDirty();
         }*/
     }
 }
 
-void TetMeshRendererProjection::renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor) {
+void TetMeshRendererIntersection::renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor) {
     if (propertyEditor.addCombo(
             "Sorting Algorithm", (int*)&sortingAlgorithm,
             SORTING_ALGORITHM_NAMES, IM_ARRAYSIZE(SORTING_ALGORITHM_NAMES))) {

@@ -32,7 +32,6 @@
 
 #extension GL_EXT_control_flow_attributes : require
 #extension GL_EXT_scalar_block_layout : require
-#extension GL_EXT_debug_printf : enable
 
 layout(local_size_x = BLOCK_SIZE) in;
 
