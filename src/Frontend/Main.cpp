@@ -179,6 +179,7 @@ int main(int argc, char *argv[]) {
 
     sgl::AppSettings::get()->setPrimaryDevice(device);
     sgl::AppSettings::get()->initializeSubsystems();
+    //sgl::vk::ShaderManager->setGenerateDebugInfo(true);
 
     auto app = new MainApp();
     app->run();

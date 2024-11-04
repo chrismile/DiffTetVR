@@ -101,7 +101,7 @@ layout(location = 0) out vec4 outputColor;
 
 // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution.html
 const float RAY_INTERSECTION_EPSILON = 1e-6;
-bool rayTriangleIntersect(vec3 ro, vec3 rd, vec3 p0, vec3 p1, vec3 p2, out float t) {
+bool rayTriangleIntersect(vec3 ro, vec3 rd, vec3 p0, vec3 p1, vec3 p2, out float t, out bool isInside) {
     // Compute plane normal.
     vec3 p0p1 = p1 - p0;
     vec3 p0p2 = p2 - p0;
@@ -115,11 +115,6 @@ bool rayTriangleIntersect(vec3 ro, vec3 rd, vec3 p0, vec3 p1, vec3 p2, out float
 
     float d = -dot(planeNormal, p0);
     t = -(dot(planeNormal, ro) + d) / cosNormalRayDir;
-
-    // Check if the triangle intersection is behind the ray origin.
-    if (t < 0.0) {
-        return false;
-    }
 
     vec3 intersectionPoint = ro + t * rd;
 
@@ -146,6 +141,13 @@ bool rayTriangleIntersect(vec3 ro, vec3 rd, vec3 p0, vec3 p1, vec3 p2, out float
         return false;
     }
 
+    isInside = true;
+
+    // Check if the triangle intersection is behind the ray origin.
+    if (t < 0.0) {
+        return false;
+    }
+
     return true;
 }
 
@@ -155,12 +157,14 @@ bool intersectRayTet(
     t0 = 1e9;
     t1 = -1e9;
     float t;
+    bool isInside;
     [[unroll]] for (uint tetFaceIdx = 0; tetFaceIdx < 4; tetFaceIdx++) {
         vec3 p0 = tetVertexPositions[tetFaceTable[tetFaceIdx][0]];
         vec3 p1 = tetVertexPositions[tetFaceTable[tetFaceIdx][1]];
         vec3 p2 = tetVertexPositions[tetFaceTable[tetFaceIdx][2]];
         t = 1e9;
-        if (rayTriangleIntersect(ro, rd, p0, p1, p2, t)) {
+        isInside = false;
+        if (rayTriangleIntersect(ro, rd, p0, p1, p2, t, isInside)) {
             if (t < t0) {
                 f0 = tetFaceIdx;
                 t0 = t;
@@ -169,7 +173,7 @@ bool intersectRayTet(
                 f1 = tetFaceIdx;
                 t1 = t;
             }
-        } else if (t < 0.0) {
+        } else if (isInside && t < 0.0) {
             f0 = tetFaceIdx;
             t0 = 0.0;
         }
