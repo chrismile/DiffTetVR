@@ -58,7 +58,6 @@ protected:
     void createComputeData(sgl::vk::Renderer* renderer, sgl::vk::ComputePipelinePtr& computePipeline) override {
         computeData = std::make_shared<sgl::vk::ComputeData>(renderer, computePipeline);
         const auto& tetMesh = volumeRenderer->getTetMesh();
-        computeData->setStaticBuffer(tetMesh->getTriangleIndexBuffer(), "TriangleCounterBuffer");
         computeData->setStaticBuffer(volumeRenderer->getUniformDataBuffer(), "UniformDataBuffer");
         computeData->setStaticBuffer(volumeRenderer->getTriangleCounterBuffer(), "TriangleCounterBuffer");
         computeData->setStaticBuffer(tetMesh->getCellIndicesBuffer(), "TetIndexBuffer");
@@ -220,7 +219,8 @@ protected:
         pipelineInfo.setColorWriteEnabled(true);
         pipelineInfo.setDepthWriteEnabled(false);
         pipelineInfo.setDepthTestEnabled(false);
-        pipelineInfo.setBlendMode(sgl::vk::BlendMode::BACK_TO_FRONT_PREMUL_ALPHA);
+        //pipelineInfo.setBlendMode(sgl::vk::BlendMode::BACK_TO_FRONT_PREMUL_ALPHA);
+        pipelineInfo.setBlendMode(sgl::vk::BlendMode::BACK_TO_FRONT_STRAIGHT_ALPHA);
     }
 
 private:
@@ -391,17 +391,8 @@ void TetMeshRendererProjection::recreateSwapchain(uint32_t width, uint32_t heigh
     useExternalFragmentBuffer = false;
     TetMeshVolumeRenderer::recreateSwapchain(width, height);
 
-    size_t startOffsetBufferSizeBytes = sizeof(uint32_t) * paddedWindowWidth * paddedWindowHeight;
-    startOffsetBuffer = {}; // Delete old data first (-> refcount 0)
-    startOffsetBuffer = std::make_shared<sgl::vk::Buffer>(
-            renderer->getDevice(), startOffsetBufferSizeBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
-
-    fragmentCounterBuffer = {}; // Delete old data first (-> refcount 0)
-    fragmentCounterBuffer = std::make_shared<sgl::vk::Buffer>(
-            renderer->getDevice(), sizeof(uint32_t),
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
+    startOffsetBuffer = {};
+    fragmentCounterBuffer = {};
 
     generateTrianglesPass->recreateSwapchain(width, height);
     computeTrianglesDepthPass->recreateSwapchain(width, height);

@@ -60,7 +60,7 @@ public:
     [[nodiscard]] const sgl::vk::BufferPtr& getUniformDataBuffer() { return uniformDataBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getTriangleCounterBuffer() { return triangleCounterBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexPositionBuffer() { return triangleVertexPositionBuffer; }
-    [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexColorBuffer() { return triangleVertexColorBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getTriangleTetIndexBuffer() { return triangleTetIndexBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getDrawIndirectBuffer() { return drawIndirectBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getDispatchIndirectBuffer() { return dispatchIndirectBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getTriangleKeyValueBuffer() { return triangleKeyValueBuffer; }
@@ -99,17 +99,19 @@ private:
     struct UniformData {
         glm::mat4 viewProjMat;
         glm::mat4 invProjMat;
+        glm::mat4 invViewMat;
         glm::vec3 cameraPosition;
         float attenuationCoefficient;
+        glm::vec2 viewportSize;
         uint32_t numTets;
-        uint32_t pad0, pad1, pad2;
+        uint32_t pad0;
     };
     UniformData uniformData = {};
     sgl::vk::BufferPtr uniformDataBuffer;
 
     sgl::vk::BufferPtr triangleCounterBuffer; // 1x uint
     sgl::vk::BufferPtr triangleVertexPositionBuffer; // ?x vec4
-    sgl::vk::BufferPtr triangleVertexColorBuffer; // ?x vec4
+    sgl::vk::BufferPtr triangleTetIndexBuffer; // ?x uint
     sgl::vk::BufferPtr drawIndirectBuffer; // 1x VkDrawIndirectCommand (4x uint32_t)
     sgl::vk::BufferPtr dispatchIndirectBuffer; // 1x VkDispatchIndirectCommand (3x uint32_t)
     sgl::vk::BufferPtr triangleKeyValueBuffer; // ?x uint64_t

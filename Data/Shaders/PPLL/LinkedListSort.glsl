@@ -215,9 +215,7 @@ void minHeapSink4(uint x, uint fragsCount) {
     }
 }
 
-#define USE_SUBDIVS
-const int NUM_SUBDIVS = 4;
-
+#include "RayCommon.glsl"
 #ifndef BACKWARD_PASS
 #include "Forward.glsl"
 #else

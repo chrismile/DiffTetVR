@@ -34,23 +34,21 @@ struct TriangleKeyValue {
     uint index;
     float depth;
 };
-layout(binding = 0, std430) readonly buffer TriangleKeyValueBuffer {
+layout(binding = 1, std430) readonly buffer TriangleKeyValueBuffer {
     TriangleKeyValue triangleKeyValues[];
 };
-layout(binding = 1, std430) readonly buffer TriangleVertexPositionBuffer {
+layout(binding = 2, std430) readonly buffer TriangleVertexPositionBuffer {
     vec4 vertexPositions[];
 };
-layout(binding = 2, std430) readonly buffer TriangleTetIndexBuffer {
+layout(binding = 3, std430) readonly buffer TriangleTetIndexBuffer {
     uint triangleTetIndices[];
 };
 
-layout(location = 0) in vec3 vertexPositionWorld;
-layout(location = 1) flat in uint tetIdx;
+layout(location = 0) flat out uint tetIdx;
 
 void main() {
     uint triangleIdx = triangleKeyValues[gl_VertexIndex / 3u].index;
     uint vertexIdx = triangleIdx * 3u + (gl_VertexIndex % 3u);
-    vertexPositionWorld = invViewProjMatrix * vertexPositions[vertexIdx];
     tetIdx = triangleTetIndices[triangleIdx];
     gl_Position = vertexPositions[vertexIdx];
 }
@@ -60,34 +58,35 @@ void main() {
 
 #version 450
 
-// Input tet data.
-layout(binding = 2, std430) readonly buffer TetIndexBuffer {
+#extension GL_EXT_control_flow_attributes : require
+#extension GL_EXT_scalar_block_layout : require
+
+#include "TetFaceTable.glsl"
+#include "RayCommon.glsl"
+#include "IntersectUniform.glsl"
+
+// Tet data.
+layout(binding = 4, std430) readonly buffer TetIndexBuffer {
     uint tetsIndices[];
 };
-layout(binding = 3, scalar) readonly buffer TetVertexPositionBuffer {
+layout(binding = 5, scalar) readonly buffer TetVertexPositionBuffer {
     vec3 tetsVertexPositions[];
-};
-layout(binding = 4, scalar) readonly buffer TetVertexColorBuffer {
-    vec4 tetsVertexColors[];
 };
 
 #ifndef SHOW_TET_QUALITY
-layout(binding = 6, scalar) readonly buffer VertexColorBuffer {
-    vec4 vertexColors[];
+layout(binding = 6, scalar) readonly buffer TetVertexColorBuffer {
+    vec4 tetsVertexColors[];
 };
 #else
 #define INVALID_TET 0xFFFFFFFFu
-layout(binding = 6, scalar) readonly buffer FaceToTetMapBuffer {
-    uvec2 faceToTetMap[];
-};
-layout(binding = 7, scalar) readonly buffer TetQualityBuffer {
+layout(binding = 6, scalar) readonly buffer TetQualityBuffer {
     float tetQualityArray[];
 };
-layout (binding = 8) uniform MinMaxUniformBuffer {
+layout (binding = 7) uniform MinMaxUniformBuffer {
     float minAttributeValue;
     float maxAttributeValue;
 };
-layout(binding = 9) uniform sampler1D transferFunctionTexture;
+layout(binding = 8) uniform sampler1D transferFunctionTexture;
 vec4 transferFunction(float attr) {
     // Transfer to range [0, 1].
     float posFloat = clamp((attr - minAttributeValue) / (maxAttributeValue - minAttributeValue), 0.0, 1.0);
@@ -96,16 +95,9 @@ vec4 transferFunction(float attr) {
 }
 #endif
 
-layout(location = 0) in vec3 vertexPositionWorld;
-layout(location = 1) flat in uint tetIdx;
+in vec4 gl_FragCoord;
+layout(location = 0) flat in uint tetIdx;
 layout(location = 0) out vec4 outputColor;
-
-const int tetFaceTable[4][4] = {
-        { 0, 1, 2, 3 }, // Last index is point opposite to face.
-        { 1, 0, 3, 2 }, // Last index is point opposite to face.
-        { 0, 2, 3, 1 }, // Last index is point opposite to face.
-        { 2, 1, 3, 0 }, // Last index is point opposite to face.
-};
 
 // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution.html
 const float RAY_INTERSECTION_EPSILON = 1e-6;
@@ -158,7 +150,7 @@ bool rayTriangleIntersect(vec3 ro, vec3 rd, vec3 p0, vec3 p1, vec3 p2, out float
 }
 
 bool intersectRayTet(
-        vec3 ro, vec3 rd, vec3 p[4],
+        vec3 ro, vec3 rd, vec3 tetVertexPositions[4],
         out uint f0, out uint f1, out float t0, out float t1) {
     t0 = 1e9;
     t1 = -1e9;
@@ -188,8 +180,16 @@ bool intersectRayTet(
 #include "ForwardCommon.glsl"
 
 void main() {
+    // Compute camera ray direction.
+    vec2 fragNdc = 2.0 * (gl_FragCoord.xy / vec2(viewportSize)) - 1.0;
+    vec3 rayTarget = (invProjMat * vec4(fragNdc.xy, 1.0, 1.0)).xyz;
+    vec3 normalizedTarget = normalize(rayTarget.xyz);
+    vec3 rayDirection = (invViewMat * vec4(normalizedTarget, 0.0)).xyz;
+
+    // Fetch the tet vertex positions and colors.
     vec3 tetVertexPositions[4];
     vec4 tetVertexColors[4];
+    const uint tetOffset = tetIdx * 4u;
     [[unroll]] for (uint tetVertIdx = 0; tetVertIdx < 4; tetVertIdx++) {
         uint tetGlobalVertIdx = tetsIndices[tetOffset + tetVertIdx];
         tetVertexPositions[tetVertIdx] = tetsVertexPositions[tetGlobalVertIdx];
@@ -199,14 +199,17 @@ void main() {
     uint f0, f1; //< Face index hit 0, 1.
     float t0, t1; //< Ray distance hit 0, 1.
     // needs to return: face idx, bary coords (back and front)
-    if (!intersectRayTet(ro, rd, tetVertexPositions, f0, f1, t0, t1)) {
+    if (!intersectRayTet(cameraPosition, rayDirection, tetVertexPositions, f0, f1, t0, t1)) {
         discard; // Should never happen...
     }
 
-    vec3 intersectPos0 = ro + t0 * rd;
-    vec3 intersectPos1 = ro + t1 * rd;
+    vec3 intersectPos0 = cameraPosition + t0 * rayDirection;
+    vec3 intersectPos1 = cameraPosition + t1 * rayDirection;
 
     // Barycentric interpolation (face 0 and 1).
+    uint i0, i1, i2;
+    vec3 p0, p1, p2;
+    vec4 c0, c1, c2;
     i0 = tetFaceTable[f0][0];
     i1 = tetFaceTable[f0][1];
     i2 = tetFaceTable[f0][2];
@@ -234,7 +237,7 @@ void main() {
 #ifdef USE_SUBDIVS
     vec4 rayColor = vec4(0.0);
     float t = t1 - t0;
-    tSeg = t / float(NUM_SUBDIVS);
+    float tSeg = t / float(NUM_SUBDIVS);
     const float INV_N_SUB = 1.0 / float(NUM_SUBDIVS);
     for (int s = 0; s < NUM_SUBDIVS; s++) {
         float fbegin = (float(s)) * INV_N_SUB;
@@ -243,13 +246,13 @@ void main() {
         vec3 c0 = mix(fragment1Color.rgb, fragment2Color.rgb, fbegin);
         vec3 c1 = mix(fragment1Color.rgb, fragment2Color.rgb, fend);
         float alpha = mix(fragment1Color.a, fragment2Color.a, fmid);
-        currentColor = accumulateLinearConst(tSeg, c0, c1, alpha * attenuationCoefficient);
+        vec4 currentColor = accumulateLinearConst(tSeg, c0, c1, alpha * attenuationCoefficient);
         rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
         rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
     }
 #else
     vec4 rayColor;
-    currentColor = accumulateLinear(
+    vec4 currentColor = accumulateLinear(
             t, fragment1Color.rgb, fragment2Color.rgb,
             fragment1Color.a * attenuationCoefficient, fragment2Color.a * attenuationCoefficient);
     rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;

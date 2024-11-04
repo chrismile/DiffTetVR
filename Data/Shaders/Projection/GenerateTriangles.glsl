@@ -35,6 +35,8 @@
 
 layout(local_size_x = BLOCK_SIZE) in;
 
+#include "TetFaceTable.glsl"
+
 layout(binding = 0) uniform UniformDataBuffer {
     mat4 viewProjMat;
     mat4 invProjMat;
@@ -67,13 +69,6 @@ layout(binding = 6, std430) writeonly buffer TriangleVertexColorBuffer {
     vec4 vertexColors[];
 };
 
-const int tetFaceTable[4][4] = {
-        { 0, 1, 2, 3 }, // Last index is point opposite to face.
-        { 1, 0, 3, 2 }, // Last index is point opposite to face.
-        { 0, 2, 3, 1 }, // Last index is point opposite to face.
-        { 2, 1, 3, 0 }, // Last index is point opposite to face.
-};
-
 float computeAlpha(float thickness) {
     float alpha = 1.0 - exp(-thickness * attenuationCoefficient);
     return alpha;
@@ -87,9 +82,9 @@ void pushTri(inout uint triOffset, vec3 pF, vec3 pB, vec3 pC, vec4 cF, vec4 cB, 
     //vertexColors[idx0] = vec4(alpha, alpha, alpha, alpha);
     //vertexColors[idx0 + 1] = vec4(0.0, 0.0, 0.0, 0.0);
     //vertexColors[idx0 + 2] = vec4(0.0, 0.0, 0.0, 0.0);
-    vertexColors[idx0] = alpha * cF;
-    vertexColors[idx0 + 1] = vec4(0.0, 0.0, 0.0, 0.0);
-    vertexColors[idx0 + 2] = vec4(0.0, 0.0, 0.0, 0.0);
+    vertexColors[idx0] = vec4(cF.rgb, cF.a * alpha);
+    vertexColors[idx0 + 1] = vec4(cB.rgb, 0.0);
+    vertexColors[idx0 + 2] = vec4(cC.rgb, 0.0);
     triOffset++;
 }
 

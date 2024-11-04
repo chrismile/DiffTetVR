@@ -35,13 +35,8 @@
 
 layout(local_size_x = BLOCK_SIZE) in;
 
-layout(binding = 0) uniform UniformDataBuffer {
-    mat4 viewProjMat;
-    mat4 invProjMat;
-    vec3 cameraPosition;
-    float attenuationCoefficient;
-    uint numTets;
-};
+#include "TetFaceTable.glsl"
+#include "IntersectUniform.glsl"
 
 // Atomically increased linear append index.
 layout(binding = 1, std430) buffer TriangleCounterBuffer {
@@ -55,38 +50,22 @@ layout(binding = 2, std430) readonly buffer TetIndexBuffer {
 layout(binding = 3, scalar) readonly buffer TetVertexPositionBuffer {
     vec3 tetsVertexPositions[];
 };
-layout(binding = 4, scalar) readonly buffer TetVertexColorBuffer {
-    vec4 tetsVertexColors[];
-};
 
 // Output triangle data.
-layout(binding = 5, scalar) writeonly buffer TriangleVertexPositionBuffer {
+layout(binding = 4, scalar) writeonly buffer TriangleVertexPositionBuffer {
     vec4 vertexPositions[];
 };
-layout(binding = 6, std430) writeonly buffer TriangleTetIndexBuffer {
+layout(binding = 5, std430) writeonly buffer TriangleTetIndexBuffer {
     uint triangleTetIndices[];
 };
 
-const int tetFaceTable[4][4] = {
-        { 0, 1, 2, 3 }, // Last index is point opposite to face.
-        { 1, 0, 3, 2 }, // Last index is point opposite to face.
-        { 0, 2, 3, 1 }, // Last index is point opposite to face.
-        { 2, 1, 3, 0 }, // Last index is point opposite to face.
-};
-
-void pushTri(inout uint triOffset, vec3 pA vec3 pB, vec3 pC, uint tetIdx) {
+void pushTri(inout uint triOffset, vec4 pA, vec4 pB, vec4 pC, uint tetIdx) {
     uint idx0 = triOffset * 3u;
-    vertexPositions[idx0] = vec4(pA, 1.0);
-    vertexPositions[idx0 + 1] = vec4(pB, 1.0);
-    vertexPositions[idx0 + 2] = vec4(pC, 1.0);
+    vertexPositions[idx0] = pA;
+    vertexPositions[idx0 + 1] = pB;
+    vertexPositions[idx0 + 2] = pC;
     triangleTetIndices[triOffset] = tetIdx;
     triOffset++;
-}
-
-float solveLineT(vec2 p0, vec2 p1, vec2 pt) {
-    vec2 num = pt - p0;
-    vec2 denom = p1 - p0;
-    return abs(denom.x) > abs(denom.y) ? num.x / denom.x : num.y / denom.y;
 }
 
 void main() {
@@ -95,14 +74,12 @@ void main() {
         return;
     }
 
-    // Read the tet vertex positions and colors from the global buffer.
+    // Read the tet vertex positions from the global buffer.
     vec3 tetVertexPositions[4];
-    vec4 tetVertexColors[4];
     vec4 tetVertexPositionsNdc[4];
     [[unroll]] for (uint tetVertIdx = 0; tetVertIdx < 4; tetVertIdx++) {
         uint tetGlobalVertIdx = tetsIndices[tetIdx * 4 + tetVertIdx];
         tetVertexPositions[tetVertIdx] = tetsVertexPositions[tetGlobalVertIdx];
-        tetVertexColors[tetVertIdx] = tetsVertexColors[tetGlobalVertIdx];
         vec4 vertexPosNdc = viewProjMat * vec4(tetsVertexPositions[tetGlobalVertIdx], 1.0);
         vertexPosNdc.xyz /= vertexPosNdc.w;
         vertexPosNdc.w = 1.0;
@@ -110,10 +87,8 @@ void main() {
     }
 
     // Compute the signs of the faces.
-    int tetFaceSigns[4];
-    int numPositiveSigns = 0;
-    int numNegativeSigns = 0;
-    int numZeroSigns = 0;
+    uint numGeneratedTris = 0;
+    uint visibleFaceIndices[3];
     [[unroll]] for (uint tetFaceIdx = 0; tetFaceIdx < 4; tetFaceIdx++) {
         vec3 p0 = tetVertexPositions[tetFaceTable[tetFaceIdx][0]];
         vec3 p1 = tetVertexPositions[tetFaceTable[tetFaceIdx][1]];
@@ -124,60 +99,19 @@ void main() {
         float signValCam = sign(dot(cameraPosition, n) + d);
         float signValOpposite = sign(dot(p3, n) + d);
         int signVal = 0;
-        if (signValCam == 0) {
-            signVal = 0;
-            numZeroSigns++;
-        } else if (signValCam != signValOpposite) {
-            signVal = 1;
-            numPositiveSigns++;
-        } else if (signValCam == signValOpposite) {
-            signVal = -1;
-            numNegativeSigns++;
+        if (signValCam != 0 && signValCam != signValOpposite) {
+            visibleFaceIndices[numGeneratedTris] = tetFaceIdx;
+            numGeneratedTris++;
         }
-        tetFaceSigns[tetFaceIdx] = signVal;
-    }
-
-    // Get the case index and decide on number of triangles.
-    uint caseIdx = 4;
-    uint numGeneratedTris = 1u;
-    if (numZeroSigns == 0) {
-        if (numPositiveSigns != numNegativeSigns) {
-            caseIdx = 1;
-            numGeneratedTris = 3u;
-        } else {
-            caseIdx = 2;
-            numGeneratedTris = 4u;
-        }
-    } else if (numZeroSigns == 1) {
-        caseIdx = 3;
-        numGeneratedTris = 2u;
     }
 
     // Generate the projected triangles.
     uint triOffset = atomicAdd(globalTriangleCounter, numGeneratedTris);
-
-    [[unroll]] for (uint tetFaceIdx = 0; tetFaceIdx < 4; tetFaceIdx++) {
-        vec3 p0 = tetVertexPositions[tetFaceTable[tetFaceIdx][0]];
-        vec3 p1 = tetVertexPositions[tetFaceTable[tetFaceIdx][1]];
-        vec3 p2 = tetVertexPositions[tetFaceTable[tetFaceIdx][2]];
-        vec3 p3 = tetVertexPositions[tetFaceTable[tetFaceIdx][3]];
-        vec3 n = cross(p1 - p0, p2 - p0);
-        float d = -dot(n, p0);
-        float signValCam = sign(dot(cameraPosition, n) + d);
-        float signValOpposite = sign(dot(p3, n) + d);
-        int signVal = 0;
-        if (signValCam == 0) {
-            signVal = 0;
-            numZeroSigns++;
-        } else if (signValCam != signValOpposite) {
-            signVal = 1;
-            numPositiveSigns++;
-        } else if (signValCam == signValOpposite) {
-            signVal = -1;
-            numNegativeSigns++;
-        }
-        tetFaceSigns[tetFaceIdx] = signVal;
+    for (uint visibleFaceIdx = 0; visibleFaceIdx < numGeneratedTris; visibleFaceIdx++) {
+        uint tetFaceIdx = visibleFaceIndices[visibleFaceIdx];
+        vec4 p0 = tetVertexPositionsNdc[tetFaceTable[tetFaceIdx][0]];
+        vec4 p1 = tetVertexPositionsNdc[tetFaceTable[tetFaceIdx][1]];
+        vec4 p2 = tetVertexPositionsNdc[tetFaceTable[tetFaceIdx][2]];
         pushTri(triOffset, p0, p1, p2, tetIdx);
     }
-
 }

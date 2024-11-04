@@ -53,19 +53,17 @@ protected:
         preprocessorDefines.insert(std::make_pair("BLOCK_SIZE", std::to_string(BLOCK_SIZE)));
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
-                { "GenerateTriangles.Compute" }, preprocessorDefines);
+                { "GenerateTrianglesIntersect.Compute" }, preprocessorDefines);
     }
     void createComputeData(sgl::vk::Renderer* renderer, sgl::vk::ComputePipelinePtr& computePipeline) override {
         computeData = std::make_shared<sgl::vk::ComputeData>(renderer, computePipeline);
         const auto& tetMesh = volumeRenderer->getTetMesh();
-        computeData->setStaticBuffer(tetMesh->getTriangleIndexBuffer(), "TriangleCounterBuffer");
         computeData->setStaticBuffer(volumeRenderer->getUniformDataBuffer(), "UniformDataBuffer");
         computeData->setStaticBuffer(volumeRenderer->getTriangleCounterBuffer(), "TriangleCounterBuffer");
         computeData->setStaticBuffer(tetMesh->getCellIndicesBuffer(), "TetIndexBuffer");
         computeData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "TetVertexPositionBuffer");
-        computeData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
         computeData->setStaticBuffer(volumeRenderer->getTriangleVertexPositionBuffer(), "TriangleVertexPositionBuffer");
-        computeData->setStaticBuffer(volumeRenderer->getTriangleVertexColorBuffer(), "TriangleVertexColorBuffer");
+        computeData->setStaticBuffer(volumeRenderer->getTriangleTetIndexBuffer(), "TriangleTetIndexBuffer");
         volumeRenderer->setRenderDataBindings(computeData);
     }
     void setComputePipelineInfo(sgl::vk::ComputePipelineInfo& pipelineInfo) override {
@@ -86,7 +84,7 @@ protected:
         renderer->insertBufferMemoryBarrier(
                 VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                volumeRenderer->getTriangleVertexColorBuffer());
+                volumeRenderer->getTriangleTetIndexBuffer());
     }
 
 private:
@@ -207,15 +205,21 @@ protected:
     }
     void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) {
         rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
+        const auto& tetMesh = volumeRenderer->getTetMesh();
+        rasterData->setStaticBuffer(volumeRenderer->getUniformDataBuffer(), "UniformDataBuffer");
         rasterData->setStaticBuffer(volumeRenderer->getSortedTriangleKeyValueBuffer(), "TriangleKeyValueBuffer");
         rasterData->setStaticBuffer(volumeRenderer->getTriangleVertexPositionBuffer(), "TriangleVertexPositionBuffer");
-        rasterData->setStaticBuffer(volumeRenderer->getTriangleVertexColorBuffer(), "TriangleVertexColorBuffer");
+        rasterData->setStaticBuffer(volumeRenderer->getTriangleTetIndexBuffer(), "TriangleTetIndexBuffer");
+        rasterData->setStaticBuffer(tetMesh->getCellIndicesBuffer(), "TetIndexBuffer");
+        rasterData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "TetVertexPositionBuffer");
+        rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
+        // TODO: Tet quality mode.
         rasterData->setIndirectDrawBuffer(volumeRenderer->getDrawIndirectBuffer(), sizeof(VkDrawIndirectCommand));
         rasterData->setIndirectDrawCount(1);
         volumeRenderer->setRenderDataBindings(rasterData);
     }
     void setGraphicsPipelineInfo(sgl::vk::GraphicsPipelineInfo& pipelineInfo) {
-        pipelineInfo.setCullMode(sgl::vk::CullMode::CULL_NONE);
+        pipelineInfo.setCullMode(sgl::vk::CullMode::CULL_NONE); // TODO
         pipelineInfo.setIsFrontFaceCcw(true);
         pipelineInfo.setColorWriteEnabled(true);
         pipelineInfo.setDepthWriteEnabled(false);
@@ -282,13 +286,13 @@ void TetMeshRendererIntersection::setTetMeshData(const TetMeshPtr& _tetMesh) {
     TetMeshVolumeRenderer::setTetMeshData(_tetMesh);
 
     sgl::vk::Device* device = renderer->getDevice();
-    size_t maxNumProjectedTriangles = tetMesh->getNumCells() * 4;
-    size_t maxNumProjectedVertices = maxNumProjectedTriangles * 3;
+    size_t maxNumTriangles = tetMesh->getNumCells() * 3;
+    size_t maxNumVertices = maxNumTriangles * 3;
     triangleVertexPositionBuffer = std::make_shared<sgl::vk::Buffer>(
-            device, maxNumProjectedVertices * sizeof(glm::vec4),
+            device, maxNumVertices * sizeof(glm::vec4),
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-    triangleVertexColorBuffer = std::make_shared<sgl::vk::Buffer>(
-            device, maxNumProjectedVertices * sizeof(glm::vec4),
+    triangleTetIndexBuffer = std::make_shared<sgl::vk::Buffer>(
+            device, maxNumTriangles * sizeof(glm::uint32_t),
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
     recreateSortingBuffers();
@@ -391,17 +395,8 @@ void TetMeshRendererIntersection::recreateSwapchain(uint32_t width, uint32_t hei
     useExternalFragmentBuffer = false;
     TetMeshVolumeRenderer::recreateSwapchain(width, height);
 
-    size_t startOffsetBufferSizeBytes = sizeof(uint32_t) * paddedWindowWidth * paddedWindowHeight;
-    startOffsetBuffer = {}; // Delete old data first (-> refcount 0)
-    startOffsetBuffer = std::make_shared<sgl::vk::Buffer>(
-            renderer->getDevice(), startOffsetBufferSizeBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
-
-    fragmentCounterBuffer = {}; // Delete old data first (-> refcount 0)
-    fragmentCounterBuffer = std::make_shared<sgl::vk::Buffer>(
-            renderer->getDevice(), sizeof(uint32_t),
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
+    startOffsetBuffer = {};
+    fragmentCounterBuffer = {};
 
     generateTrianglesPass->recreateSwapchain(width, height);
     computeTrianglesDepthPass->recreateSwapchain(width, height);
@@ -474,7 +469,9 @@ void printBuffer(const sgl::vk::BufferPtr& bufferGpu) {
 void TetMeshRendererIntersection::render() {
     uniformData.viewProjMat = (*camera)->getViewProjMatrix();
     uniformData.invProjMat = glm::inverse((*camera)->getProjectionMatrix());
+    uniformData.invViewMat = glm::inverse((*camera)->getViewMatrix());
     uniformData.cameraPosition = (*camera)->getPosition();
+    uniformData.viewportSize = glm::vec2(windowWidth, windowHeight);
     uniformData.attenuationCoefficient = attenuationCoefficient;
     uniformData.numTets = uint32_t(tetMesh->getNumCells());
     uniformDataBuffer->updateData(
