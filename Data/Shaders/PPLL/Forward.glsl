@@ -1,3 +1,31 @@
+/*
+ * BSD 2-Clause License
+ *
+ * Copyright (c) 2024, Christoph Neuhauser
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * * Redistributions of source code must retain the above copyright notice, this
+ *   list of conditions and the following disclaimer.
+ *
+ * * Redistributions in binary form must reproduce the above copyright notice,
+ *   this list of conditions and the following disclaimer in the documentation
+ *   and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include "ForwardCommon.glsl"
 
 #ifdef USE_SHADING
@@ -128,28 +156,28 @@ vec4 frontToBackPQ(uint fragsCount) {
 
 #else // !defined(SHOW_TET_QUALITY)
 
-    vec4 fragment1Color, fragment2Color;
-    float fragment1Depth, fragment2Depth;
-    bool fragment1Boundary, fragment2Boundary;
-    bool fragment1FrontFace, fragment2FrontFace;
+    vec4 fragment0Color, fragment1Color;
+    float fragment0Depth, fragment1Depth;
+    bool fragment0Boundary, fragment1Boundary;
+    bool fragment0FrontFace, fragment1FrontFace;
     float t, tSeg;
-    getNextFragment(0, fragsCount, fragment2Color, fragment2Depth, fragment2Boundary, fragment2FrontFace);
+    getNextFragment(0, fragsCount, fragment1Color, fragment1Depth, fragment1Boundary, fragment1FrontFace);
 
     for (i = 1; i < fragsCount; i++) {
         // Load the new fragment.
-        fragment1Color = fragment2Color;
-        fragment1Depth = fragment2Depth;
-        fragment1Boundary = fragment2Boundary;
-        fragment1FrontFace = fragment2FrontFace;
-        getNextFragment(i, fragsCount, fragment2Color, fragment2Depth, fragment2Boundary, fragment2FrontFace);
+        fragment0Color = fragment1Color;
+        fragment0Depth = fragment1Depth;
+        fragment0Boundary = fragment1Boundary;
+        fragment0FrontFace = fragment1FrontFace;
+        getNextFragment(i, fragsCount, fragment1Color, fragment1Depth, fragment1Boundary, fragment1FrontFace);
 
         // Skip if the closest fragment is a boundary face.
-        if ((fragment1Boundary && !fragment1FrontFace) && (fragment2Boundary && fragment2FrontFace)) {
+        if ((fragment0Boundary && !fragment0FrontFace) && (fragment1Boundary && fragment1FrontFace)) {
             continue;
         }
 
         // Compute the accumulated color of the fragments.
-        t = fragment2Depth - fragment1Depth;
+        t = fragment1Depth - fragment0Depth;
 
 #ifdef USE_SUBDIVS
         tSeg = t / float(NUM_SUBDIVS);
@@ -158,17 +186,17 @@ vec4 frontToBackPQ(uint fragsCount) {
             float fbegin = (float(s)) * INV_N_SUB;
             float fmid = (float(s) + 0.5) * INV_N_SUB;
             float fend = (float(s) + 1.0) * INV_N_SUB;
-            vec3 c0 = mix(fragment1Color.rgb, fragment2Color.rgb, fbegin);
-            vec3 c1 = mix(fragment1Color.rgb, fragment2Color.rgb, fend);
-            float alpha = mix(fragment1Color.a, fragment2Color.a, fmid);
+            vec3 c0 = mix(fragment0Color.rgb, fragment1Color.rgb, fbegin);
+            vec3 c1 = mix(fragment0Color.rgb, fragment1Color.rgb, fend);
+            float alpha = mix(fragment0Color.a, fragment1Color.a, fmid);
             currentColor = accumulateLinearConst(tSeg, c0, c1, alpha * attenuationCoefficient);
             rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
             rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
         }
 #else
         currentColor = accumulateLinear(
-                t, fragment1Color.rgb, fragment2Color.rgb,
-                fragment1Color.a * attenuationCoefficient, fragment2Color.a * attenuationCoefficient);
+                t, fragment0Color.rgb, fragment1Color.rgb,
+                fragment0Color.a * attenuationCoefficient, fragment1Color.a * attenuationCoefficient);
         rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
         rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
 #endif

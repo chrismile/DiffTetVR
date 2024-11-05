@@ -92,7 +92,7 @@ private:
     std::shared_ptr<InitializeIndirectCommandBufferInterPass> initializeIndirectCommandBufferPass;
     std::shared_ptr<ComputeTrianglesDepthInterPass> computeTrianglesDepthPass;
     std::shared_ptr<IntersectRasterPass> intersectRasterPass;
-    // TODO, use fragment shader interlock for adjoint pass.
+    // Adjoint pass uses fragment shader interlock.
     std::shared_ptr<AdjointIntersectRasterPass> adjointIntersectRasterPass; // only for optimization
 
     // Uniform data buffer shared by all shaders.

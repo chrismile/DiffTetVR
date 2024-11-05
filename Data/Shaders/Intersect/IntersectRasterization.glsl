@@ -115,85 +115,8 @@ in vec4 gl_FragCoord;
 layout(location = 0) flat in uint tetIdx;
 layout(location = 0) out vec4 outputColor;
 
-// https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution.html
-const float RAY_INTERSECTION_EPSILON = 1e-6;
-bool rayTriangleIntersect(vec3 ro, vec3 rd, vec3 p0, vec3 p1, vec3 p2, out float t, inout bool isInside) {
-    // Compute plane normal.
-    vec3 p0p1 = p1 - p0;
-    vec3 p0p2 = p2 - p0;
-    vec3 planeNormal = cross(p0p1, p0p2);
-
-    // Check if the plane is parallel to the ray direction.
-    float cosNormalRayDir = dot(planeNormal, rd);
-    if (abs(cosNormalRayDir) < RAY_INTERSECTION_EPSILON) {
-        return false;
-    }
-
-    float d = -dot(planeNormal, p0);
-    t = -(dot(planeNormal, ro) + d) / cosNormalRayDir;
-
-    vec3 intersectionPoint = ro + t * rd;
-
-    // Test whether intersection point is inside of edge p0p1.
-    vec3 p0p = intersectionPoint - p0;
-    vec3 normalEdge = cross(p0p1, p0p);
-    if (dot(planeNormal, normalEdge) < 0.0) {
-        return false;
-    }
-
-    // Test whether intersection point is inside of edge p2p1.
-    vec3 p2p1 = p2 - p1;
-    vec3 p1p = intersectionPoint - p1;
-    normalEdge = cross(p2p1, p1p);
-    if (dot(planeNormal, normalEdge) < 0.0) {
-        return false;
-    }
-
-    // Test whether intersection point is inside of edge p2p0.
-    vec3 p2p0 = p0 - p2;
-    vec3 p2p = intersectionPoint - p2;
-    normalEdge = cross(p2p0, p2p);
-    if (dot(planeNormal, normalEdge) < 0.0) {
-        return false;
-    }
-
-    isInside = true;
-
-    // Check if the triangle intersection is in front of the ray origin.
-    return t >= 0.0;
-}
-
-bool intersectRayTet(
-        vec3 ro, vec3 rd, vec3 tetVertexPositions[4],
-        out uint f0, out uint f1, out float t0, out float t1) {
-    t0 = 1e9;
-    t1 = -1e9;
-    float t;
-    bool isInside;
-    [[unroll]] for (uint tetFaceIdx = 0; tetFaceIdx < 4; tetFaceIdx++) {
-        vec3 p0 = tetVertexPositions[tetFaceTable[tetFaceIdx][0]];
-        vec3 p1 = tetVertexPositions[tetFaceTable[tetFaceIdx][1]];
-        vec3 p2 = tetVertexPositions[tetFaceTable[tetFaceIdx][2]];
-        t = 1e9;
-        isInside = false;
-        bool intersectsTri = rayTriangleIntersect(ro, rd, p0, p1, p2, t, isInside);
-        if (intersectsTri) {
-            if (t < t0) {
-                f0 = tetFaceIdx;
-                t0 = t;
-            }
-            if (t > t1) {
-                f1 = tetFaceIdx;
-                t1 = t;
-            }
-        } else if (isInside && t < 0.0) {
-            f0 = tetFaceIdx;
-            t0 = 0.0;
-        }
-    }
-    return t1 >= t0;
-}
-
+#include "RayIntersectionTests.glsl"
+#include "BarycentricInterpolation.glsl"
 #include "ForwardCommon.glsl"
 
 void main() {
@@ -219,7 +142,6 @@ void main() {
 
     uint f0, f1; //< Face index hit 0, 1.
     float t0, t1; //< Ray distance hit 0, 1.
-    // needs to return: face idx, bary coords (back and front)
     if (!intersectRayTet(cameraPosition, rayDirection, tetVertexPositions, f0, f1, t0, t1)) {
         discard; // Should never happen...
     }
@@ -242,7 +164,7 @@ void main() {
     c1 = tetVertexColors[i1];
     c2 = tetVertexColors[i2];
     vec3 barycentricCoordinates = barycentricInterpolation(p0, p1, p2, intersectPos0);
-    vec4 fragment1Color = c0 * barycentricCoordinates.x + c1 * barycentricCoordinates.y + c2 * barycentricCoordinates.z;
+    vec4 fragment0Color = c0 * barycentricCoordinates.x + c1 * barycentricCoordinates.y + c2 * barycentricCoordinates.z;
 
     i0 = tetFaceTable[f1][0];
     i1 = tetFaceTable[f1][1];
@@ -254,7 +176,7 @@ void main() {
     c1 = tetVertexColors[i1];
     c2 = tetVertexColors[i2];
     barycentricCoordinates = barycentricInterpolation(p0, p1, p2, intersectPos1);
-    vec4 fragment2Color = c0 * barycentricCoordinates.x + c1 * barycentricCoordinates.y + c2 * barycentricCoordinates.z;
+    vec4 fragment1Color = c0 * barycentricCoordinates.x + c1 * barycentricCoordinates.y + c2 * barycentricCoordinates.z;
 #endif
 #if defined(SHOW_TET_QUALITY) && defined(USE_SHADING)
     uint i0 = tetFaceTable[f0][0];
@@ -289,9 +211,9 @@ void main() {
         float fbegin = (float(s)) * INV_N_SUB;
         float fmid = (float(s) + 0.5) * INV_N_SUB;
         float fend = (float(s) + 1.0) * INV_N_SUB;
-        vec3 c0 = mix(fragment1Color.rgb, fragment2Color.rgb, fbegin);
-        vec3 c1 = mix(fragment1Color.rgb, fragment2Color.rgb, fend);
-        float alpha = mix(fragment1Color.a, fragment2Color.a, fmid);
+        vec3 c0 = mix(fragment0Color.rgb, fragment1Color.rgb, fbegin);
+        vec3 c1 = mix(fragment0Color.rgb, fragment1Color.rgb, fend);
+        float alpha = mix(fragment0Color.a, fragment1Color.a, fmid);
         vec4 currentColor = accumulateLinearConst(tSeg, c0, c1, alpha * attenuationCoefficient);
         rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
         rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
@@ -299,8 +221,8 @@ void main() {
 #else
     vec4 rayColor;
     vec4 currentColor = accumulateLinear(
-            t, fragment1Color.rgb, fragment2Color.rgb,
-            fragment1Color.a * attenuationCoefficient, fragment2Color.a * attenuationCoefficient);
+            t, fragment0Color.rgb, fragment1Color.rgb,
+            fragment0Color.a * attenuationCoefficient, fragment1Color.a * attenuationCoefficient);
     rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
     rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
 #endif

@@ -97,14 +97,3 @@ vec4 accumulateLinear(float t, vec3 c0, vec3 c1, float a0, float a1) {
     vec3 C = p2 / (2.0 * a) * (tp * exp(a * tp * tp) - (PI_SQRT * G) / (2.0 * sqrta) - b * exp(a * b * b) + (PI_SQRT * H) / (2.0 * sqrta));
     return vec4(exp(c) * (A + B + C), 1.0 - exp(-a0 * t + 0.5 * (a0 - a1) * t * t));
 }
-
-vec3 barycentricInterpolation(vec3 p0, vec3 p1, vec3 p2, vec3 fragmentPositionWorld) {
-    // Barycentric interpolation (face 0).
-    vec3 d20 = p2 - p0;
-    vec3 d21 = p2 - p1;
-    float totalArea = max(length(cross(d20, d21)), 1e-5);
-    float u = length(cross(d21, fragmentPositionWorld - p1)) / totalArea;
-    float v = length(cross(fragmentPositionWorld - p0, d20)) / totalArea;
-    const vec3 barycentricCoordinates = vec3(u, v, 1.0 - u - v);
-    return barycentricCoordinates;
-}

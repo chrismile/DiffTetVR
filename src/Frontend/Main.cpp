@@ -87,6 +87,7 @@ int main(int argc, char *argv[]) {
 #endif
     optionalDeviceExtensions.push_back(VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
     optionalDeviceExtensions.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+    optionalDeviceExtensions.push_back(VK_EXT_FRAGMENT_SHADER_INTERLOCK_EXTENSION_NAME); // for raster adjoint pass
 
     sgl::vk::Instance* instance = sgl::AppSettings::get()->getVulkanInstance();
     auto* device = new sgl::vk::Device;

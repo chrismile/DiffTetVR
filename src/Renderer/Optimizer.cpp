@@ -49,6 +49,7 @@
 #include "Tet/Writers/VtkWriter.hpp"
 #include "Renderer/TetMeshRendererPPLL.hpp"
 #include "Renderer/TetMeshRendererProjection.hpp"
+#include "Renderer/TetMeshRendererIntersection.hpp"
 #include "LossPass.hpp"
 #include "OptimizerPass.hpp"
 #include "TetRegularizerPass.hpp"
@@ -106,6 +107,9 @@ void TetMeshOptimizer::setTetMeshRendererType(TetMeshRendererType _tetMeshRender
         } else if (tetMeshRendererType == TetMeshRendererType::PROJECTION) {
             tetMeshVolumeRendererGT = std::make_shared<TetMeshRendererProjection>(renderer, &camera, transferFunctionWindow);
             tetMeshVolumeRendererOpt = std::make_shared<TetMeshRendererProjection>(renderer, &camera, transferFunctionWindow);
+        } else if (tetMeshRendererType == TetMeshRendererType::INTERSECTION) {
+            tetMeshVolumeRendererGT = std::make_shared<TetMeshRendererIntersection>(renderer, &camera, transferFunctionWindow);
+            tetMeshVolumeRendererOpt = std::make_shared<TetMeshRendererIntersection>(renderer, &camera, transferFunctionWindow);
         }
     }
 }
@@ -587,12 +591,21 @@ void TetMeshOptimizer::updateRequest() {
             VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
     tetMeshVolumeRendererOpt->render();
-    renderer->insertImageMemoryBarriers(
-            std::vector<sgl::vk::ImagePtr>{ colorImageGT->getImage(), colorImageOpt->getImage() },
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+    if (tetMeshRendererType == TetMeshRendererType::PPLL) {
+        renderer->insertImageMemoryBarriers(
+                std::vector<sgl::vk::ImagePtr>{ colorImageGT->getImage(), colorImageOpt->getImage() },
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+    } else {
+        renderer->insertImageMemoryBarriers(
+                std::vector<sgl::vk::ImagePtr>{ colorImageGT->getImage(), colorImageOpt->getImage() },
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+    }
 
     // Compute the image loss.
     lossPass->render();

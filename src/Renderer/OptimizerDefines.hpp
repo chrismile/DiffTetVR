@@ -87,7 +87,7 @@ struct OptimizationSettings {
     // Selected file name.
     std::string dataSetFileNameGT, dataSetFileNameOpt;
     // Coarse to fine.
-    bool useCoarseToFine = true;
+    bool useCoarseToFine = false;
     bool useConstantInitGrid = false;
     glm::uvec3 initGridResolution{16,16,16};
     uint32_t maxNumTets = 1320000;

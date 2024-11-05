@@ -45,12 +45,12 @@ layout(binding = 1, rgba32f) uniform readonly image2D colorImageGT;
 layout(binding = 2, rgba32f) uniform readonly image2D colorImageOpt;
 layout(binding = 3, rgba32f) uniform writeonly image2D adjointColors;
 
-layout(binding = 4, std430) coherent buffer StartOffsetBufferGT {
+/*layout(binding = 4, std430) coherent buffer StartOffsetBufferGT {
     uint startOffsetGT[];
 };
 layout(binding = 5, std430) coherent buffer StartOffsetBufferOpt {
     uint startOffsetOpt[];
-};
+};*/
 
 void main() {
     const ivec2 imageIdx = ivec2(gl_GlobalInvocationID.xy);

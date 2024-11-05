@@ -67,13 +67,13 @@ void LossPass::setImageViews(
     if (startOffsetBufferGT != _startOffsetBufferGT) {
         startOffsetBufferGT = _startOffsetBufferGT;
         if (computeData) {
-            computeData->setStaticBuffer(startOffsetBufferGT, "StartOffsetBufferGT");
+            computeData->setStaticBufferOptional(startOffsetBufferGT, "StartOffsetBufferGT");
         }
     }
     if (startOffsetBufferOpt != _startOffsetBufferOpt) {
         startOffsetBufferOpt = _startOffsetBufferOpt;
         if (computeData) {
-            computeData->setStaticBuffer(startOffsetBufferOpt, "StartOffsetBufferOpt");
+            computeData->setStaticBufferOptional(startOffsetBufferOpt, "StartOffsetBufferOpt");
         }
     }
 }
@@ -137,8 +137,8 @@ void LossPass::createComputeData(
     computeData->setStaticImageView(colorImageGT, "colorImageGT");
     computeData->setStaticImageView(colorImageOpt, "colorImageOpt");
     computeData->setStaticImageView(adjointColorsImageView, "adjointColors");
-    computeData->setStaticBuffer(startOffsetBufferGT, "StartOffsetBufferGT");
-    computeData->setStaticBuffer(startOffsetBufferOpt, "StartOffsetBufferOpt");
+    computeData->setStaticBufferOptional(startOffsetBufferGT, "StartOffsetBufferGT");
+    computeData->setStaticBufferOptional(startOffsetBufferOpt, "StartOffsetBufferOpt");
 }
 
 void LossPass::_render() {

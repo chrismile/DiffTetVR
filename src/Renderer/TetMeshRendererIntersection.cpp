@@ -186,6 +186,12 @@ public:
         framebufferDirty = true;
         dataDirty = true;
     }
+    void setBlendMode(sgl::vk::BlendMode _blendMode) {
+        if (blendMode != _blendMode) {
+            blendMode = _blendMode;
+            setDataDirty();
+        }
+    }
     void setAttachmentClearColor(const glm::vec4& color) {
         if (framebuffer) {
             bool dataDirtyOld = dataDirty;
@@ -215,7 +221,7 @@ protected:
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
                 { "IntersectRasterization.Vertex", "IntersectRasterization.Fragment" }, preprocessorDefines);
     }
-    void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) {
+    void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) override {
         rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
         const auto& tetMesh = volumeRenderer->getTetMesh();
         rasterData->setStaticBuffer(volumeRenderer->getUniformDataBuffer(), "UniformDataBuffer");
@@ -239,17 +245,93 @@ protected:
         rasterData->setIndirectDrawCount(1);
         volumeRenderer->setRenderDataBindings(rasterData);
     }
-    void setGraphicsPipelineInfo(sgl::vk::GraphicsPipelineInfo& pipelineInfo) {
+    void setGraphicsPipelineInfo(sgl::vk::GraphicsPipelineInfo& pipelineInfo) override {
         pipelineInfo.setCullMode(sgl::vk::CullMode::CULL_NONE); // TODO
         pipelineInfo.setIsFrontFaceCcw(true);
         pipelineInfo.setColorWriteEnabled(true);
         pipelineInfo.setDepthWriteEnabled(false);
         pipelineInfo.setDepthTestEnabled(false);
-        pipelineInfo.setBlendMode(sgl::vk::BlendMode::BACK_TO_FRONT_PREMUL_ALPHA);
+        pipelineInfo.setBlendMode(blendMode);
     }
 
 private:
     TetMeshRendererIntersection* volumeRenderer;
+    sgl::vk::BlendMode blendMode = sgl::vk::BlendMode::BACK_TO_FRONT_PREMUL_ALPHA;
+};
+
+class AdjointIntersectRasterPass : public sgl::vk::RasterPass {
+public:
+    explicit AdjointIntersectRasterPass(TetMeshRendererIntersection* volumeRenderer)
+            : RasterPass(volumeRenderer->getRenderer()), volumeRenderer(volumeRenderer) {
+        auto* device = volumeRenderer->getRenderer()->getDevice();
+        if (!device->isDeviceExtensionSupported(VK_EXT_FRAGMENT_SHADER_INTERLOCK_EXTENSION_NAME)) {
+            sgl::Logfile::get()->throwError(
+                    std::string() + "Error in AdjointIntersectRasterPass::AdjointIntersectRasterPass: "
+                    + "The extension \"" + VK_EXT_FRAGMENT_SHADER_INTERLOCK_EXTENSION_NAME
+                    + "\" is not supported by the used device.");
+        }
+    }
+    void recreateSwapchain(uint32_t width, uint32_t height) override {
+        framebuffer = std::make_shared<sgl::vk::Framebuffer>(device, width, height);
+
+        sgl::vk::AttachmentState attachmentState;
+        attachmentState.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachmentState.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachmentState.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachmentState.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        framebuffer->setColorAttachment(outputImageView, 0, attachmentState, glm::vec4(0.0f));
+
+        framebufferDirty = true;
+        dataDirty = true;
+    }
+    void setOutputImage(sgl::vk::ImageViewPtr& imageView) {
+        outputImageView = imageView;
+        setDataDirty();
+    }
+
+protected:
+    void loadShader() override {
+        sgl::vk::ShaderManager->invalidateShaderCache();
+        std::map<std::string, std::string> preprocessorDefines;
+        preprocessorDefines.insert(std::make_pair("BACKWARD_PASS", ""));
+        preprocessorDefines.insert(std::make_pair("PI_SQRT", std::to_string(std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
+        if (renderer->getDevice()->getPhysicalDeviceShaderAtomicFloatFeatures().shaderBufferFloat32AtomicAdd) {
+            preprocessorDefines.insert(std::make_pair("SUPPORT_BUFFER_FLOAT_ATOMIC_ADD", ""));
+            preprocessorDefines.insert(std::make_pair(
+                    "__extensions", "GL_EXT_shader_atomic_float;GL_EXT_control_flow_attributes"));
+        }
+        volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
+        shaderStages = sgl::vk::ShaderManager->getShaderStages(
+                { "AdjointIntersectRasterization.Vertex", "AdjointIntersectRasterization.Fragment" },
+                preprocessorDefines);
+    }
+    void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) override {
+        rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
+        const auto& tetMesh = volumeRenderer->getTetMesh();
+        rasterData->setStaticBuffer(volumeRenderer->getUniformDataBuffer(), "UniformDataBuffer");
+        rasterData->setStaticBuffer(volumeRenderer->getSortedTriangleKeyValueBuffer(), "TriangleKeyValueBuffer");
+        rasterData->setStaticBuffer(volumeRenderer->getTriangleVertexPositionBuffer(), "TriangleVertexPositionBuffer");
+        rasterData->setStaticBuffer(volumeRenderer->getTriangleTetIndexBuffer(), "TriangleTetIndexBuffer");
+        rasterData->setStaticBuffer(tetMesh->getCellIndicesBuffer(), "TetIndexBuffer");
+        rasterData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "TetVertexPositionBuffer");
+        rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
+        rasterData->setIndirectDrawBuffer(volumeRenderer->getDrawIndirectBuffer(), sizeof(VkDrawIndirectCommand));
+        rasterData->setIndirectDrawCount(1);
+        volumeRenderer->setRenderDataBindings(rasterData);
+    }
+    void setGraphicsPipelineInfo(sgl::vk::GraphicsPipelineInfo& pipelineInfo) override {
+        pipelineInfo.setCullMode(sgl::vk::CullMode::CULL_NONE);
+        pipelineInfo.setIsFrontFaceCcw(true);
+        pipelineInfo.setColorWriteEnabled(false);
+        pipelineInfo.setDepthWriteEnabled(false);
+        pipelineInfo.setDepthTestEnabled(false);
+        pipelineInfo.setBlendMode(sgl::vk::BlendMode::OVERWRITE);
+    }
+
+private:
+    TetMeshRendererIntersection* volumeRenderer;
+    sgl::vk::ImageViewPtr outputImageView;
 };
 
 TetMeshRendererIntersection::TetMeshRendererIntersection(
@@ -400,16 +482,10 @@ void TetMeshRendererIntersection::setAdjointPassData(
             std::move(_adjointPassBackbuffer),
             std::move(_vertexPositionGradientBuffer),
             std::move(_vertexColorGradientBuffer));
-    /*if (!adjointRasterPass) {
-        adjointRasterPass = std::make_shared<AdjointRasterPass>(this);
-        adjointRasterPass->setColorWriteEnabled(false);
-        adjointRasterPass->setAttachmentLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE);
-        adjointRasterPass->setAttachmentStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE);
-        adjointRasterPass->setOutputImageInitialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
-        adjointRasterPass->setOutputImageFinalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        adjointRasterPass->setBlendMode(sgl::vk::BlendMode::OVERWRITE);
+    if (!adjointIntersectRasterPass) {
+        adjointIntersectRasterPass = std::make_shared<AdjointIntersectRasterPass>(this);
     }
-    adjointRasterPass->setDataDirty();*/
+    adjointIntersectRasterPass->setDataDirty();
 }
 
 void TetMeshRendererIntersection::recreateSwapchain(uint32_t width, uint32_t height) {
@@ -421,13 +497,12 @@ void TetMeshRendererIntersection::recreateSwapchain(uint32_t width, uint32_t hei
 
     generateTrianglesPass->recreateSwapchain(width, height);
     computeTrianglesDepthPass->recreateSwapchain(width, height);
-    //intersectRasterPass->setOutputImage(outputImageView);
     intersectRasterPass->recreateSwapchain(width, height);
 
-    /*if (adjointRasterPass) {
-        //adjointRasterPass->setOutputImage(adjointPassBackbuffer);
-        adjointRasterPass->recreateSwapchain(width, height);
-    }*/
+    if (adjointIntersectRasterPass) {
+        adjointIntersectRasterPass->setOutputImage(adjointPassBackbuffer);
+        adjointIntersectRasterPass->recreateSwapchain(width, height);
+    }
 }
 
 void TetMeshRendererIntersection::recreateSwapchainExternal(
@@ -439,13 +514,12 @@ void TetMeshRendererIntersection::recreateSwapchainExternal(
 
     generateTrianglesPass->recreateSwapchain(width, height);
     computeTrianglesDepthPass->recreateSwapchain(width, height);
-    //intersectRasterPass->setOutputImage(outputImageView);
     intersectRasterPass->recreateSwapchain(width, height);
 
-    /*if (adjointRasterPass) {
-        adjointRasterPass->setOutputImage(adjointPassBackbuffer);
-        adjointRasterPass->recreateSwapchain(width, height);
-    }*/
+    if (adjointIntersectRasterPass) {
+        adjointIntersectRasterPass->setOutputImage(adjointPassBackbuffer);
+        adjointIntersectRasterPass->recreateSwapchain(width, height);
+    }
 }
 
 void TetMeshRendererIntersection::getVulkanShaderPreprocessorDefines(
@@ -465,6 +539,13 @@ void TetMeshRendererIntersection::setFramebufferAttachments(sgl::vk::Framebuffer
 
 void TetMeshRendererIntersection::onClearColorChanged() {
     intersectRasterPass->setAttachmentClearColor(clearColor.getFloatColorRGBA());
+    if ((clearColor.getA() == 0) != (alphaMode == AlphaMode::STRAIGHT)) {
+        intersectRasterPass->setShaderDirty();
+        alphaMode = clearColor.getA() == 0 ? AlphaMode::STRAIGHT : AlphaMode::PREMUL;
+        intersectRasterPass->setBlendMode(
+                alphaMode == AlphaMode::PREMUL
+                ? sgl::vk::BlendMode::BACK_TO_FRONT_PREMUL_ALPHA : sgl::vk::BlendMode::OVERWRITE);
+    }
 }
 
 /*template<class T>
@@ -540,6 +621,9 @@ void TetMeshRendererIntersection::render() {
             if (sortedTriangleKeyValueBuffer) {
                 renderer->getDevice()->waitIdle();
                 intersectRasterPass->setDataDirty();
+                if (adjointIntersectRasterPass) {
+                    adjointIntersectRasterPass->setDataDirty();
+                }
             }
             if (descriptorBufferInfo.buffer == sortingBufferEven->getVkBuffer()) {
                 sortedTriangleKeyValueBuffer = sortingBufferEven;
@@ -589,7 +673,7 @@ void TetMeshRendererIntersection::render() {
 }
 
 void TetMeshRendererIntersection::renderAdjoint() {
-    //adjointRasterPass->render();
+    adjointIntersectRasterPass->render();
 }
 
 void TetMeshRendererIntersection::setShadersDirty(VolumeRendererPassType passType) {
@@ -602,9 +686,9 @@ void TetMeshRendererIntersection::setShadersDirty(VolumeRendererPassType passTyp
     }
     if ((int(passType) & int(VolumeRendererPassType::OTHER)) != 0) {
         //sortPass->setShaderDirty();
-        /*if (adjointIntersectRasterPass) {
+        if (adjointIntersectRasterPass) {
             adjointIntersectRasterPass->setShaderDirty();
-        }*/
+        }
     }
 }
 
