@@ -146,7 +146,7 @@ void TetMeshVolumeRenderer::getVulkanShaderPreprocessorDefines(
 
 void TetMeshVolumeRenderer::setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData) {
     if (showDepthComplexity) {
-        renderData->setStaticBuffer(depthComplexityCounterBuffer, "DepthComplexityCounterBuffer");
+        renderData->setStaticBufferOptional(depthComplexityCounterBuffer, "DepthComplexityCounterBuffer");
     }
 
     // For resolve pass.
@@ -176,7 +176,8 @@ void TetMeshVolumeRenderer::renderGuiShared(sgl::PropertyEditor& propertyEditor)
     if (propertyEditor.addCheckbox("Use Quality Metric", &showTetQuality)) {
         tetMesh->setTetQualityMetric(tetQualityMetric);
         setShadersDirty(
-                rendererType == RendererType::PPLL ? VolumeRendererPassType::RESOLVE : VolumeRendererPassType::GATHER);
+                rendererType == RendererType::PPLL || rendererType == RendererType::INTERSECTION
+                ? VolumeRendererPassType::RESOLVE : VolumeRendererPassType::GATHER);
         reRender = true;
     }
     if (rendererType == RendererType::PPLL) {

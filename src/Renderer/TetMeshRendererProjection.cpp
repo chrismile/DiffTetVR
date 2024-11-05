@@ -549,6 +549,17 @@ void TetMeshRendererProjection::render() {
                 sortedTriangleKeyValueBuffer);
     }
 
+    if (showDepthComplexity) {
+        depthComplexityCounterBuffer->fill(0, renderer->getVkCommandBuffer());
+        renderer->insertBufferMemoryBarrier(
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                depthComplexityCounterBuffer);
+        auto viewportLinearW = uint32_t(windowWidth);
+        projectedRasterPass->buildIfNecessary();
+        renderer->pushConstants(
+                projectedRasterPass->getGraphicsPipeline(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, viewportLinearW);
+    }
     projectedRasterPass->render();
 }
 

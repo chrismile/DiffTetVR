@@ -32,6 +32,7 @@
 #include <Graphics/Vulkan/Render/Renderer.hpp>
 #include <Graphics/Vulkan/Render/Passes/BlitRenderPass.hpp>
 #include <ImGui/Widgets/PropertyEditor.hpp>
+#include <ImGui/Widgets/TransferFunctionWindow.hpp>
 
 #ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
 #include <radix_sort/radix_sort_vk.h>
@@ -199,6 +200,17 @@ protected:
     void loadShader() override {
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
+        preprocessorDefines.insert(std::make_pair("PI_SQRT", std::to_string(std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
+        if (volumeRenderer->getShowTetQuality()) {
+            preprocessorDefines.insert(std::make_pair("SHOW_TET_QUALITY", ""));
+            if (volumeRenderer->getUseShading()) {
+                preprocessorDefines.insert(std::make_pair("USE_SHADING", ""));
+            }
+        }
+        if (volumeRenderer->getAlphaMode() == AlphaMode::STRAIGHT) {
+            preprocessorDefines.insert(std::make_pair("ALPHA_MODE_STRAIGHT", ""));
+        }
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
                 { "IntersectRasterization.Vertex", "IntersectRasterization.Fragment" }, preprocessorDefines);
@@ -212,8 +224,17 @@ protected:
         rasterData->setStaticBuffer(volumeRenderer->getTriangleTetIndexBuffer(), "TriangleTetIndexBuffer");
         rasterData->setStaticBuffer(tetMesh->getCellIndicesBuffer(), "TetIndexBuffer");
         rasterData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "TetVertexPositionBuffer");
-        rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
-        // TODO: Tet quality mode.
+        if (volumeRenderer->getShowTetQuality()) {
+            rasterData->setStaticBuffer(tetMesh->getTetQualityBuffer(), "TetQualityBuffer");
+            rasterData->setStaticTexture(
+                    volumeRenderer->getTransferFunctionWindow()->getTransferFunctionMapTextureVulkan(),
+                    "transferFunctionTexture");
+            rasterData->setStaticBuffer(
+                    volumeRenderer->getTransferFunctionWindow()->getMinMaxUboVulkan(),
+                    "MinMaxUniformBuffer");
+        } else {
+            rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
+        }
         rasterData->setIndirectDrawBuffer(volumeRenderer->getDrawIndirectBuffer(), sizeof(VkDrawIndirectCommand));
         rasterData->setIndirectDrawCount(1);
         volumeRenderer->setRenderDataBindings(rasterData);
@@ -472,6 +493,7 @@ void TetMeshRendererIntersection::render() {
     uniformData.invViewMat = glm::inverse((*camera)->getViewMatrix());
     uniformData.cameraPosition = (*camera)->getPosition();
     uniformData.viewportSize = glm::vec2(windowWidth, windowHeight);
+    uniformData.viewportLinearW = uint32_t(windowWidth);
     uniformData.attenuationCoefficient = attenuationCoefficient;
     uniformData.numTets = uint32_t(tetMesh->getNumCells());
     uniformDataBuffer->updateData(
@@ -553,6 +575,14 @@ void TetMeshRendererIntersection::render() {
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
                 sortedTriangleKeyValueBuffer);
+    }
+
+    if (showDepthComplexity) {
+        depthComplexityCounterBuffer->fill(0, renderer->getVkCommandBuffer());
+        renderer->insertBufferMemoryBarrier(
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                depthComplexityCounterBuffer);
     }
 
     intersectRasterPass->render();

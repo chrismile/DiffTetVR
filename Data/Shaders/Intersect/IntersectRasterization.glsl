@@ -60,10 +60,15 @@ void main() {
 
 #extension GL_EXT_control_flow_attributes : require
 #extension GL_EXT_scalar_block_layout : require
+//#extension GL_EXT_debug_printf : enable
 
 #include "TetFaceTable.glsl"
 #include "RayCommon.glsl"
 #include "IntersectUniform.glsl"
+
+#ifdef USE_SHADING
+#include "Lighting.glsl"
+#endif
 
 // Tet data.
 layout(binding = 4, std430) readonly buffer TetIndexBuffer {
@@ -95,13 +100,24 @@ vec4 transferFunction(float attr) {
 }
 #endif
 
+#ifdef SHOW_DEPTH_COMPLEXITY
+// Stores the number of fragments using atomic operations.
+layout(binding = 9) coherent buffer DepthComplexityCounterBuffer {
+    uint depthComplexityCounterBuffer[];
+};
+
+uint addrGenLinear(uvec2 addr2D) {
+    return addr2D.x + viewportLinearW * addr2D.y;
+}
+#endif
+
 in vec4 gl_FragCoord;
 layout(location = 0) flat in uint tetIdx;
 layout(location = 0) out vec4 outputColor;
 
 // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution.html
 const float RAY_INTERSECTION_EPSILON = 1e-6;
-bool rayTriangleIntersect(vec3 ro, vec3 rd, vec3 p0, vec3 p1, vec3 p2, out float t, out bool isInside) {
+bool rayTriangleIntersect(vec3 ro, vec3 rd, vec3 p0, vec3 p1, vec3 p2, out float t, inout bool isInside) {
     // Compute plane normal.
     vec3 p0p1 = p1 - p0;
     vec3 p0p2 = p2 - p0;
@@ -143,12 +159,8 @@ bool rayTriangleIntersect(vec3 ro, vec3 rd, vec3 p0, vec3 p1, vec3 p2, out float
 
     isInside = true;
 
-    // Check if the triangle intersection is behind the ray origin.
-    if (t < 0.0) {
-        return false;
-    }
-
-    return true;
+    // Check if the triangle intersection is in front of the ray origin.
+    return t >= 0.0;
 }
 
 bool intersectRayTet(
@@ -164,7 +176,8 @@ bool intersectRayTet(
         vec3 p2 = tetVertexPositions[tetFaceTable[tetFaceIdx][2]];
         t = 1e9;
         isInside = false;
-        if (rayTriangleIntersect(ro, rd, p0, p1, p2, t, isInside)) {
+        bool intersectsTri = rayTriangleIntersect(ro, rd, p0, p1, p2, t, isInside);
+        if (intersectsTri) {
             if (t < t0) {
                 f0 = tetFaceIdx;
                 t0 = t;
@@ -192,12 +205,16 @@ void main() {
 
     // Fetch the tet vertex positions and colors.
     vec3 tetVertexPositions[4];
+#ifndef SHOW_TET_QUALITY
     vec4 tetVertexColors[4];
+#endif
     const uint tetOffset = tetIdx * 4u;
     [[unroll]] for (uint tetVertIdx = 0; tetVertIdx < 4; tetVertIdx++) {
         uint tetGlobalVertIdx = tetsIndices[tetOffset + tetVertIdx];
         tetVertexPositions[tetVertIdx] = tetsVertexPositions[tetGlobalVertIdx];
+#ifndef SHOW_TET_QUALITY
         tetVertexColors[tetVertIdx] = tetsVertexColors[tetGlobalVertIdx];
+#endif
     }
 
     uint f0, f1; //< Face index hit 0, 1.
@@ -210,6 +227,7 @@ void main() {
     vec3 intersectPos0 = cameraPosition + t0 * rayDirection;
     vec3 intersectPos1 = cameraPosition + t1 * rayDirection;
 
+#ifndef SHOW_TET_QUALITY
     // Barycentric interpolation (face 0 and 1).
     uint i0, i1, i2;
     vec3 p0, p1, p2;
@@ -237,10 +255,34 @@ void main() {
     c2 = tetVertexColors[i2];
     barycentricCoordinates = barycentricInterpolation(p0, p1, p2, intersectPos1);
     vec4 fragment2Color = c0 * barycentricCoordinates.x + c1 * barycentricCoordinates.y + c2 * barycentricCoordinates.z;
+#endif
+#if defined(SHOW_TET_QUALITY) && defined(USE_SHADING)
+    uint i0 = tetFaceTable[f0][0];
+    uint i1 = tetFaceTable[f0][1];
+    uint i2 = tetFaceTable[f0][2];
+    vec3 p0 = tetVertexPositions[i0];
+    vec3 p1 = tetVertexPositions[i1];
+    vec3 p2 = tetVertexPositions[i2];
+    vec3 faceNormal0 = normalize(cross(p1 - p0, p2 - p0));
+#endif
 
-#ifdef USE_SUBDIVS
     vec4 rayColor = vec4(0.0);
     float t = t1 - t0;
+
+#ifdef SHOW_TET_QUALITY
+
+    float tetQuality = tetQualityArray[tetIdx];
+    rayColor = transferFunction(tetQuality);
+#ifdef USE_SHADING
+    rayColor = blinnPhongShadingSurface(rayColor, intersectPos0, faceNormal0);
+#endif
+#ifndef ALPHA_MODE_STRAIGHT
+    rayColor.rgb *= rayColor.a;
+#endif
+
+#else // !defined(SHOW_TET_QUALITY)
+
+#ifdef USE_SUBDIVS
     float tSeg = t / float(NUM_SUBDIVS);
     const float INV_N_SUB = 1.0 / float(NUM_SUBDIVS);
     for (int s = 0; s < NUM_SUBDIVS; s++) {
@@ -261,6 +303,19 @@ void main() {
             fragment1Color.a * attenuationCoefficient, fragment2Color.a * attenuationCoefficient);
     rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
     rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
+#endif
+
+#ifdef ALPHA_MODE_STRAIGHT
+    if (rayColor.a > 1e-5) {
+        rayColor.rgb = rayColor.rgb / rayColor.a; // Correct rgb with alpha
+    }
+#endif
+
+#endif // SHOW_TET_QUALITY
+
+#ifdef SHOW_DEPTH_COMPLEXITY
+    uvec2 fragCoordUvec = uvec2(gl_FragCoord.xy);
+    atomicAdd(depthComplexityCounterBuffer[addrGenLinear(fragCoordUvec)], 1u);
 #endif
 
     outputColor = rayColor;

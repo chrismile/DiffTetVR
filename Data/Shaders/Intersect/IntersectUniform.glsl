@@ -34,4 +34,5 @@ layout(binding = 0) uniform UniformDataBuffer {
     float attenuationCoefficient;
     vec2 viewportSize;
     uint numTets;
+    uint viewportLinearW;
 };

@@ -61,6 +61,24 @@ void main() {
 layout(location = 0) in vec4 fragmentColor;
 layout(location = 0) out vec4 outputColor;
 
+#ifdef SHOW_DEPTH_COMPLEXITY
+// Stores the number of fragments using atomic operations.
+layout(binding = 3) coherent buffer DepthComplexityCounterBuffer {
+    uint depthComplexityCounterBuffer[];
+};
+layout(push_constant) uniform PushConstants {
+    uint viewportLinearW;
+};
+uint addrGenLinear(uvec2 addr2D) {
+    return addr2D.x + viewportLinearW * addr2D.y;
+}
+#endif
+
 void main() {
+#ifdef SHOW_DEPTH_COMPLEXITY
+    uvec2 fragCoordUvec = uvec2(gl_FragCoord.xy);
+    atomicAdd(depthComplexityCounterBuffer[addrGenLinear(fragCoordUvec)], 1u);
+#endif
+
     outputColor = fragmentColor;
 }

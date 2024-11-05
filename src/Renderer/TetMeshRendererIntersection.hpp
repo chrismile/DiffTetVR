@@ -43,7 +43,7 @@ public:
     explicit TetMeshRendererIntersection(
             sgl::vk::Renderer* renderer, sgl::CameraPtr* camera, sgl::TransferFunctionWindow* transferFunctionWindow);
     ~TetMeshRendererIntersection() override;
-    [[nodiscard]] RendererType getRendererType() const override { return RendererType::PROJECTION; }
+    [[nodiscard]] RendererType getRendererType() const override { return RendererType::INTERSECTION; }
 
     // Public interface.
     void recreateSwapchain(uint32_t width, uint32_t height) override;
@@ -104,7 +104,7 @@ private:
         float attenuationCoefficient;
         glm::vec2 viewportSize;
         uint32_t numTets;
-        uint32_t pad0;
+        uint32_t viewportLinearW;
     };
     UniformData uniformData = {};
     sgl::vk::BufferPtr uniformDataBuffer;

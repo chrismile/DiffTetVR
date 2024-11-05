@@ -26,6 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <utility>
+
 #include <Utils/Convert.hpp>
 #include <Utils/File/Logfile.hpp>
 #include <Graphics/Vulkan/Utils/Device.hpp>
@@ -35,7 +37,6 @@
 #include <ImGui/Widgets/PropertyEditor.hpp>
 #include <ImGui/Widgets/NumberFormatting.hpp>
 #include <ImGui/Widgets/TransferFunctionWindow.hpp>
-#include <utility>
 
 #include "Tet/TetMesh.hpp"
 #include "TetMeshRendererPPLL.hpp"
