@@ -874,6 +874,8 @@ void MainApp::renderGuiPropertyEditorCustomNodes() {
                 "Renderer", (int*)&tetMeshRendererType,
                 TET_MESH_RENDERER_TYPES, IM_ARRAYSIZE(TET_MESH_RENDERER_TYPES))) {
             rendererVk->getDevice()->waitIdle();
+            // syncWithCpu is necessary to avoid destroyed bound VkPipeline errors when continuous rendering is on.
+            rendererVk->syncWithCpu();
             createTetMeshRenderer();
         }
         tetMeshVolumeRenderer->renderGuiPropertyEditorNodes(propertyEditor);
