@@ -105,6 +105,7 @@ private:
     const int COARSE_TO_FINE_EPOCH_COLOR_POS = 1;
     const int COARSE_TO_FINE_EPOCH_GATHER = 2;
     bool usePreviewCached = false;
+    TetMeshRendererType tetMeshRendererTypeCached = TetMeshRendererType::PPLL;
     uint32_t viewportWidth = 0;
     uint32_t viewportHeight = 0;
     int currentEpoch = 0;
@@ -128,6 +129,7 @@ private:
     int previewDelay = 0;
     bool showPreview = true;
     std::shared_ptr<ImGuiVulkanImage> colorImageGTImGui, colorImageOptImGui;
+    sgl::vk::TexturePtr colorImageOptPreview; //< In case renderer changes image data in adjoint pass.
 
     // For exporting position gradients to a file.
     std::shared_ptr<VtkWriter> vtkWriter;

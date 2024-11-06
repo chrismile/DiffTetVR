@@ -45,12 +45,15 @@ layout(binding = 2, std430) readonly buffer TriangleVertexPositionBuffer {
 layout(binding = 3, std430) readonly buffer TriangleTetIndexBuffer {
     uint triangleTetIndices[];
 };
+layout(binding = 4) uniform TriangleCounterBuffer {
+    uint numTriangles;
+};
 
 layout(location = 0) flat out uint tetIdx;
 
 void main() {
-    // The triangles are rendered in reverse order using index "numTets - i - 1".
-    uint triangleIdx = triangleKeyValues[numTets - gl_VertexIndex / 3u - 1u].index;
+    // The triangles are rendered in reverse order using index "numTriangles - i - 1".
+    uint triangleIdx = triangleKeyValues[numTriangles - gl_VertexIndex / 3u - 1u].index;
     uint vertexIdx = triangleIdx * 3u + (gl_VertexIndex % 3u);
     tetIdx = triangleTetIndices[triangleIdx];
     gl_Position = vertexPositions[vertexIdx];
@@ -73,13 +76,13 @@ layout(early_fragment_tests, pixel_interlock_ordered) in;
 #include "IntersectUniform.glsl"
 
 // Tet data.
-layout(binding = 4, std430) readonly buffer TetIndexBuffer {
+layout(binding = 5, std430) readonly buffer TetIndexBuffer {
     uint tetsIndices[];
 };
-layout(binding = 5, scalar) readonly buffer TetVertexPositionBuffer {
+layout(binding = 6, scalar) readonly buffer TetVertexPositionBuffer {
     vec3 tetsVertexPositions[];
 };
-layout(binding = 6, scalar) readonly buffer TetVertexColorBuffer {
+layout(binding = 7, scalar) readonly buffer TetVertexColorBuffer {
     vec4 tetsVertexColors[];
 };
 
@@ -88,8 +91,8 @@ layout(location = 0) flat in uint tetIdx;
 layout(location = 0) out vec4 outputColor;
 
 #include "BackwardCommon.glsl"
-layout(binding = 9, rgba32f) uniform image2D colorImageOpt;
-layout(binding = 10, rgba32f) uniform image2D adjointColors;
+layout(binding = 10, rgba32f) uniform image2D colorImageOpt;
+layout(binding = 11, rgba32f) uniform image2D adjointColors;
 
 #include "RayIntersectionTests.glsl"
 #include "BarycentricInterpolation.glsl"

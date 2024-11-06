@@ -43,11 +43,22 @@ layout(binding = 1, std430) readonly buffer TriangleVertexPositionBuffer {
 layout(binding = 2, std430) readonly buffer TriangleVertexColorBuffer {
     vec4 vertexColors[];
 };
+#ifdef BACK_TO_FRONT_BLENDING
+layout(binding = 3) uniform TriangleCounterBuffer {
+    uint numTriangles;
+};
+#endif
 
 layout(location = 0) out vec4 fragmentColor;
 
 void main() {
+#ifdef BACK_TO_FRONT_BLENDING
+    // Rendering is done in back-to-front order, so we reverse the index using "numTriangles - i - 1".
+    uint triangleIdx = triangleKeyValues[numTriangles - gl_VertexIndex / 3u - 1u].index;
+#else
     uint triangleIdx = triangleKeyValues[gl_VertexIndex / 3u].index;
+#endif
+    triangleIdx = triangleKeyValues[gl_VertexIndex / 3u].index;
     uint vertexIdx = triangleIdx * 3u + (gl_VertexIndex % 3u);
     fragmentColor = vertexColors[vertexIdx];
     gl_Position = vertexPositions[vertexIdx];

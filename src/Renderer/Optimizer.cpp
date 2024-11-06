@@ -427,11 +427,19 @@ void TetMeshOptimizer::startRequest() {
     }
 
     if (viewportWidth != settings.imageWidth || viewportHeight != settings.imageHeight
-            || usePreviewCached != showPreview) {
+            || usePreviewCached != showPreview || tetMeshRendererTypeCached != tetMeshRendererType) {
+        colorImageOptPreview = {};
         colorImageGTImGui = {};
         colorImageOptImGui = {};
         colorImageGTImGui = std::make_shared<ImGuiVulkanImage>(renderer, colorImageGT);
-        colorImageOptImGui = std::make_shared<ImGuiVulkanImage>(renderer, colorImageOpt);
+        if (tetMeshRendererType == TetMeshRendererType::PPLL) {
+            colorImageOptImGui = std::make_shared<ImGuiVulkanImage>(renderer, colorImageOpt);
+        } else {
+            auto imageSettings = colorImageOpt->getImage()->getImageSettings();
+            imageSettings.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            colorImageOptPreview = std::make_shared<sgl::vk::Texture>(device, imageSettings);
+            colorImageOptImGui = std::make_shared<ImGuiVulkanImage>(renderer, colorImageOptPreview);
+        }
     }
 
     tetMeshGT = std::make_shared<TetMesh>(device, transferFunctionWindow);
@@ -495,6 +503,7 @@ void TetMeshOptimizer::startRequest() {
     viewportWidth = settings.imageWidth;
     viewportHeight = settings.imageHeight;
     usePreviewCached = showPreview;
+    tetMeshRendererTypeCached = tetMeshRendererType;
 }
 
 void TetMeshOptimizer::recreateGradientBuffers() {
@@ -599,12 +608,41 @@ void TetMeshOptimizer::updateRequest() {
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
     } else {
-        renderer->insertImageMemoryBarriers(
-                std::vector<sgl::vk::ImagePtr>{ colorImageGT->getImage(), colorImageOpt->getImage() },
+        renderer->insertImageMemoryBarrier(
+                colorImageGT->getImage(),
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+        renderer->insertImageMemoryBarrier(
+                colorImageOpt->getImage(),
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT);
+        renderer->insertImageMemoryBarrier(
+                colorImageOptPreview->getImage(),
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_ACCESS_NONE_KHR, VK_ACCESS_TRANSFER_WRITE_BIT);
+        colorImageOpt->getImage()->copyToImage(
+                colorImageOptPreview->getImage(), VK_IMAGE_ASPECT_COLOR_BIT, renderer->getVkCommandBuffer());
+        renderer->insertImageMemoryBarrier(
+                colorImageOpt->getImage(),
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+        renderer->insertImageMemoryBarrier(
+                colorImageOptPreview->getImage(),
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+        /*renderer->insertImageMemoryBarriers(
+                std::vector<sgl::vk::ImagePtr>{ colorImageGT->getImage(), colorImageOpt->getImage() },
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);*/
     }
 
     // Compute the image loss.

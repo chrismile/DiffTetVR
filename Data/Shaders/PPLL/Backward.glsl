@@ -27,8 +27,8 @@
  */
 
 #include "BackwardCommon.glsl"
-layout(binding = 9, rgba32f) uniform readonly image2D colorImageOpt;
-layout(binding = 10, rgba32f) uniform readonly image2D adjointColors;
+layout(binding = 10, rgba32f) uniform readonly image2D colorImageOpt;
+layout(binding = 11, rgba32f) uniform readonly image2D adjointColors;
 
 void getNextFragment(
         in uint i, in uint fragsCount, out vec4 color, out float depthLinear, out bool boundary, out bool frontFace,

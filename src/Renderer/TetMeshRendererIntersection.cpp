@@ -186,12 +186,12 @@ public:
         framebufferDirty = true;
         dataDirty = true;
     }
-    void setBlendMode(sgl::vk::BlendMode _blendMode) {
-        if (blendMode != _blendMode) {
-            blendMode = _blendMode;
-            setDataDirty();
-        }
-    }
+    //void setBlendMode(sgl::vk::BlendMode _blendMode) {
+    //    if (blendMode != _blendMode) {
+    //        blendMode = _blendMode;
+    //        setDataDirty();
+    //    }
+    //}
     void setAttachmentClearColor(const glm::vec4& color) {
         if (framebuffer) {
             bool dataDirtyOld = dataDirty;
@@ -214,9 +214,10 @@ protected:
                 preprocessorDefines.insert(std::make_pair("USE_SHADING", ""));
             }
         }
-        if (volumeRenderer->getAlphaMode() == AlphaMode::STRAIGHT) {
-            preprocessorDefines.insert(std::make_pair("ALPHA_MODE_STRAIGHT", ""));
-        }
+        preprocessorDefines.insert(std::make_pair("BACK_TO_FRONT_BLENDING", ""));
+        //if (volumeRenderer->getAlphaMode() == AlphaMode::STRAIGHT) {
+        //    preprocessorDefines.insert(std::make_pair("ALPHA_MODE_STRAIGHT", ""));
+        //}
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
                 { "IntersectRasterization.Vertex", "IntersectRasterization.Fragment" }, preprocessorDefines);
@@ -226,6 +227,7 @@ protected:
         const auto& tetMesh = volumeRenderer->getTetMesh();
         rasterData->setStaticBuffer(volumeRenderer->getUniformDataBuffer(), "UniformDataBuffer");
         rasterData->setStaticBuffer(volumeRenderer->getSortedTriangleKeyValueBuffer(), "TriangleKeyValueBuffer");
+        rasterData->setStaticBufferOptional(volumeRenderer->getTriangleCounterBuffer(), "TriangleCounterBuffer");
         rasterData->setStaticBuffer(volumeRenderer->getTriangleVertexPositionBuffer(), "TriangleVertexPositionBuffer");
         rasterData->setStaticBuffer(volumeRenderer->getTriangleTetIndexBuffer(), "TriangleTetIndexBuffer");
         rasterData->setStaticBuffer(tetMesh->getCellIndicesBuffer(), "TetIndexBuffer");
@@ -246,7 +248,7 @@ protected:
         volumeRenderer->setRenderDataBindings(rasterData);
     }
     void setGraphicsPipelineInfo(sgl::vk::GraphicsPipelineInfo& pipelineInfo) override {
-        pipelineInfo.setCullMode(sgl::vk::CullMode::CULL_NONE); // TODO
+        pipelineInfo.setCullMode(sgl::vk::CullMode::CULL_NONE);
         pipelineInfo.setIsFrontFaceCcw(true);
         pipelineInfo.setColorWriteEnabled(true);
         pipelineInfo.setDepthWriteEnabled(false);
@@ -311,6 +313,7 @@ protected:
         const auto& tetMesh = volumeRenderer->getTetMesh();
         rasterData->setStaticBuffer(volumeRenderer->getUniformDataBuffer(), "UniformDataBuffer");
         rasterData->setStaticBuffer(volumeRenderer->getSortedTriangleKeyValueBuffer(), "TriangleKeyValueBuffer");
+        rasterData->setStaticBufferOptional(volumeRenderer->getTriangleCounterBuffer(), "TriangleCounterBuffer");
         rasterData->setStaticBuffer(volumeRenderer->getTriangleVertexPositionBuffer(), "TriangleVertexPositionBuffer");
         rasterData->setStaticBuffer(volumeRenderer->getTriangleTetIndexBuffer(), "TriangleTetIndexBuffer");
         rasterData->setStaticBuffer(tetMesh->getCellIndicesBuffer(), "TetIndexBuffer");
@@ -539,13 +542,13 @@ void TetMeshRendererIntersection::setFramebufferAttachments(sgl::vk::Framebuffer
 
 void TetMeshRendererIntersection::onClearColorChanged() {
     intersectRasterPass->setAttachmentClearColor(clearColor.getFloatColorRGBA());
-    if ((clearColor.getA() == 0) != (alphaMode == AlphaMode::STRAIGHT)) {
+    /*if ((clearColor.getA() == 0) != (alphaMode == AlphaMode::STRAIGHT)) {
         intersectRasterPass->setShaderDirty();
         alphaMode = clearColor.getA() == 0 ? AlphaMode::STRAIGHT : AlphaMode::PREMUL;
         intersectRasterPass->setBlendMode(
                 alphaMode == AlphaMode::PREMUL
                 ? sgl::vk::BlendMode::BACK_TO_FRONT_PREMUL_ALPHA : sgl::vk::BlendMode::OVERWRITE);
-    }
+    }*/
 }
 
 /*template<class T>

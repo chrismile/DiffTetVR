@@ -43,11 +43,21 @@ layout(binding = 2, std430) readonly buffer TriangleVertexPositionBuffer {
 layout(binding = 3, std430) readonly buffer TriangleTetIndexBuffer {
     uint triangleTetIndices[];
 };
+#ifdef BACK_TO_FRONT_BLENDING
+layout(binding = 4) uniform TriangleCounterBuffer {
+    uint numTriangles;
+};
+#endif
 
 layout(location = 0) flat out uint tetIdx;
 
 void main() {
+#ifdef BACK_TO_FRONT_BLENDING
+    // Rendering is done in back-to-front order, so we reverse the index using "numTriangles - i - 1".
+    uint triangleIdx = triangleKeyValues[numTriangles - gl_VertexIndex / 3u - 1u].index;
+#else
     uint triangleIdx = triangleKeyValues[gl_VertexIndex / 3u].index;
+#endif
     uint vertexIdx = triangleIdx * 3u + (gl_VertexIndex % 3u);
     tetIdx = triangleTetIndices[triangleIdx];
     gl_Position = vertexPositions[vertexIdx];
@@ -71,27 +81,27 @@ void main() {
 #endif
 
 // Tet data.
-layout(binding = 4, std430) readonly buffer TetIndexBuffer {
+layout(binding = 5, std430) readonly buffer TetIndexBuffer {
     uint tetsIndices[];
 };
-layout(binding = 5, scalar) readonly buffer TetVertexPositionBuffer {
+layout(binding = 6, scalar) readonly buffer TetVertexPositionBuffer {
     vec3 tetsVertexPositions[];
 };
 
 #ifndef SHOW_TET_QUALITY
-layout(binding = 6, scalar) readonly buffer TetVertexColorBuffer {
+layout(binding = 7, scalar) readonly buffer TetVertexColorBuffer {
     vec4 tetsVertexColors[];
 };
 #else
 #define INVALID_TET 0xFFFFFFFFu
-layout(binding = 6, scalar) readonly buffer TetQualityBuffer {
+layout(binding = 7, scalar) readonly buffer TetQualityBuffer {
     float tetQualityArray[];
 };
-layout (binding = 7) uniform MinMaxUniformBuffer {
+layout (binding = 8) uniform MinMaxUniformBuffer {
     float minAttributeValue;
     float maxAttributeValue;
 };
-layout(binding = 8) uniform sampler1D transferFunctionTexture;
+layout(binding = 9) uniform sampler1D transferFunctionTexture;
 vec4 transferFunction(float attr) {
     // Transfer to range [0, 1].
     float posFloat = clamp((attr - minAttributeValue) / (maxAttributeValue - minAttributeValue), 0.0, 1.0);

@@ -26,14 +26,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-layout(binding = 7, scalar) coherent buffer VertexPositionGradientBuffer {
+layout(binding = 8, scalar) coherent buffer VertexPositionGradientBuffer {
 #ifdef SUPPORT_BUFFER_FLOAT_ATOMIC_ADD
     float vertexPositionGradients[]; // stride: vec3
 #else
     uint vertexPositionGradients[]; // stride: vec3
 #endif
 };
-layout(binding = 8, scalar) coherent buffer VertexColorGradientBuffer {
+layout(binding = 9, scalar) coherent buffer VertexColorGradientBuffer {
 #ifdef SUPPORT_BUFFER_FLOAT_ATOMIC_ADD
     float vertexColorGradients[]; // stride: vec4
 #else
