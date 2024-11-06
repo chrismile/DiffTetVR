@@ -97,6 +97,9 @@ void DataView::resize(int newWidth, int newHeight) {
     } else {
         imageSettings.format = VK_FORMAT_R8G8B8A8_UNORM;
     }
+    if (tetMeshVolumeRenderer->getRendererType() != RendererType::PPLL) {
+        imageSettings.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    }
     dataViewTexture = std::make_shared<sgl::vk::Texture>(
             device, imageSettings, sgl::vk::ImageSamplerSettings(),
             VK_IMAGE_ASPECT_COLOR_BIT);

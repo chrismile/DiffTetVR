@@ -61,6 +61,7 @@ public:
     sgl::Color clearColor;
     uint32_t viewportWidth = 0;
     uint32_t viewportHeight = 0;
+    RendererType cachedRendererType = RendererType::PPLL;
 
     sgl::vk::TexturePtr dataViewTexture; ///< Can be 8 or 16 bits per pixel.
     sgl::vk::TexturePtr compositedDataViewTexture; ///< The final RGBA8 texture.
