@@ -137,6 +137,9 @@ void main() {
     float uf0 = bary0.x;
     float vf0 = bary0.y;
     vec4 fragment0Color = cf00 * bary0.x + cf01 * bary0.y + cf02 * bary0.z;
+    if00 = tetsIndices[tetOffset + if00];
+    if01 = tetsIndices[tetOffset + if01];
+    if02 = tetsIndices[tetOffset + if02];
 
     uint if10 = tetFaceTable[f1][0];
     uint if11 = tetFaceTable[f1][1];
@@ -151,6 +154,9 @@ void main() {
     float uf1 = bary1.x;
     float vf1 = bary1.y;
     vec4 fragment1Color = cf10 * bary1.x + cf11 * bary1.y + cf12 * bary1.z;
+    if10 = tetsIndices[tetOffset + if10];
+    if11 = tetsIndices[tetOffset + if11];
+    if12 = tetsIndices[tetOffset + if12];
 
     vec4 colorAcc; // temp from loop
     float A; // temp from loop

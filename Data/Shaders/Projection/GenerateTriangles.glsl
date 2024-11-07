@@ -74,7 +74,7 @@ float computeAlpha(float thickness) {
     return alpha;
 }
 
-void pushTri(inout uint triOffset, vec3 pF, vec3 pB, vec3 pC, vec4 cF, vec4 cB, vec4 cC, float alpha) {
+void pushTri(inout uint triOffset, vec3 pF, vec3 pB, vec3 pC, vec4 cF, vec4 cB, vec4 cC, float thickness) {
     uint idx0 = triOffset * 3u;
     vertexPositions[idx0] = vec4(pF, 1.0);
     vertexPositions[idx0 + 1] = vec4(pB, 1.0);
@@ -82,7 +82,8 @@ void pushTri(inout uint triOffset, vec3 pF, vec3 pB, vec3 pC, vec4 cF, vec4 cB, 
     //vertexColors[idx0] = vec4(alpha, alpha, alpha, alpha);
     //vertexColors[idx0 + 1] = vec4(0.0, 0.0, 0.0, 0.0);
     //vertexColors[idx0 + 2] = vec4(0.0, 0.0, 0.0, 0.0);
-    vertexColors[idx0] = vec4(cF.rgb, cF.a * alpha);
+    float alpha = computeAlpha(cF.a * thickness);
+    vertexColors[idx0] = vec4(cF.rgb, alpha);
     vertexColors[idx0 + 1] = vec4(cB.rgb, 0.0);
     vertexColors[idx0 + 2] = vec4(cC.rgb, 0.0);
     triOffset++;
@@ -189,11 +190,10 @@ void main() {
         vec4 pTW = invProjMat * vec4(pT, 1.0);
         vec4 pIW = invProjMat * vec4(pI, 1.0);
         float thickness = distance(pTW.xyz / pTW.w, pIW.xyz / pIW.w);
-        float alpha = computeAlpha(thickness);
 
-        pushTri(triOffset, pT, pA, pB, cT, cA, cB, alpha);
-        pushTri(triOffset, pT, pB, pC, cT, cB, cC, alpha);
-        pushTri(triOffset, pT, pC, pA, cT, cC, cA, alpha);
+        pushTri(triOffset, pT, pA, pB, cT, cA, cB, thickness);
+        pushTri(triOffset, pT, pB, pC, cT, cB, cC, thickness);
+        pushTri(triOffset, pT, pC, pA, cT, cC, cA, thickness);
     } else if (caseIdx == 2) {
         // Find vertices forming lines lp and lm, which are formed by faces with sign (1, 1) and sign (-1, -1).
         uint ff0 = 4, ff1 = 4; // faces plus
@@ -252,11 +252,10 @@ void main() {
         vec4 pBW = invProjMat * vec4(pB, 1.0);
         float thickness = distance(pFW.xyz / pFW.w, pBW.xyz / pBW.w);
 
-        float alpha = computeAlpha(thickness);
-        pushTri(triOffset, pF, pf0, pb0, cF, cf0, cb0, alpha);
-        pushTri(triOffset, pF, pf0, pb1, cF, cf0, cb1, alpha);
-        pushTri(triOffset, pF, pf1, pb0, cF, cf1, cb0, alpha);
-        pushTri(triOffset, pF, pf1, pb1, cF, cf1, cb1, alpha);
+        pushTri(triOffset, pF, pf0, pb0, cF, cf0, cb0, thickness);
+        pushTri(triOffset, pF, pf0, pb1, cF, cf0, cb1, thickness);
+        pushTri(triOffset, pF, pf1, pb0, cF, cf1, cb0, thickness);
+        pushTri(triOffset, pF, pf1, pb1, cF, cf1, cb1, thickness);
     } else if (caseIdx == 3) {
         // 2 triangles; find the two tris formed by 2x negative or 2x positive faces.
 
@@ -308,10 +307,9 @@ void main() {
         vec4 pFW = invProjMat * vec4(pF, 1.0);
         vec4 pTW = invProjMat * vec4(pT, 1.0);
         float thickness = distance(pFW, pTW);
-        float alpha = computeAlpha(thickness);
 
-        pushTri(triOffset, pF, pA, pB, cF, cA, cB, alpha);
-        pushTri(triOffset, pF, pA, pC, cF, cA, cC, alpha);
+        pushTri(triOffset, pF, pA, pB, cF, cA, cB, thickness);
+        pushTri(triOffset, pF, pA, pC, cF, cA, cC, thickness);
     } else if (caseIdx == 4) {
         // The protruding vertex is not shared by front and back face.
         uint ff = 4, fb = 4; // face front, back
@@ -349,7 +347,6 @@ void main() {
         vec4 cC = tetVertexColors[ivShared0];
         float thickness = distance(tetVertexPosition[ivUnique0], tetVertexPosition[ivUnique1]);
 
-        float alpha = computeAlpha(thickness);
-        pushTri(triOffset, pF, pB, pC, cF, cB, cC, alpha);
+        pushTri(triOffset, pF, pB, pC, cF, cB, cC, thickness);
     }
 }

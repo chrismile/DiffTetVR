@@ -91,5 +91,6 @@ void main() {
     atomicAdd(depthComplexityCounterBuffer[addrGenLinear(fragCoordUvec)], 1u);
 #endif
 
-    outputColor = fragmentColor;
+    //outputColor = fragmentColor;
+    outputColor = vec4(fragmentColor.rgb * fragmentColor.a, fragmentColor.a);
 }
