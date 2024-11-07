@@ -123,6 +123,9 @@ public:
     TetMeshWriter* createTetMeshWriterByExtension(const std::string& fileExtension);
     std::map<std::string, std::function<TetMeshWriter*()>> factoriesWriter;
 
+    // Removes the links between all tets, i.e., a potentially used shared index representation is reversed.
+    void unlinkTets();
+
 private:
     sgl::vk::Device* device;
 

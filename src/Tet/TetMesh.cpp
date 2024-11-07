@@ -1086,3 +1086,33 @@ void TetMesh::setHexMeshConst(
     convertHexToTetIndices(hexIndices, cellIndices);
     setTetMeshDataInternal();
 }
+
+void TetMesh::unlinkTets() {
+    updateCellIndicesIfNecessary();
+    updateVerticesIfNecessary();
+    if (!forceUseOvmRepresentation) {
+        useOvmRepresentation = false;
+    }
+    std::vector<uint32_t> cellIndicesUnlinked(cellIndices.size());
+    std::vector<glm::vec3> vertexPositionsUnlinked(cellIndices.size());
+    std::vector<glm::vec4> vertexColorsUnlinked(cellIndices.size());
+    const size_t numIndices = cellIndicesUnlinked.size();
+#ifdef USE_TBB
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, numIndices), [&](auto const& r) {
+            for (auto i = r.begin(); i != r.end(); i++) {
+#else
+#if _OPENMP >= 201107
+    #pragma omp parallel for shared(numIndices, cellIndices, cellIndicesUnlinked, vertexPositionsUnlinked, vertexColorsUnlinked) default(none)
+#endif
+    for (size_t i = 0; i < numIndices; i++) {
+#endif
+        size_t vidx = cellIndices.at(i);
+        cellIndicesUnlinked.at(i) = i;
+        vertexPositionsUnlinked.at(i) = vertexPositions.at(vidx);
+        vertexColorsUnlinked.at(i) = vertexColors.at(vidx);
+    }
+#ifdef USE_TBB
+    });
+#endif
+    setTetMeshData(cellIndicesUnlinked, vertexPositionsUnlinked, vertexColorsUnlinked);
+}

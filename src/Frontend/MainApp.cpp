@@ -824,6 +824,11 @@ void MainApp::renderGuiMenuBar() {
                 std::cout << "Pitch: " << camera->getPitch() << std::endl;
                 std::cout << "FoVy: " << (camera->getFOVy() / sgl::PI * 180.0f) << std::endl;
             }
+
+            if (tetMesh && ImGui::MenuItem("Unlink Tets...")) {
+                tetMesh->unlinkTets();
+            }
+
             ImGui::EndMenu();
         }
 
