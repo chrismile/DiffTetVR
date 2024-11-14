@@ -88,6 +88,7 @@ public:
     virtual void setUseLinearRGB(bool _useLinearRGB);
     void setCoarseToFineTargetNumTets(uint32_t _coarseToFineMaxNumTets);
     virtual void setTetMeshData(const TetMeshPtr& _tetMesh);
+    [[nodiscard]] inline float getAttenuationCoefficient() const { return attenuationCoefficient; }
     void setAttenuationCoefficient(float _attenuationCoefficient) { attenuationCoefficient = _attenuationCoefficient; reRender = true; }
     virtual void setClearColor(const sgl::Color& _clearColor);
     void setNewTilingMode(int newTileWidth, int newTileHeight, bool useMortonCode = false);

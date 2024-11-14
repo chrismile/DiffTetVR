@@ -243,6 +243,10 @@ MainApp::~MainApp() {
 }
 
 void MainApp::createTetMeshRenderer() {
+    float oldAttenuation = 0.0f;
+    if (tetMeshVolumeRenderer) {
+        oldAttenuation = tetMeshVolumeRenderer->getAttenuationCoefficient();
+    }
     tetMeshVolumeRenderer = {};
     if (tetMeshRendererType == TetMeshRendererType::PPLL) {
         tetMeshVolumeRenderer = std::make_shared<TetMeshRendererPPLL>(
@@ -256,6 +260,9 @@ void MainApp::createTetMeshRenderer() {
     }
     tetMeshVolumeRenderer->setUseLinearRGB(useLinearRGB);
     tetMeshVolumeRenderer->setClearColor(clearColor);
+    if (oldAttenuation > 0.0f) {
+        tetMeshVolumeRenderer->setAttenuationCoefficient(oldAttenuation);
+    }
     //tetMeshVolumeRenderer->setFileDialogInstance(fileDialogInstance);
     if (tetMesh) {
         tetMeshVolumeRenderer->setTetMeshData(tetMesh);

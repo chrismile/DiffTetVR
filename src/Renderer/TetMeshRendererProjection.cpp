@@ -51,6 +51,8 @@ protected:
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("BLOCK_SIZE", std::to_string(BLOCK_SIZE)));
+        preprocessorDefines.insert(std::make_pair("PI_SQRT", std::to_string(std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
                 { "GenerateTriangles.Compute" }, preprocessorDefines);
