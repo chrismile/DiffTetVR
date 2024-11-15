@@ -140,7 +140,8 @@ void doRippling(std::vector<Prism>& prisms, int startIdx, const std::vector<bool
                         //p->cuts = possibleCuts.getConsistentCuts().value();
                         break;
                     }
-                    possibleCuts.update(neighborIdxLocal, 1u - neighbor->cuts.getCut(neighborFaceIdx));
+                    newCut.setCut(neighborFaceIdx, 1u - newCut.getCut(neighborFaceIdx));
+                    possibleCuts.update(neighborIdxLocal, 1u - newCut.getCut(neighborFaceIdx));
                 }
             }
             if (!existsFlippableNeighbor) {
@@ -246,7 +247,6 @@ bool FlipSolver::solve(std::vector<Prism>& prisms) {
                     // Use rippling algorithm.
                     p->cuts = possibleCuts.getAnyConsistentCut();
                     doRippling(prisms, currIdx, prismVisitedArray);
-                    //writeGraphviz(prisms);
                     //throw std::runtime_error("Error: Rippling algorithm not yet implemented.");
                 }
             }
