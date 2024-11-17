@@ -103,8 +103,8 @@ void accumulateLinearConstAdjoint(
         dOut_dc0 = ((1.0 - A) + ((t + inva) * A - inva)) * dOut_dC.rgb;
         dOut_dc1 = -((t + inva) * A - inva) * dOut_dC.rgb;
         dOut_da =
-        dot(dOut_dC.rgb, t * A * c0 + (inva * inva - (t * t + inva * inva + t * inva) * A) * (c0 - c1))
-        + dOut_dC.a * t * A;
+                dot(dOut_dC.rgb, t * A * c0 + (inva * inva - (t * t + inva * inva + t * inva) * A) * (c0 - c1))
+                + dOut_dC.a * t * A;
     }
 }
 

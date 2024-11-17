@@ -93,7 +93,7 @@ vec4 accumulateLinear(float t, vec3 c0, vec3 c1, float a0, float a1) {
     vec3 p2 = a0 * c0 - a1 * c0 - a0 * c1 + a1 * c1;
 
     vec3 A = (p0 - b * p1 + b * b * p2) * PI_SQRT / (2.0 * sqrta) * (G - H);
-    vec3 B = (p1 - 2 * b * p2) / (2.0 * a) * (exp(a * tp * tp) - exp(a * b * b));
+    vec3 B = (p1 - 2.0 * b * p2) / (2.0 * a) * (exp(a * tp * tp) - exp(a * b * b));
     vec3 C = p2 / (2.0 * a) * (tp * exp(a * tp * tp) - (PI_SQRT * G) / (2.0 * sqrta) - b * exp(a * b * b) + (PI_SQRT * H) / (2.0 * sqrta));
-    return vec4(exp(c) * (A + B + C), 1.0 - exp(-a0 * t + 0.5 * (a0 - a1) * t * t));
+    return vec4(exp(c) * (A + B + C), 1.0 - exp(-a0 * t + a * t * t));
 }
