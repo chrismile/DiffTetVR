@@ -158,6 +158,10 @@ protected:
         computeData->setStaticBuffer(volumeRenderer->getTriangleCounterBuffer(), "TriangleCounterBuffer");
         computeData->setStaticBuffer(volumeRenderer->getTriangleVertexPositionBuffer(), "TriangleVertexPositionBuffer");
         computeData->setStaticBuffer(volumeRenderer->getTriangleKeyValueBuffer(), "TriangleKeyValueBuffer");
+        computeData->setStaticBufferOptional(volumeRenderer->getTriangleTetIndexBuffer(), "TriangleTetIndexBuffer");
+        computeData->setStaticBufferOptional(volumeRenderer->getUniformDataBuffer(), "UniformDataBuffer");
+        computeData->setStaticBufferOptional(volumeRenderer->getTetMesh()->getCellIndicesBuffer(), "TetIndexBuffer");
+        computeData->setStaticBufferOptional(volumeRenderer->getTetMesh()->getVertexPositionBuffer(), "TetVertexPositionBuffer");
         volumeRenderer->setRenderDataBindings(computeData);
     }
     void setComputePipelineInfo(sgl::vk::ComputePipelineInfo& pipelineInfo) override {

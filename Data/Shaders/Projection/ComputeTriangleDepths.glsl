@@ -29,22 +29,35 @@
 -- Compute
 
 #version 450
+#extension GL_EXT_control_flow_attributes : require
+#extension GL_EXT_scalar_block_layout : require
 
 layout(local_size_x = BLOCK_SIZE) in;
 
-layout(binding = 0) uniform TriangleCounterBuffer {
+#include "IntersectUniform.glsl"
+
+layout(binding = 1) uniform TriangleCounterBuffer {
     uint numTriangles;
 };
 
-layout(binding = 1, std430) readonly buffer TriangleVertexPositionBuffer {
+layout(binding = 2, std430) readonly buffer TriangleVertexPositionBuffer {
     vec4 vertexPositions[];
+};
+layout(binding = 3, std430) readonly buffer TriangleTetIndexBuffer {
+    uint triangleTetIndices[];
+};
+layout(binding = 4, std430) readonly buffer TetIndexBuffer {
+    uint tetsIndices[];
+};
+layout(binding = 5, scalar) readonly buffer TetVertexPositionBuffer {
+    vec3 tetsVertexPositions[];
 };
 
 struct TriangleKeyValue {
     uint index;
     float depth;
 };
-layout(binding = 2, std430) writeonly buffer TriangleKeyValueBuffer {
+layout(binding = 6, std430) writeonly buffer TriangleKeyValueBuffer {
     TriangleKeyValue triangleKeyValues[];
 };
 
@@ -55,10 +68,28 @@ void main() {
     }
 
     const uint triangleOffset = globalThreadIdx * 3u;
-    vec4 p0 = vertexPositions[triangleOffset];
-    vec4 p1 = vertexPositions[triangleOffset + 1u];
-    vec4 p2 = vertexPositions[triangleOffset + 2u];
-    vec4 centerPoint = (p0 + p1 + p2) / 3.0;
+    //vec4 p0 = vertexPositions[triangleOffset];
+    //vec4 p1 = vertexPositions[triangleOffset + 1u];
+    //vec4 p2 = vertexPositions[triangleOffset + 2u];
+    //vec4 centerPoint = (p0 + p1 + p2) / 3.0;
+
+    /*uint tetOffset = triangleTetIndices[globalThreadIdx] * 4u;
+    vec3 p[4];
+    [[unroll]] for (uint tetVertIdx = 0; tetVertIdx < 4; tetVertIdx++) {
+        vec4 pt = viewProjMat * vec4(tetsVertexPositions[tetsIndices[tetOffset + tetVertIdx]], 1.0);
+        pt.xyz /= pt.w;
+        p[tetVertIdx] = pt.xyz;
+    }
+    vec3 centerPoint = (p[0] + p[1] + p[2] + p[3]) / 4.0;*/
+
+    uint tetOffset = triangleTetIndices[globalThreadIdx] * 4u;
+    vec3 centerPoint;
+    [[unroll]] for (uint tetVertIdx = 0; tetVertIdx < 4; tetVertIdx++) {
+        centerPoint += tetsVertexPositions[tetsIndices[tetOffset + tetVertIdx]];
+    }
+    centerPoint /= 4.0;
+    vec4 centerPointHom = viewProjMat * vec4(centerPoint, 1.0);
+    centerPoint = centerPointHom.xyz / centerPointHom.w;
 
     TriangleKeyValue triKeyVal;
     triKeyVal.index = globalThreadIdx;
