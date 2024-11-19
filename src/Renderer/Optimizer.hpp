@@ -112,6 +112,7 @@ private:
     int coarseToFineEpoch = 0;
     uint32_t numCellsInit = 0;
     sgl::CameraPtr camera;
+    std::chrono::system_clock::time_point timeStart{};
 
     // Image data & adjoint image data.
     sgl::vk::TexturePtr colorImageGT, colorImageOpt;

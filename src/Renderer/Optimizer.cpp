@@ -333,6 +333,9 @@ void TetMeshOptimizer::renderGuiDialog() {
     }
 
     if (hasResult && !hasStopped) {
+        auto timeEnd = std::chrono::system_clock::now();
+        auto elapsedLoad = std::chrono::duration_cast<std::chrono::microseconds >(timeEnd - timeStart);
+        std::cout << "Elapsed time optimization: " << (double(elapsedLoad.count()) * 1e-6) << "s" << std::endl;
         if (settings.optimizerSettingsPositions.learningRate > 0.0f) {
             tetMeshOpt->setVerticesChangedOnDevice(true);
         }
@@ -504,6 +507,7 @@ void TetMeshOptimizer::startRequest() {
     viewportHeight = settings.imageHeight;
     usePreviewCached = showPreview;
     tetMeshRendererTypeCached = tetMeshRendererType;
+    timeStart = std::chrono::system_clock::now();
 }
 
 void TetMeshOptimizer::recreateGradientBuffers() {
