@@ -30,6 +30,10 @@
 layout(binding = 10, rgba32f) uniform readonly image2D colorImageOpt;
 layout(binding = 11, rgba32f) uniform readonly image2D adjointColors;
 
+layout(push_constant) uniform PushConstants {
+    uint useAbsGrad;
+};
+
 void getNextFragment(
         in uint i, in uint fragsCount, out vec4 color, out float depthLinear, out bool boundary, out bool frontFace,
         out uint i0, out uint i1, out uint i2, out vec3 p, out vec3 p0, out vec3 p1, out vec3 p2,
@@ -298,6 +302,27 @@ vec4 frontToBackPQ(uint fragsCount) {
             dOut_dpf12 = vec3(0.0);
         }*/
 
+        /*
+         * For testing an idea similar to the one from the following 3DGS paper:
+         * "AbsGS: Recovering Fine Details for 3D Gaussian Splatting". 2024.
+         * Zongxin Ye, Wenyu Li, Sidun Liu, Peng Qiao, Yong Dou.
+         */
+        if (useAbsGrad != 0u) {
+            dOut_dcf00 = abs(dOut_dcf00);
+            dOut_dcf01 = abs(dOut_dcf01);
+            dOut_dcf02 = abs(dOut_dcf02);
+            dOut_dcf10 = abs(dOut_dcf10);
+            dOut_dcf11 = abs(dOut_dcf11);
+            dOut_dcf12 = abs(dOut_dcf12);
+            dOut_dpf00 = abs(dOut_dpf00);
+            dOut_dpf01 = abs(dOut_dpf01);
+            dOut_dpf02 = abs(dOut_dpf02);
+            dOut_dpf10 = abs(dOut_dpf10);
+            dOut_dpf11 = abs(dOut_dpf11);
+            dOut_dpf12 = abs(dOut_dpf12);
+        }
+
+        // Accumulate gradients wrt. tet properties.
         atomicAddGradCol(if00, dOut_dcf00);
         atomicAddGradCol(if01, dOut_dcf01);
         atomicAddGradCol(if02, dOut_dcf02);

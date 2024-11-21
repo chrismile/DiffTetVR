@@ -280,7 +280,9 @@ void TetMeshRendererPPLL::updateLargeMeshMode() {
     LargeMeshMode newMeshLargeMeshMode = MESH_SIZE_SMALL;
     if (numCells > size_t(1e6)) { // > 1m cells
         newMeshLargeMeshMode = MESH_SIZE_LARGE;
-    } else if (numCells > size_t(1e5)) { // > 1m cells
+    } else if (numCells > size_t(1e5)) { // > 100k cells
+        newMeshLargeMeshMode = MESH_SIZE_MEDIUM_LARGE;
+    } else if (numCells > size_t(2e4)) { // > 20k cells
         newMeshLargeMeshMode = MESH_SIZE_MEDIUM;
     }
     if (newMeshLargeMeshMode != largeMeshMode) {
@@ -632,6 +634,10 @@ void TetMeshRendererPPLL::render() {
 }
 
 void TetMeshRendererPPLL::renderAdjoint() {
+    adjointRasterPass->buildIfNecessary();
+    uint32_t useAbsGradUint = useAbsGrad ? 1 : 0;
+    renderer->pushConstants(
+            adjointRasterPass->getGraphicsPipeline(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, useAbsGradUint);
     adjointRasterPass->render();
 }
 

@@ -167,8 +167,9 @@ MainApp::MainApp()
     }
 
     tetMeshOptimizer = new TetMeshOptimizer(
-            rendererVk, [this](const TetMeshPtr& _tetMesh) {
+            rendererVk, [this](const TetMeshPtr& _tetMesh, float _attenuationCoefficient) {
                 tetMesh = _tetMesh;
+                tetMeshVolumeRenderer->setAttenuationCoefficient(_attenuationCoefficient);
                 tetMeshVolumeRenderer->setTetMeshData(tetMesh);
             },
             dataSetNames.size() > 1, [this]() -> std::string {

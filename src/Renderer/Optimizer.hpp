@@ -64,7 +64,7 @@ private:
 class TetMeshOptimizer {
 public:
     TetMeshOptimizer(
-            sgl::vk::Renderer* renderer, std::function<void(const TetMeshPtr&)> setTetMeshCallback,
+            sgl::vk::Renderer* renderer, std::function<void(const TetMeshPtr&, float)> setTetMeshCallback,
             bool hasDataSets, std::function<std::string()> renderGuiDataSetSelectionMenuCallback,
             sgl::TransferFunctionWindow* transferFunctionWindow);
 
@@ -92,7 +92,7 @@ private:
     // Settings.
     OptimizationSettings settings{};
     TetMeshPtr tetMeshGT, tetMeshOpt;
-    std::function<void(const TetMeshPtr&)> setTetMeshCallback;
+    std::function<void(const TetMeshPtr&, float)> setTetMeshCallback;
     bool hasDataSets = false;
     std::function<std::string()> renderGuiDataSetSelectionMenuCallback;
     bool hasRequest = false;

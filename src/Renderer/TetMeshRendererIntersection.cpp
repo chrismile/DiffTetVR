@@ -676,6 +676,10 @@ void TetMeshRendererIntersection::render() {
 }
 
 void TetMeshRendererIntersection::renderAdjoint() {
+    adjointIntersectRasterPass->buildIfNecessary();
+    uint32_t useAbsGradUint = useAbsGrad ? 1 : 0;
+    renderer->pushConstants(
+            adjointIntersectRasterPass->getGraphicsPipeline(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, useAbsGradUint);
     adjointIntersectRasterPass->render();
 }
 

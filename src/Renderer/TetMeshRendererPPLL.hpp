@@ -45,9 +45,9 @@ const char* const FRAGMENT_BUFFER_MODE_NAMES[3] = {
         "Buffer", "Buffer Array", "Buffer Reference Array"
 };
 
-const int MESH_MODE_DEPTH_COMPLEXITIES_PPLL[3][2] = {
+const int MESH_MODE_DEPTH_COMPLEXITIES_PPLL[4][2] = {
         {20, 100}, // avg and max depth complexity medium
-        //{80, 256}, // avg and max depth complexity medium
+        {80, 256}, // avg and max depth complexity medium
         //{120, 380} // avg and max depth complexity very large
         {100, 520}, // avg and max depth complexity very large
         {400, 900} // avg and max depth complexity very large
@@ -146,7 +146,7 @@ private:
 
     // Per-pixel linked list settings.
     enum LargeMeshMode {
-        MESH_SIZE_SMALL, MESH_SIZE_MEDIUM, MESH_SIZE_LARGE
+        MESH_SIZE_SMALL, MESH_SIZE_MEDIUM, MESH_SIZE_MEDIUM_LARGE, MESH_SIZE_LARGE
     };
     LargeMeshMode largeMeshMode = MESH_SIZE_SMALL;
     int expectedAvgDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[0][0];

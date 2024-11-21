@@ -92,6 +92,7 @@ public:
     void setAttenuationCoefficient(float _attenuationCoefficient) { attenuationCoefficient = _attenuationCoefficient; reRender = true; }
     virtual void setClearColor(const sgl::Color& _clearColor);
     void setNewTilingMode(int newTileWidth, int newTileHeight, bool useMortonCode = false);
+    inline void setUseAbsGrad(bool _useAbsGrad) { useAbsGrad = _useAbsGrad; }
 
     // Public interface, only for backward pass.
     virtual void setAdjointPassData(
@@ -188,6 +189,7 @@ protected:
     float attenuationCoefficient = 100.0f;
     bool useCoarseToFine = false;
     uint32_t coarseToFineMaxNumTets = 0;
+    bool useAbsGrad = false;
 
     // Per-pixel linked list data (only written to in subclass TetMeshRendererPPLL).
     bool useExternalFragmentBuffer = false;

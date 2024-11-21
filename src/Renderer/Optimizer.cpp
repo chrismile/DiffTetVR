@@ -85,7 +85,7 @@ ImVec2 ImGuiVulkanImage::getTextureSizeImVec2() {
 
 
 TetMeshOptimizer::TetMeshOptimizer(
-        sgl::vk::Renderer* renderer, std::function<void(const TetMeshPtr&)> setTetMeshCallback,
+        sgl::vk::Renderer* renderer, std::function<void(const TetMeshPtr&, float)> setTetMeshCallback,
         bool hasDataSets, std::function<std::string()> renderGuiDataSetSelectionMenuCallback,
         sgl::TransferFunctionWindow* transferFunctionWindow)
         : renderer(renderer), setTetMeshCallback(std::move(setTetMeshCallback)), hasDataSets(hasDataSets),
@@ -339,7 +339,7 @@ void TetMeshOptimizer::renderGuiDialog() {
         if (settings.optimizerSettingsPositions.learningRate > 0.0f) {
             tetMeshOpt->setVerticesChangedOnDevice(true);
         }
-        setTetMeshCallback(tetMeshOpt);
+        setTetMeshCallback(tetMeshOpt, settings.attenuationCoefficient);
         needsReRender = true;
     }
     if (hasResult || hasStopped) {
@@ -693,7 +693,13 @@ void TetMeshOptimizer::updateRequest() {
     }
 
     // Compute the gradients wrt. the tet vertices for the image loss.
+    if (coarseToFineEpochIndex == COARSE_TO_FINE_EPOCH_GATHER
+            && (settings.splitGradientType == SplitGradientType::ABS_POSITION
+                    || settings.splitGradientType == SplitGradientType::ABS_COLOR)) {
+        tetMeshVolumeRendererOpt->setUseAbsGrad(true);
+    }
     tetMeshVolumeRendererOpt->renderAdjoint();
+    tetMeshVolumeRendererOpt->setUseAbsGrad(false);
     if (settings.optimizePositions) {
         renderer->insertBufferMemoryBarrier(
                 VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
@@ -707,7 +713,12 @@ void TetMeshOptimizer::updateRequest() {
                 vertexColorGradientBuffer);
     }
 
-    if (settings.exportPositionGradients && settings.optimizePositions) {
+    // TODO
+    bool writeNow =
+            (!settings.useCoarseToFine && settings.optimizePositions)
+            || (settings.useCoarseToFine && coarseToFineEpochIndex == COARSE_TO_FINE_EPOCH_GATHER
+                    && currentEpoch == settings.maxNumEpochs - 1);
+    if (settings.exportPositionGradients && writeNow) {
         const auto& cellIndices = tetMeshOpt->getCellIndices();
         auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
         auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();

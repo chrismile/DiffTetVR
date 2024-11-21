@@ -46,10 +46,10 @@ const char* const LOSS_TYPE_NAMES[] = {
 };
 
 enum class SplitGradientType {
-    POSITION, COLOR
+    POSITION, COLOR, ABS_POSITION, ABS_COLOR
 };
 const char* const SPLIT_GRADIENT_TYPE_NAMES[] = {
-        "Position", "Color"
+        "Position", "Color", "abs(Position)", "abs(Color)"
 };
 
 struct OptimizerSettings {
