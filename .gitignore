@@ -60,6 +60,7 @@ docs/latex/*
 
 # CLion
 .idea/*
+*/.idea/*
 cmake-build-*/
 
 Data/Screenshots/*
@@ -77,3 +78,8 @@ vcpkg_installed/*
 
 # macOS
 .DS_Store
+
+# setuptools
+build*/
+*egg-info*
+dist/*

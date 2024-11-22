@@ -83,8 +83,10 @@ public:
     void render() override;
     void renderAdjoint() override;
 
+#ifndef DISABLE_IMGUI
     /// Renders the GUI. The "reRender" flag might be set depending on the user's actions.
     void renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor) override;
+#endif
 
 private:
     void onClearColorChanged() override;
@@ -95,8 +97,10 @@ private:
     void resolve();
     void setShadersDirty(VolumeRendererPassType passType) override;
 
+#ifndef DISABLE_IMGUI
     void renderGuiMemory(sgl::PropertyEditor& propertyEditor) override;
     std::string getMaxDepthComplexityString() override { return sgl::toString(expectedMaxDepthComplexity); }
+#endif
 
     // Render passes.
     std::shared_ptr<GatherRasterPass> gatherRasterPass;

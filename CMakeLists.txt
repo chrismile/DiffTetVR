@@ -111,6 +111,7 @@ endif()
 
 if (${SUPPORT_PYTORCH})
     find_package(Torch QUIET)
+    find_package(Python3 COMPONENTS Development QUIET)
 endif()
 if (${SUPPORT_PYTORCH} AND NOT Torch_FOUND)
     MESSAGE(STATUS "PyTorch support was enabled, but PyTorch couldn't be found. Disabling PyTorch support.")
@@ -290,7 +291,8 @@ if (${Vulkan_FOUND} AND NOT "USE_SGL_VULKAN_HEADERS" IN_LIST SGL_INTERFACE_COMPI
     target_link_libraries(DiffTetVR PUBLIC Vulkan::Headers)
 endif()
 
-if (${SUPPORT_PYTORCH} AND Torch_FOUND)
+if (${SUPPORT_PYTORCH} AND Torch_FOUND AND Python3_FOUND)
+    target_link_libraries(DiffTetVR PRIVATE Python3::Python)
     target_link_libraries(DiffTetVR PRIVATE ${TORCH_LIBRARIES})
     target_include_directories(DiffTetVR PRIVATE ${TORCH_INCLUDE_DIR})
     target_compile_definitions(DiffTetVR PRIVATE SUPPORT_PYTORCH)

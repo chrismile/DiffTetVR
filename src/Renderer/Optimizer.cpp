@@ -38,10 +38,12 @@
 #include <Graphics/Vulkan/Buffers/Buffer.hpp>
 #include <Graphics/Vulkan/Utils/Device.hpp>
 #include <Graphics/Vulkan/Render/Renderer.hpp>
+#ifndef DISABLE_IMGUI
 #include <ImGui/ImGuiWrapper.hpp>
 #include <ImGui/imgui.h>
 #include <ImGui/imgui_stdlib.h>
 #include <ImGui/imgui_custom.h>
+#endif
 
 #include "Tet/TetMesh.hpp"
 #include "Tet/Loaders/LoadersUtil.hpp"
@@ -55,6 +57,7 @@
 #include "TetRegularizerPass.hpp"
 #include "Optimizer.hpp"
 
+#ifndef DISABLE_IMGUI
 ImGuiVulkanImage::ImGuiVulkanImage(sgl::vk::Renderer* renderer, sgl::vk::TexturePtr _texture)
         : renderer(renderer), texture(std::move(_texture)) {
     descriptorSetImGui = ImGui_ImplVulkan_AddTexture(
@@ -82,6 +85,7 @@ ImTextureID ImGuiVulkanImage::getImGuiTextureId() {
 ImVec2 ImGuiVulkanImage::getTextureSizeImVec2() {
     return {float(texture->getImage()->getImageSettings().width), float(texture->getImage()->getImageSettings().height)};
 }
+#endif
 
 
 TetMeshOptimizer::TetMeshOptimizer(
@@ -114,6 +118,7 @@ void TetMeshOptimizer::setTetMeshRendererType(TetMeshRendererType _tetMeshRender
     }
 }
 
+#ifndef DISABLE_IMGUI
 void TetMeshOptimizer::openDialog() {
     ImGui::OpenPopup("Optimize Tet Mesh");
     isOptimizationSettingsDialogOpen = true;
@@ -348,6 +353,7 @@ void TetMeshOptimizer::renderGuiDialog() {
         hasRequest = false;
     }
 }
+#endif
 
 float TetMeshOptimizer::getProgress() {
     return float(currentEpoch) / float(settings.maxNumEpochs);
@@ -429,6 +435,7 @@ void TetMeshOptimizer::startRequest() {
                 device, imageSettings));
     }
 
+#ifndef DISABLE_IMGUI
     if (viewportWidth != settings.imageWidth || viewportHeight != settings.imageHeight
             || usePreviewCached != showPreview || tetMeshRendererTypeCached != tetMeshRendererType) {
         colorImageOptPreview = {};
@@ -444,6 +451,7 @@ void TetMeshOptimizer::startRequest() {
             colorImageOptImGui = std::make_shared<ImGuiVulkanImage>(renderer, colorImageOptPreview);
         }
     }
+#endif
 
     tetMeshGT = std::make_shared<TetMesh>(device, transferFunctionWindow);
     tetMeshOpt = std::make_shared<TetMesh>(device, transferFunctionWindow);

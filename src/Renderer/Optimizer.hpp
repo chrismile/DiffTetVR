@@ -47,6 +47,7 @@ class TetRegularizerPass;
 class OptimizerPass;
 class VtkWriter;
 
+#ifndef DISABLE_IMGUI
 class ImGuiVulkanImage {
 public:
     ImGuiVulkanImage() = default;
@@ -60,6 +61,7 @@ private:
     sgl::vk::TexturePtr texture{};
     VkDescriptorSet descriptorSetImGui{};
 };
+#endif
 
 class TetMeshOptimizer {
 public:
@@ -68,8 +70,10 @@ public:
             bool hasDataSets, std::function<std::string()> renderGuiDataSetSelectionMenuCallback,
             sgl::TransferFunctionWindow* transferFunctionWindow);
 
+#ifndef DISABLE_IMGUI
     void openDialog();
     void renderGuiDialog();
+#endif
     inline bool getNeedsReRender() { bool tmp = needsReRender; needsReRender = false; return tmp; }
 
     float getProgress();
@@ -129,7 +133,9 @@ private:
 
     int previewDelay = 0;
     bool showPreview = true;
+#ifndef DISABLE_IMGUI
     std::shared_ptr<ImGuiVulkanImage> colorImageGTImGui, colorImageOptImGui;
+#endif
     sgl::vk::TexturePtr colorImageOptPreview; //< In case renderer changes image data in adjoint pass.
 
     // For exporting position gradients to a file.

@@ -50,8 +50,10 @@ typedef std::shared_ptr<Framebuffer> FramebufferPtr;
 }}
 
 namespace sgl {
-class PropertyEditor;
 class TransferFunctionWindow;
+#ifndef DISABLE_IMGUI
+class PropertyEditor;
+#endif
 }
 
 class TetMesh;
@@ -130,8 +132,10 @@ public:
     virtual void onHasMoved();
     /// Called when the transfer function (for tet quality analysis) has been rebuilt.
     virtual void onTransferFunctionMapRebuilt() {}
+#ifndef DISABLE_IMGUI
     /// Renders the GUI. The "reRender" flag might be set depending on the user's actions.
     virtual void renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor)=0;
+#endif
 
     /// Returns screen width and screen height padded for tile size
     void getScreenSizeWithTiling(int& screenWidth, int& screenHeight);
@@ -141,9 +145,11 @@ protected:
     virtual void reallocateFragmentBuffer() {}
     virtual void setShadersDirty(VolumeRendererPassType passType)=0;
 
+#ifndef DISABLE_IMGUI
     void renderGuiShared(sgl::PropertyEditor& propertyEditor);
     virtual void renderGuiMemory(sgl::PropertyEditor& propertyEditor);
     virtual std::string getMaxDepthComplexityString() { return "unlimited"; }
+#endif
 
     sgl::vk::Renderer* renderer;
     sgl::CameraPtr* camera;
@@ -205,11 +211,14 @@ protected:
     int tileWidth = 2;
     int tileHeight = 8;
     bool tilingUseMortonCode = false;
+
+#ifndef DISABLE_IMGUI
     /**
      * Uses ImGui to render a tiling mode selection window.
      * @return True if a new tiling mode was selected (shaders need to be reloaded in this case).
      */
     bool selectTilingModeUI(sgl::PropertyEditor& propertyEditor);
+#endif
 };
 
 #endif //DIFFTETVR_TETMESHVOLUMERENDERER_HPP

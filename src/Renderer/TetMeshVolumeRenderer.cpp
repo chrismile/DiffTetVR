@@ -28,9 +28,11 @@
 
 #include <Graphics/Vulkan/Buffers/Framebuffer.hpp>
 #include <Graphics/Vulkan/Render/Data.hpp>
+#include <ImGui/Widgets/TransferFunctionWindow.hpp>
+#ifndef DISABLE_IMGUI
 #include <ImGui/Widgets/PropertyEditor.hpp>
 #include <ImGui/Widgets/NumberFormatting.hpp>
-#include <ImGui/Widgets/TransferFunctionWindow.hpp>
+#endif
 
 #include "Tet/TetMesh.hpp"
 #include "TetMeshVolumeRenderer.hpp"
@@ -165,6 +167,7 @@ void TetMeshVolumeRenderer::setFramebufferAttachments(sgl::vk::FramebufferPtr& f
     framebuffer->setColorAttachment(outputImageView, 0, attachmentState, clearColor.getFloatColorRGBA());
 }
 
+#ifndef DISABLE_IMGUI
 void TetMeshVolumeRenderer::renderGuiShared(sgl::PropertyEditor& propertyEditor) {
     auto rendererType = getRendererType();
     /*
@@ -260,6 +263,7 @@ bool TetMeshVolumeRenderer::selectTilingModeUI(sgl::PropertyEditor& propertyEdit
     }
     return false;
 }
+#endif
 
 void TetMeshVolumeRenderer::setNewTilingMode(int newTileWidth, int newTileHeight, bool useMortonCode /* = false */) {
     tileWidth = newTileWidth;

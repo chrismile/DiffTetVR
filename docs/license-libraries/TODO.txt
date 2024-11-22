@@ -1,1 +1,0 @@
-TODO: Add licenses of library dependencies used by the build scripts.

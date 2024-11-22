@@ -80,8 +80,10 @@ public:
     void render() override;
     void renderAdjoint() override;
 
+#ifndef DISABLE_IMGUI
     /// Renders the GUI. The "reRender" flag might be set depending on the user's actions.
     void renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor) override;
+#endif
 
 private:
     void onClearColorChanged() override;

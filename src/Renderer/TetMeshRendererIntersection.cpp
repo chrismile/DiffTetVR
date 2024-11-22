@@ -31,8 +31,10 @@
 #include <Graphics/Vulkan/Buffers/Framebuffer.hpp>
 #include <Graphics/Vulkan/Render/Renderer.hpp>
 #include <Graphics/Vulkan/Render/Passes/BlitRenderPass.hpp>
-#include <ImGui/Widgets/PropertyEditor.hpp>
 #include <ImGui/Widgets/TransferFunctionWindow.hpp>
+#ifndef DISABLE_IMGUI
+#include <ImGui/Widgets/PropertyEditor.hpp>
+#endif
 
 #ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
 #include <radix_sort/radix_sort_vk.h>
@@ -699,6 +701,7 @@ void TetMeshRendererIntersection::setShadersDirty(VolumeRendererPassType passTyp
     }
 }
 
+#ifndef DISABLE_IMGUI
 void TetMeshRendererIntersection::renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor) {
     if (propertyEditor.addCombo(
             "Sorting Algorithm", (int*)&sortingAlgorithm,
@@ -711,3 +714,4 @@ void TetMeshRendererIntersection::renderGuiPropertyEditorNodes(sgl::PropertyEdit
     }
     renderGuiShared(propertyEditor);
 }
+#endif

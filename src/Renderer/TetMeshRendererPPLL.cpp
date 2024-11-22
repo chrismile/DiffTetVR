@@ -34,9 +34,11 @@
 #include <Graphics/Vulkan/Buffers/Framebuffer.hpp>
 #include <Graphics/Vulkan/Render/Renderer.hpp>
 #include <Graphics/Vulkan/Render/Passes/BlitRenderPass.hpp>
-#include <ImGui/Widgets/PropertyEditor.hpp>
-#include <ImGui/Widgets/NumberFormatting.hpp>
 #include <ImGui/Widgets/TransferFunctionWindow.hpp>
+#ifndef DISABLE_IMGUI
+#include <ImGui/Widgets/NumberFormatting.hpp>
+#include <ImGui/Widgets/PropertyEditor.hpp>
+#endif
 
 #include "Tet/TetMesh.hpp"
 #include "TetMeshRendererPPLL.hpp"
@@ -694,6 +696,7 @@ void TetMeshRendererPPLL::setShadersDirty(VolumeRendererPassType passType) {
     }
 }
 
+#ifndef DISABLE_IMGUI
 void TetMeshRendererPPLL::renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor) {
     if (propertyEditor.addCombo(
             "Sorting Mode", (int*)&sortingAlgorithmMode,
@@ -719,3 +722,4 @@ void TetMeshRendererPPLL::renderGuiMemory(sgl::PropertyEditor& propertyEditor) {
             sgl::getNiceMemoryString(totalNumFragments * 12ull, 2) + " / "
             + sgl::getNiceMemoryString(fragmentBufferSize * 12ull, 2));
 }
+#endif

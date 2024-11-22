@@ -181,4 +181,6 @@ private:
     sgl::vk::BufferPtr tetQualityBuffer;
 };
 
+typedef std::shared_ptr<TetMesh> TetMeshPtr;
+
 #endif //DIFFTETVR_TETMESH_HPP
