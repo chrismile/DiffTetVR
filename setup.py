@@ -31,8 +31,10 @@ import shutil
 import subprocess
 from pathlib import Path
 from urllib.request import urlopen
-from setuptools import setup
+from setuptools import setup, find_packages
 from setuptools.command.egg_info import egg_info
+from setuptools.dist import Distribution
+from setuptools.command import bdist_egg
 from torch.utils.cpp_extension import BuildExtension, CppExtension, CUDAExtension, IS_WINDOWS
 
 extra_compile_args = []
@@ -203,7 +205,6 @@ source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCuda.cpp')
 
 data_files_all.append(('.', data_files))
 
-
 def update_data_files_recursive(data_files_all, directory):
     files_in_directory = []
     for filename in os.listdir(directory):
@@ -230,25 +231,74 @@ for define in defines:
         else:
             extra_compile_args.append(f'-D{define[0]}={define[1]}')
 
-setup(
-    name='difftetvr',
-    author='Christoph Neuhauser',
-    ext_modules=[
+uses_pip = '_' in os.environ and (os.environ['_'].endswith('pip') or os.environ['_'].endswith('pip3'))
+if uses_pip:
+    if os.path.exists('difftetvr'):
+        shutil.rmtree('difftetvr')
+    Path('difftetvr/Data').mkdir(parents=True, exist_ok=True)
+    shutil.copy('src/Module/difftetvr.pyi', 'difftetvr/__init__.pyi')
+    shutil.copytree('docs', 'difftetvr/docs')
+    shutil.copytree('Data/Shaders', 'difftetvr/Data/Shaders')
+    ext_modules = [
         CppExtension(
-            'difftetvr',
+            'difftetvr.difftetvr',
             source_files,
             libraries=libraries,
             extra_compile_args=extra_compile_args,
             extra_objects=extra_objects
         )
-    ],
-    data_files=data_files_all,
-    package_data={"": ['src/Module/difftetvr.pyi', "docs/*", "Data/Shaders/*"]},
-    include_package_data=True,
-    cmdclass={
-        'build_ext': BuildExtension,
-        'egg_info': EggInfoInstallLicense
-    },
-    license_files=('LICENSE',),
-    include_dirs=include_dirs
-)
+    ]
+    dist = Distribution(attrs={'name': 'difftetvr', 'version': '0.0.0', 'ext_modules': ext_modules})
+    bdist_egg_cmd = dist.get_command_obj('bdist_egg')
+    build_cmd = bdist_egg_cmd.get_finalized_command('build_ext')
+    difftetvr_so_file = ''
+    for ext in build_cmd.extensions:
+        fullname = build_cmd.get_ext_fullname(ext.name)
+        filename = build_cmd.get_ext_filename(fullname)
+        difftetvr_so_file = os.path.basename(filename)
+    with open( 'difftetvr/__init__.py', 'w') as file:
+        file.write('import torch\n\n')
+        file.write('def __bootstrap__():\n')
+        file.write('    global __bootstrap__, __loader__, __file__\n')
+        file.write('    import sys, pkg_resources, importlib.util\n')
+        file.write(f'    __file__ = pkg_resources.resource_filename(__name__, \'{difftetvr_so_file}\')\n')
+        file.write('    __loader__ = None; del __bootstrap__, __loader__\n')
+        file.write('    spec = importlib.util.spec_from_file_location(__name__,__file__)\n')
+        file.write('    mod = importlib.util.module_from_spec(spec)\n')
+        file.write('    spec.loader.exec_module(mod)\n')
+        file.write('__bootstrap__()\n')
+    setup(
+        name='difftetvr',
+        author='Christoph Neuhauser',
+        ext_modules=ext_modules,
+        packages=find_packages(include=['difftetvr', 'difftetvr.*']),
+        package_data={'difftetvr': ['**/*.pyi', '**/*.md', '**/*.txt', '**/*.glsl']},
+        #include_package_data=True,
+        cmdclass={
+            'build_ext': BuildExtension,
+            'egg_info': EggInfoInstallLicense
+        },
+        license_files=('LICENSE',),
+        include_dirs=include_dirs
+    )
+else:
+    setup(
+        name='difftetvr',
+        author='Christoph Neuhauser',
+        ext_modules=[
+            CppExtension(
+                'difftetvr',
+                source_files,
+                libraries=libraries,
+                extra_compile_args=extra_compile_args,
+                extra_objects=extra_objects
+            )
+        ],
+        data_files=data_files_all,
+        cmdclass={
+            'build_ext': BuildExtension,
+            'egg_info': EggInfoInstallLicense
+        },
+        license_files=('LICENSE',),
+        include_dirs=include_dirs
+    )

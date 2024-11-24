@@ -8,12 +8,8 @@ Differentiable volume renderer for tetrahedral meshes.
 To install the library as a Python module, the following command must be called in the repository directory.
 
 ```sh
-python setup.py install
+pip install .
 ```
-
-Using `pip install .` is currently not supported, however, I would be grateful for any hints in the
-[issue tracker](https://github.com/chrismile/LineVis/issues) if there is someone familiar with the necessary changes.
-Currently, `data_files` is used to copy shaders and a `.pyi` file, which is however not compatible with pip.
 
 If the package should be installed in a Conda environment, activate the corresponding environment first as follows.
 

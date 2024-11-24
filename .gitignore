@@ -83,3 +83,5 @@ vcpkg_installed/*
 build*/
 *egg-info*
 dist/*
+tmp/*
+difftetvr/*
