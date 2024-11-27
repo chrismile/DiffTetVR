@@ -26,6 +26,14 @@ class vec4:
     def __init__(self, x: float, y: float, z: float, w: float) -> None:
         pass
 
+class uvec3:
+    x: int
+    y: int
+    z: int
+
+    def __init__(self, x: int, y: int, z: int) -> None:
+        pass
+
 
 class AABB3:
     min: vec3
@@ -53,8 +61,16 @@ class AABB3:
 class TestCase(enum.Enum):
     SINGLE_TETRAHEDRON = enum.auto() # (= 0)
 
+class SplitGradientType(enum.Enum):
+    POSITION = enum.auto()     # (= 0)
+    COLOR = enum.auto()        # (= 1)
+    ABS_POSITION = enum.auto() # (= 2)
+    ABS_COLOR = enum.auto()    # (= 3)
+
 class TetMesh:
     def __init__(self) -> None:
+        pass
+    def set_use_gradients(self, use_gradients: bool = True) -> None:
         pass
     def load_test_data(self, test_case: TestCase) -> None:
         pass
@@ -85,8 +101,50 @@ class TetMesh:
     def get_num_vertices(self) -> int:
         pass
 
+    def get_vertex_positions(self) -> torch.Tensor:
+        pass
+    def get_vertex_colors(self) -> torch.Tensor:
+        pass
+
     def unlink_tets(self) -> None:
         """ Removes the links between all tets, i.e., a potentially used shared index representation is reversed. """
+        pass
+    def split_by_largest_gradient_magnitudes(self, split_gradient_type: SplitGradientType, splits_ratio: float) -> None:
+        pass
+
+
+class RendererType(enum.Enum):
+    PPLL = enum.auto() # (= 0)
+    PROJECTION = enum.auto() # (= 1)
+    INTERSECTION = enum.auto() # (= 2)
+
+class Renderer:
+    def __init__(self, renderer_type: RendererType = RendererType.PPLL) -> None:
+        pass
+    def get_renderer_type(self) -> RendererType:
+        pass
+    def set_tet_mesh(self, tet_mesh: TetMesh) -> None:
+        pass
+    def get_attenuation(self) -> float:
+        pass
+    def set_attenuation(self, attenuation_coefficient: float) -> None:
+        pass
+    def set_viewport_size(self, image_width: int, image_height: int) -> None:
+        pass
+    def set_camera_fovy(self, fovy: float) -> None:
+        pass
+    def set_view_matrix(self, view_matrix_array: list[float]) -> None:
+        pass
+    def render(self) -> torch.Tensor:
+        pass
+    def render_adjoint(self, image_adjoint: torch.Tensor) -> None:
+        pass
+
+
+class TetRegularizer:
+    def __init__(self, tet_mesh: TetMesh, reg_lambda: float, softplus_beta: float) -> None:
+        pass
+    def compute_grad(self) -> RendererType:
         pass
 
 
@@ -97,12 +155,6 @@ class OptimizerType(enum.Enum):
 class LossType(enum.Enum):
     L1 = enum.auto() # (= 0)
     L2 = enum.auto() # (= 1)
-
-class SplitGradientType(enum.Enum):
-    POSITION = enum.auto()     # (= 0)
-    COLOR = enum.auto()        # (= 1)
-    ABS_POSITION = enum.auto() # (= 2)
-    ABS_COLOR = enum.auto()    # (= 3)
 
 class OptimizerSettings:
     # SGD & Adam.
@@ -133,8 +185,8 @@ class TetRegularizerSettings:
         pass
 
 class OptimizationSettings:
-    optimizer_type: OptimizerType = OptimizerType.adam
-    loss_type: LossType = LossType.l2
+    optimizer_type: OptimizerType = OptimizerType.ADAM
+    loss_type: LossType = LossType.L2
     optimize_positions: bool = True
     optimize_colors: bool = True
     optimizer_settings_positions: OptimizerSettings = OptimizerSettings()
@@ -157,15 +209,15 @@ class OptimizationSettings:
     init_grid_resolution: uvec3 = uvec3(16, 16, 16)
     max_num_tets: int = 1320000
     num_splits_ratio: float = 0.1
-    split_gradient_type: SplitGradientType = SplitGradientType.color
+    split_gradient_type: SplitGradientType = SplitGradientType.ABS_COLOR
     # Export position gradient field.
     export_position_gradients: bool = False
     export_file_name_gradient_field: str
     is_binary_vtk: bool = True
     def __init__(
             self,
-            optimizer_type: OptimizerType = OptimizerType.adam,
-            loss_type: LossType = LossType.l2,
+            optimizer_type: OptimizerType = OptimizerType.ADAM,
+            loss_type: LossType = LossType.L2,
             optimize_positions: bool = True,
             optimize_colors: bool = True,
             optimizer_settings_positions: OptimizerSettings = OptimizerSettings(),
@@ -184,7 +236,7 @@ class OptimizationSettings:
             init_grid_resolution: uvec3 = uvec3(16, 16, 16),
             max_num_tets: int = 1320000,
             num_splits_ratio: float = 0.1,
-            split_gradient_type: SplitGradientType = SplitGradientType.color,
+            split_gradient_type: SplitGradientType = SplitGradientType.ABS_COLOR,
             export_position_gradients: bool = False,
             export_file_name_gradient_field: str = "",
             is_binary_vtk: bool = True
@@ -193,7 +245,7 @@ class OptimizationSettings:
         pass
 
 
-def forward(X: torch.Tensor) -> torch.Tensor:
+def render(X: torch.Tensor) -> torch.Tensor:
     """
     Forward rendering pass.
     """

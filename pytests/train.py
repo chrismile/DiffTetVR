@@ -1,0 +1,206 @@
+# BSD 2-Clause License
+#
+# Copyright (c) 2024, Christoph Neuhauser
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+import os
+import sys
+import random
+import time
+import argparse
+import torch
+import difftetvr as d
+from datasets.tet_mesh_dataset import TetMeshDataset
+from datasets.images_dataset import ImagesDataset
+
+
+# https://stackoverflow.com/questions/78750965/how-to-make-argparse-work-nicely-with-enums-and-default-values
+def enum_action(enum_class):
+    class EnumAction(argparse.Action):
+        def __init__(self, *args, **kwargs):
+            table = {member.name.casefold(): member for member in enum_class}
+            super().__init__(*args, choices=table, **kwargs)
+            self.table = table
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            setattr(namespace, self.dest, self.table[values])
+
+    return EnumAction
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog='difftetvr/train.py',
+        description='Optimizes a tetrahedral mesh using differentiable direct volume rendering.')
+
+    # Metadata.
+    parser.add_argument('--name', type=str)  # Name of the test case (used for name of output tet file).
+    parser.add_argument('-o', '--out_dir', type=str)
+
+    # Rendering settings.
+    parser.add_argument('--attenuation', type=float, default=100.0)
+
+    # Main optimization parameters.
+    parser.add_argument('--num_epochs', type=int, default=1)  # Only used if not coarse-to-fine.
+    parser.add_argument('--num_iterations', type=int, default=200)
+    parser.add_argument('--loss', type=str, default='l2')
+    parser.add_argument('--lr_col', type=float, default=0.04)
+    parser.add_argument('--lr_pos', type=float, default=0.001)
+    parser.add_argument('--fix_boundary', action='store_true', default=False)
+    parser.add_argument('--exp_decay', type=float, default=0.999)
+
+    # Tetrahedral element regularizer.
+    parser.add_argument('--tet_regularizer', action='store_true', default=False)
+    parser.add_argument('--tet_reg_lambda', type=float, default=0.1)
+    parser.add_argument('--tet_reg_softplus_beta', type=float, default=100.0)
+
+    # Initialization grid; from file (=> init_grid_path) or created from a constant opacity with medium gray color.
+    parser.add_argument('--init_grid_path', type=str, default=None)
+    parser.add_argument('--init_grid_x', type=int, default=16)
+    parser.add_argument('--init_grid_y', type=int, default=16)
+    parser.add_argument('--init_grid_z', type=int, default=16)
+    parser.add_argument('--init_grid_opacity', default=0.1)
+
+    # Coarse-to-fine strategy.
+    parser.add_argument('--coarse_to_fine', default=False)
+    parser.add_argument('--max_num_tets', type=int, default=60_000)
+    parser.add_argument('--split_grad_type', action=enum_action(d.SplitGradientType), default=d.SplitGradientType.ABS_COLOR)
+    parser.add_argument('--splits_ratio', type=float, default=0.05)
+
+    # Ground truth data sources.
+    # Test case (A): Render tet dataset as ground truth.
+    parser.add_argument('--gt_grid_path', type=str, default=None)
+    parser.add_argument('--img_width', type=int, default=512)
+    parser.add_argument('--img_height', type=int, default=512)
+    # Test case (B): Use images from disk as ground truth.
+    parser.add_argument('--gt_images_path', type=int, default=None)
+
+    args = parser.parse_args()
+
+    renderer = d.Renderer()
+    renderer.set_attenuation(args.attenuation)
+
+    # Create the ground truth data set.
+    dataset = None
+    tet_mesh_gt = None
+    if args.gt_grid_path is not None:
+        tet_mesh_gt = d.TetMesh()
+        dataset = TetMeshDataset(tet_mesh_gt, args.num_iterations, renderer, args.img_width, args.img_height)
+    elif args.gt_images_path is not None:
+        dataset = ImagesDataset(args.gt_images_path)
+    else:
+        raise RuntimeError(
+            'Error: Either \'--gt_grid_path\' or \'--gt_grid_path\' needs to '
+            'be passed to the script to specify the used ground truth data.')
+    img_width = dataset.get_img_width()
+    img_height = dataset.get_img_height()
+
+    tet_mesh_opt = d.TetMesh()
+    tet_mesh_opt.set_use_gradients(True)
+    #tet_mesh_opt.load_test_data(d.TestCase.SINGLE_TETRAHEDRON)
+    #print(f'#Cells: {tet_mesh_opt.get_num_cells()}')
+    #print(f'#Vertices: {tet_mesh_opt.get_num_vertices()}')
+    if args.tet_mesh_opt is not args.init_grid_path:
+        tet_mesh_opt.load_from_file(args.init_grid_path)
+    else:
+        const_color = d.vec4(0.5, 0.5, 0.5, args.init_grid_opacity)
+        aabb = dataset.get_aabb()
+        tet_mesh_opt.set_hex_mesh_const(aabb, args.init_grid_x, args.init_grid_y, args.init_grid_z, const_color)
+
+    renderer.set_tet_mesh(tet_mesh_opt)
+    diff_renderer = d.pyutils.DifferentiableRenderer(renderer, args)
+    renderer.set_viewport_size(img_width, img_height)
+    renderer.set_camera_fovy(dataset.get_fovy())
+
+    variables = []
+    if args.lr_col > 0.0:
+        vertex_colors = tet_mesh_opt.get_vertex_colors()
+        variables.append({'params': [vertex_colors], 'lr': args.lr_col, 'name': 'vertex_colors'})
+    if args.lr_pos > 0.0:
+        vertex_positions = tet_mesh_opt.get_vertex_positions()
+        variables.append(
+            {'params': [vertex_positions], 'lr': args.lr_pos, 'name': 'vertex_positions'})
+    optimizer = torch.optim.Adam(variables)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.999)
+
+    loss_name = args.loss.lower()
+    if loss_name == 'l1':
+        loss_fn = torch.nn.L1Loss()
+    elif loss_name == 'l2':
+        loss_fn = torch.nn.MSELoss()
+    else:
+        raise RuntimeError(f'Error: Unknown loss name \'{loss_name}\'.')
+
+    def training_step(optimizer_step=True):
+        if optimizer_step:
+            optimizer.zero_grad()
+        renderer.set_view_matrix(view_matrix_array)
+        image_opt = diff_renderer()
+        loss = loss_fn(image_opt, image_gt)
+        loss.backward()
+        if optimizer_step:
+            optimizer.step()
+
+    if args.coarse_to_fine:
+        use_accum_abs_grads = \
+            args.split_grad_type == d.SplitGradientType.ABS_POSITION or \
+            args.split_grad_type == d.SplitGradientType.ABS_COLOR
+        while True:
+            # Train colors.
+            for image_gt, view_matrix_array in dataset:
+                training_step()
+
+            # Train positions + colors.
+            for image_gt, view_matrix_array in dataset:
+                training_step()
+
+            if tet_mesh_opt.get_num_cells() >= args.max_num_tets:
+                break
+
+            # Accumulate gradients.
+            if use_accum_abs_grads:
+                diff_renderer.set_use_abs_grad(True)
+            optimizer.zero_grad()
+            for image_gt, view_matrix_array in dataset:
+                training_step(False)
+            if use_accum_abs_grads:
+                diff_renderer.set_use_abs_grad(False)
+            # Split the tets incident to the vertices with the largest gradients.
+            tet_mesh_opt.split_by_largest_gradient_magnitudes(args.split_grad_type, args.splits_ratio)
+
+            scheduler.step()
+            # if epoch_idx % args.num_epochs == args.num_epochs - 1:
+            #    scheduler.step()
+            #    for param_group in optimizer.param_groups:
+            #        lr = scheduler(epoch_idx)
+            #        param_group['lr'] = lr
+    else:
+        for epoch_idx in range(args.num_epochs):
+            for image_gt, view_matrix_array in dataset:
+                training_step()
+            scheduler.step()
+
+
+if __name__ == '__main__':
+    main()

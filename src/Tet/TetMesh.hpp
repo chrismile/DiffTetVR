@@ -41,6 +41,12 @@
 
 #include <Math/Geometry/AABB3.hpp>
 
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#include <torch/types.h>
+#include <Graphics/Vulkan/Utils/InteropCuda.hpp>
+#endif
+
+#include "../Renderer/OptimizerDefines.hpp"
 #include "TetQuality.hpp"
 
 namespace sgl {
@@ -94,6 +100,7 @@ public:
     // Coarse to fine strategy.
     void setForceUseOvmRepresentation();
     void subdivideVertices(const std::vector<float>& gradientMagnitudes, uint32_t numSplits);
+    void splitByLargestGradientMagnitudes(SplitGradientType splitGradientType, float splitsRatio);
     /// Initialize with tetrahedralized tet mesh with constant color.
     void setHexMeshConst(const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor);
 
@@ -109,6 +116,17 @@ public:
     // Buffers below are only used for tet quality renderer.
     sgl::vk::BufferPtr getFaceToTetMapBuffer() { return faceToTetMapBuffer; }
     sgl::vk::BufferPtr getTetQualityBuffer();
+
+    // Gradient interface.
+    void setUseGradients(bool _useGradient);
+    sgl::vk::BufferPtr getVertexPositionGradientBuffer() { return vertexPositionGradientBuffer; }
+    sgl::vk::BufferPtr getVertexColorGradientBuffer() { return vertexColorGradientBuffer; }
+
+    // PyTorch buffer interface.
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+    torch::Tensor getVertexPositionTensor();
+    torch::Tensor getVertexColorTensor();
+#endif
 
     // Get mesh information.
     [[nodiscard]] inline size_t getNumCells() const { return meshNumCells; }
@@ -179,6 +197,18 @@ private:
     // Buffers below are only used for tet quality renderer.
     sgl::vk::BufferPtr faceToTetMapBuffer;
     sgl::vk::BufferPtr tetQualityBuffer;
+    // Gradient data.
+    bool useGradients = false;
+    sgl::vk::BufferPtr vertexPositionGradientBuffer;
+    sgl::vk::BufferPtr vertexColorGradientBuffer;
+    sgl::vk::BufferPtr vertexPositionGradientStagingBuffer;
+    sgl::vk::BufferPtr vertexColorGradientStagingBuffer;
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexPositionBufferCu;
+    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexColorBufferCu;
+    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexPositionGradientBufferCu;
+    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexColorGradientBufferCu;
+#endif
 };
 
 typedef std::shared_ptr<TetMesh> TetMeshPtr;

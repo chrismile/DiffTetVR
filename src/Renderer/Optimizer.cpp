@@ -344,6 +344,7 @@ void TetMeshOptimizer::renderGuiDialog() {
         if (settings.optimizerSettingsPositions.learningRate > 0.0f) {
             tetMeshOpt->setVerticesChangedOnDevice(true);
         }
+        tetMeshOpt->setUseGradients(false);
         setTetMeshCallback(tetMeshOpt, settings.attenuationCoefficient);
         needsReRender = true;
     }
@@ -458,6 +459,7 @@ void TetMeshOptimizer::startRequest() {
     if (settings.useCoarseToFine) {
         tetMeshOpt->setForceUseOvmRepresentation();
     }
+    tetMeshOpt->setUseGradients(true);
     bool dataLoadedGT = tetMeshGT->loadFromFile(settings.dataSetFileNameGT);
     bool dataLoadedOpt;
     if (settings.useConstantInitGrid) {
@@ -477,7 +479,7 @@ void TetMeshOptimizer::startRequest() {
     }
     numCellsInit = uint32_t(tetMeshOpt->getNumCells());
 
-    recreateGradientBuffers();
+    onVertexBuffersRecreated();
 
     // TODO: Make sure data is freed before allocating new data.
     tetMeshVolumeRendererGT->setClearColor(sgl::Color(0, 0, 0, 0));
@@ -498,9 +500,6 @@ void TetMeshOptimizer::startRequest() {
     tetMeshVolumeRendererOpt->setTetMeshData(tetMeshOpt);
     tetMeshVolumeRendererOpt->setAttenuationCoefficient(settings.attenuationCoefficient);
     tetMeshVolumeRendererOpt->setOutputImage(colorImageOpt->getImageView());
-    tetMeshVolumeRendererOpt->setAdjointPassData(
-            colorAdjointTexture->getImageView(), adjointPassBackbuffer,
-            vertexPositionGradientBuffer, vertexColorGradientBuffer);
     tetMeshVolumeRendererOpt->recreateSwapchainExternal(
             settings.imageWidth, settings.imageHeight, fragmentBufferSize,
             fragmentBuffer, startOffsetBuffer, fragmentCounterBuffer);
@@ -518,22 +517,19 @@ void TetMeshOptimizer::startRequest() {
     timeStart = std::chrono::system_clock::now();
 }
 
-void TetMeshOptimizer::recreateGradientBuffers() {
-    auto* device = renderer->getDevice();
+void TetMeshOptimizer::onVertexBuffersRecreated() {
     auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
     auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
     auto vertexBoundaryBitBuffer = tetMeshOpt->getVertexBoundaryBitBuffer();
-    sgl::vk::BufferSettings bufferSettings{};
-    bufferSettings.usage =
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    bufferSettings.sizeInBytes = vertexPositionBuffer->getSizeInBytes();
-    vertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
-    bufferSettings.sizeInBytes = vertexColorBuffer->getSizeInBytes();
-    vertexColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
+    auto vertexColorGradientBuffer = tetMeshOpt->getVertexColorGradientBuffer();
+    auto vertexPositionGradientBuffer = tetMeshOpt->getVertexPositionGradientBuffer();
     optimizerPassPositions->setBuffers(vertexPositionBuffer, vertexPositionGradientBuffer, vertexBoundaryBitBuffer);
     optimizerPassColors->setBuffers(vertexColorBuffer, vertexColorGradientBuffer, vertexBoundaryBitBuffer);
     auto cellIndicesBuffer = tetMeshOpt->getCellIndicesBuffer();
     tetRegularizerPass->setBuffers(cellIndicesBuffer, vertexPositionBuffer, vertexPositionGradientBuffer);
+    tetMeshVolumeRendererOpt->setAdjointPassData(
+            colorAdjointTexture->getImageView(), adjointPassBackbuffer,
+            vertexPositionGradientBuffer, vertexColorGradientBuffer);
 }
 
 bool TetMeshOptimizer::getHasResult() {
@@ -671,6 +667,8 @@ void TetMeshOptimizer::updateRequest() {
             || coarseToFineEpochIndex != COARSE_TO_FINE_EPOCH_GATHER;
 
     // Clear the gradients.
+    auto vertexPositionGradientBuffer = tetMeshOpt->getVertexPositionGradientBuffer();
+    auto vertexColorGradientBuffer = tetMeshOpt->getVertexColorGradientBuffer();
     if (settings.optimizePositions && clearGrads) {
         vertexPositionGradientBuffer->fill(0, renderer->getVkCommandBuffer());
         VkPipelineStageFlags destStage =
@@ -936,6 +934,9 @@ void TetMeshOptimizer::updateRequest() {
             optimizerPassColors->updateUniformBuffer();
         }
         if (coarseToFineEpochIndex == COARSE_TO_FINE_EPOCH_GATHER) {
+            renderer->insertMemoryBarrier(
+                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
             if (!vertexPositionGradientStagingBuffer
                     || vertexPositionGradientStagingBuffer->getSizeInBytes() != vertexPositionGradientBuffer->getSizeInBytes()) {
                 vertexPositionGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
@@ -948,9 +949,6 @@ void TetMeshOptimizer::updateRequest() {
                         renderer->getDevice(), vertexColorGradientBuffer->getSizeInBytes(),
                         VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
             }
-            renderer->insertMemoryBarrier(
-                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
             vertexPositionGradientBuffer->copyDataTo(
                     vertexPositionGradientStagingBuffer, 0, 0, vertexPositionGradientBuffer->getSizeInBytes(),
                     renderer->getVkCommandBuffer());
@@ -967,10 +965,7 @@ void TetMeshOptimizer::updateRequest() {
 
             // Set new vertex and color and respective gradient buffers.
             std::cout << "Recreate" << std::endl;
-            recreateGradientBuffers();
-            tetMeshVolumeRendererOpt->setAdjointPassData(
-                    colorAdjointTexture->getImageView(), adjointPassBackbuffer,
-                    vertexPositionGradientBuffer, vertexColorGradientBuffer);
+            onVertexBuffersRecreated();
         }
     }
     if (!settings.useCoarseToFine && settings.optimizerSettingsPositions.lrDecayRate != 1.0f) {
@@ -998,7 +993,8 @@ void TetMeshOptimizer::updateRequest() {
 void TetMeshOptimizer::coarseToFineSubdivide(
         const glm::vec3* vertexPositionGradients, const glm::vec4* vertexColorGradients) {
     std::vector<float> gradientMagnitudes(tetMeshOpt->getNumVertices());
-    if (settings.splitGradientType == SplitGradientType::POSITION) {
+    if (splitGradientType == SplitGradientType::POSITION
+            || splitGradientType == SplitGradientType::ABS_POSITION) {
         computeVectorMagnitudeField(
                 vertexPositionGradients, gradientMagnitudes.data(), int(tetMeshOpt->getNumVertices()));
     } else {

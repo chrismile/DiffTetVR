@@ -103,7 +103,7 @@ private:
     sgl::TransferFunctionWindow* transferFunctionWindow;
     uint32_t numCellsGT = 0, numCellsOpt = 0;
 
-    void recreateGradientBuffers();
+    void onVertexBuffersRecreated();
     void coarseToFineSubdivide(const glm::vec3* vertexPositionGradients, const glm::vec4* vertexColorGradients);
     const int COARSE_TO_FINE_EPOCH_COLOR = 0;
     const int COARSE_TO_FINE_EPOCH_COLOR_POS = 1;
@@ -122,9 +122,6 @@ private:
     sgl::vk::TexturePtr colorImageGT, colorImageOpt;
     sgl::vk::TexturePtr colorAdjointTexture;
     sgl::vk::ImageViewPtr adjointPassBackbuffer;
-    // Gradient data for tetMeshOpt.
-    sgl::vk::BufferPtr vertexPositionGradientBuffer;
-    sgl::vk::BufferPtr vertexColorGradientBuffer;
     // Per-pixel linked list.
     size_t fragmentBufferSize = 0;
     sgl::vk::BufferPtr fragmentBuffer;

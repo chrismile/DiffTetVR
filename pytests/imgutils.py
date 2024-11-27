@@ -24,20 +24,38 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import os
-import sys
-import random
-import time
-import torch
-import difftetvr as d
+import array
+import numpy as np
+from PIL import Image
+import OpenEXR
+import Imath
 
 
-def main():
-    tet_mesh = d.TetMesh()
-    tet_mesh.load_test_data(d.TestCase.SINGLE_TETRAHEDRON)
-    print(f'#Cells: {tet_mesh.get_num_cells()}')
-    print(f'#Vertices: {tet_mesh.get_num_vertices()}')
+def save_array_png(file_path, data):
+    # Convert linear RGB to sRGB.
+    for i in range(3):
+        data[i, :, :] = np.power(data[i, :, :], 1.0 / 2.2)
+    data = np.clip(data, 0.0, 1.0)
+    data = data.transpose(1, 2, 0)
+    data = (data * 255).astype('uint8')
+    image_out = Image.fromarray(data)
+    image_out.save(file_path)
 
 
-if __name__ == '__main__':
-    main()
+def load_image_array(file_path):
+    if file_path.endswith('.exr'):
+        pt = Imath.PixelType(Imath.PixelType.FLOAT)
+        ref_exr = OpenEXR.InputFile(file_path)
+        img = np.array([array.array('f', ref_exr.channel(ch, pt)).tolist() for ch in ("R", "G", "B", "A")], dtype=np.float32)
+        dw = ref_exr.header()["dataWindow"]
+        img = img.reshape((1, 4, dw.max.y - dw.min.y + 1, dw.max.x - dw.min.x + 1))
+        img = img.transpose(0, 2, 3, 1)
+        return img
+    elif file_path.endswith('.png'):
+        img = Image.open(file_path)
+        img = np.array(img).astype(np.float32) / 255.0
+        img = img.reshape((1, img.shape[0], img.shape[1], 4))
+        img = img.transpose(0, 3, 1, 2)
+        return img
+    else:
+        raise RuntimeError('Error in load_image_array: Unsupported file extension.')

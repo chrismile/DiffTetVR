@@ -18,6 +18,14 @@ If the package should be installed in a Conda environment, activate the correspo
 conda activate <env-name>
 ```
 
+Necessary packages can be installed, e.g., via conda:
+
+```sh
+conda install numpy pillow conda-forge::openexr-python
+```
+
+For more details on how to install PyTorch, see: https://pytorch.org/get-started/locally/
+
 
 ## CUDA Detection
 

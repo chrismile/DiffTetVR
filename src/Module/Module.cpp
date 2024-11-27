@@ -27,6 +27,7 @@
  */
 
 #include <pybind11/functional.h>
+#include <pybind11/numpy.h>
 
 #include <torch/script.h>
 #include <torch/types.h>
@@ -41,6 +42,7 @@
 #include <Utils/AppSettings.hpp>
 #include <Utils/File/FileUtils.hpp>
 #include <Utils/File/Logfile.hpp>
+#include <Graphics/Scene/RenderTarget.hpp>
 #include <Graphics/Vulkan/Utils/Instance.hpp>
 #include <Graphics/Vulkan/Utils/Device.hpp>
 #include <Graphics/Vulkan/Utils/SyncObjects.hpp>
@@ -52,6 +54,10 @@
 
 #include <Tet/TetMesh.hpp>
 #include <Renderer/TetMeshVolumeRenderer.hpp>
+#include <Renderer/TetMeshRendererPPLL.hpp>
+#include <Renderer/TetMeshRendererProjection.hpp>
+#include <Renderer/TetMeshRendererIntersection.hpp>
+#include <Renderer/TetRegularizerPass.hpp>
 #include <Renderer/OptimizerDefines.hpp>
 #include <Renderer/Optimizer.hpp>
 
@@ -81,6 +87,7 @@ public:
 
     sgl::vk::Device* device = nullptr;
     sgl::vk::Renderer* renderer = nullptr;
+    sgl::CameraPtr camera;
     sgl::TransferFunctionWindow* transferFunctionWindow = nullptr;
     TetMeshOptimizer* optimizer = nullptr;
 
@@ -207,6 +214,10 @@ ApplicationState::ApplicationState() {
     sgl::AppSettings::get()->initializeSubsystems();
 
     renderer = new sgl::vk::Renderer(sgl::AppSettings::get()->getPrimaryDevice());
+    camera = std::make_shared<sgl::Camera>();
+    camera->setFOVy(std::atan(1.0f / 2.0f) * 2.0f);
+    camera->setNearClipDistance(0.001f);
+    camera->setFarClipDistance(100.0f);
     transferFunctionWindow = new sgl::TransferFunctionWindow;
     // TODO: Callbacks
     optimizer = new TetMeshOptimizer(
@@ -280,6 +291,30 @@ torch::Tensor renderAdjoint(CameraSettings cameraSettings, torch::Tensor colorIm
     return colorImage;
 }
 
+class TetRegularizer {
+public:
+    TetRegularizer(sgl::vk::Renderer* renderer, const TetMeshPtr& tetMesh, float lambda, float softplusBeta)
+            : tetMeshOpt(tetMesh) {
+        tetRegularizerPass = std::make_shared<TetRegularizerPass>(renderer);
+        tetRegularizerPass->setSettings(lambda, softplusBeta);
+    }
+    void computeGrad() {
+        auto cellIndicesBuffer = tetMeshOpt->getCellIndicesBuffer();
+        auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
+        auto vertexPositionGradientBuffer = tetMeshOpt->getVertexPositionGradientBuffer();
+        if (vertexPositionBuffer != cellIndicesBufferPrev) {
+            cellIndicesBufferPrev = vertexPositionBuffer;
+            tetRegularizerPass->setBuffers(cellIndicesBuffer, vertexPositionBuffer, vertexPositionGradientBuffer);
+        }
+        tetRegularizerPass->render();
+    }
+
+private:
+    TetMeshPtr tetMeshOpt;
+    sgl::vk::BufferPtr cellIndicesBufferPrev;
+    std::shared_ptr<TetRegularizerPass> tetRegularizerPass;
+};
+
 PYBIND11_MODULE(difftetvr, m) {
     py::class_<glm::vec3>(m, "vec3")
             .def_readwrite("x", &glm::vec3::x)
@@ -299,11 +334,17 @@ PYBIND11_MODULE(difftetvr, m) {
 
     py::enum_<TestCase>(m, "TestCase", py::arithmetic(), "")
             .value("SINGLE_TETRAHEDRON", TestCase::SINGLE_TETRAHEDRON, "");
+    py::enum_<SplitGradientType>(m, "SplitGradientType")
+            .value("POSITION", SplitGradientType::POSITION)
+            .value("COLOR", SplitGradientType::COLOR)
+            .value("ABS_POSITION", SplitGradientType::ABS_POSITION)
+            .value("ABS_COLOR", SplitGradientType::ABS_COLOR);
     py::class_<TetMesh, TetMeshPtr>(m, "TetMesh")
             .def(py::init([]() {
                 ensureStateExists();
                 return std::make_shared<TetMesh>(sState->device, sState->transferFunctionWindow);
             }))
+            .def("set_use_gradients", &TetMesh::setUseGradients, py::arg("use_gradients") = true)
             .def("load_test_data", &TetMesh::loadTestData, py::arg("test_case"))
             .def("load_from_file", &TetMesh::loadFromFile, py::arg("file_path"))
             .def("save_to_file", &TetMesh::saveToFile, py::arg("file_path"))
@@ -314,8 +355,106 @@ PYBIND11_MODULE(difftetvr, m) {
                  "Initialize with tetrahedralized tet mesh with constant color.")
             .def("get_num_cells", &TetMesh::getNumCells)
             .def("get_num_vertices", &TetMesh::getNumVertices)
+            .def("get_vertex_positions", &TetMesh::getVertexPositionTensor)
+            .def("get_vertex_colors", &TetMesh::getVertexColorTensor)
             .def("unlink_tets", &TetMesh::unlinkTets,
-                 "Removes the links between all tets, i.e., a potentially used shared index representation is reversed.");
+                 "Removes the links between all tets, i.e., a potentially used shared index representation is reversed.")
+            .def("split_by_largest_gradient_magnitudes", [](const TetMeshPtr& self, SplitGradientType splitGradientType, float splitsRatio) {
+                self->splitByLargestGradientMagnitudes(splitGradientType, splitsRatio);
+            }, py::arg("split_gradient_type"), py::arg("splits_ratio"));
+
+    py::enum_<RendererType>(m, "RendererType")
+            .value("PPLL", RendererType::PPLL)
+            .value("PROJECTION", RendererType::PROJECTION)
+            .value("INTERSECTION", RendererType::INTERSECTION);
+    py::class_<TetMeshVolumeRenderer, std::shared_ptr<TetMeshVolumeRenderer>>(m, "Renderer")
+            .def(py::init([](RendererType rendererType) {
+                ensureStateExists();
+                if (rendererType == RendererType::PPLL) {
+                    return std::shared_ptr<TetMeshVolumeRenderer>(new TetMeshRendererPPLL(
+                            sState->renderer, &sState->camera, sState->transferFunctionWindow));
+                } else if (rendererType == RendererType::PROJECTION) {
+                    return std::shared_ptr<TetMeshVolumeRenderer>(new TetMeshRendererProjection(
+                            sState->renderer, &sState->camera, sState->transferFunctionWindow));
+                } else if (rendererType == RendererType::INTERSECTION) {
+                    return std::shared_ptr<TetMeshVolumeRenderer>(new TetMeshRendererIntersection(
+                            sState->renderer, &sState->camera, sState->transferFunctionWindow));
+                } else {
+                    return std::shared_ptr<TetMeshVolumeRenderer>();
+                }
+            }), py::arg("renderer_type") = RendererType::PPLL)
+            .def("get_renderer_type", &TetMeshVolumeRenderer::getRendererType)
+            .def("set_tet_mesh", &TetMeshVolumeRenderer::setTetMeshData, py::arg("tet_mesh"))
+            .def("get_attenuation", &TetMeshVolumeRenderer::getAttenuationCoefficient)
+            .def("set_attenuation", &TetMeshVolumeRenderer::setAttenuationCoefficient, py::arg("attenuation_coefficient"))
+            .def("set_viewport_size", [](const std::shared_ptr<TetMeshVolumeRenderer>& self, uint32_t imageWidth, uint32_t imageHeight) {
+                auto camera = self->getCamera();
+                auto renderTarget = std::make_shared<sgl::RenderTarget>(int(imageWidth), int(imageHeight));
+                camera->setRenderTarget(renderTarget, false);
+                camera->onResolutionChanged({});
+            }, py::arg("image_width"), py::arg("image_height"))
+            .def("set_camera_fovy", [](const std::shared_ptr<TetMeshVolumeRenderer>& self, float fovy) {
+                auto camera = self->getCamera();
+                camera->setFOVy(fovy);
+            }, py::arg("fovy"))
+            .def("set_view_matrix", [](const std::shared_ptr<TetMeshVolumeRenderer>& self, const std::vector<float>& viewMatrixData) {
+                glm::mat4 viewMatrix;
+                for (int i = 0; i < 16; i++) {
+                    viewMatrix[i / 4][i % 4] = viewMatrixData[i];
+                }
+                self->getCamera()->overwriteViewMatrix(viewMatrix);
+            }, py::arg("view_matrix_array"))
+            .def("render", [](const std::shared_ptr<TetMeshVolumeRenderer>& self) {
+                self->render();
+                const auto& outputImageView = self->getOutputImageView();
+                auto imageWidth = outputImageView->getImage()->getImageSettings().width;
+                auto imageHeight = outputImageView->getImage()->getImageSettings().height;
+                torch::Tensor imageTensor = torch::from_blob(
+                        imageDataPtr, { int(imageHeight), int(imageWidth), int(4) },
+                        torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
+                return imageTensor;
+            })
+            .def("render_adjoint", [](const std::shared_ptr<TetMeshVolumeRenderer>& self, torch::Tensor imageAdjointTensor, bool useAbsGrad) {
+                if (imageAdjointTensor.device().type() != torch::DeviceType::CUDA) {
+                    sgl::Logfile::get()->throwError(
+                            "Error in render_adjoint: The tensors must be on a CUDA device.", false);
+                }
+                if (imageAdjointTensor.sizes().size() != 3) {
+                    sgl::Logfile::get()->throwError(
+                            "Error in render_adjoint: imageAdjointTensor.sizes().size() != 3.", false);
+                }
+                if (imageAdjointTensor.size(2) != 4) {
+                    sgl::Logfile::get()->throwError(
+                            "Error in render_adjoint: The number of image channels is not equal to 4.",
+                            false);
+                }
+                if (imageAdjointTensor.dtype() != torch::kFloat32) {
+                    sgl::Logfile::get()->throwError(
+                            "Error in render_adjoint: The only data type currently supported is 32-bit float.",
+                            false);
+                }
+                if (!imageAdjointTensor.is_contiguous()) {
+                    imageAdjointTensor = imageAdjointTensor.contiguous();
+                }
+
+                self->getOutputImageView()
+
+                imageAdjointTensor.data_ptr();
+                if (useAbsGrad) {
+                    self->setUseAbsGrad(true);
+                }
+                self->renderAdjoint();
+                self->setUseAbsGrad(false);
+            }, py::arg("image_adjoint"));
+
+    py::class_<TetRegularizer, std::shared_ptr<TetRegularizer>>(m, "TetRegularizer")
+            .def(py::init([](const TetMeshPtr& tetMesh, float lambda, float softplusBeta) {
+                ensureStateExists();
+                return std::make_shared<TetRegularizer>(sState->renderer, tetMesh, lambda, softplusBeta);
+            }), py::arg("tet_mesh"), py::arg("reg_lambda"), py::arg("softplus_beta"))
+            .def("compute_grad", [](const std::shared_ptr<TetRegularizer>& self) {
+                self->computeGrad();
+            });
 
     py::enum_<OptimizerType>(m, "OptimizerType")
             .value("SGD", OptimizerType::SGD)
@@ -323,11 +462,6 @@ PYBIND11_MODULE(difftetvr, m) {
     py::enum_<LossType>(m, "LossType")
             .value("L1", LossType::L1)
             .value("L2", LossType::L2);
-    py::enum_<SplitGradientType>(m, "SplitGradientType")
-            .value("POSITION", SplitGradientType::POSITION)
-            .value("COLOR", SplitGradientType::COLOR)
-            .value("ABS_POSITION", SplitGradientType::ABS_POSITION)
-            .value("ABS_COLOR", SplitGradientType::ABS_COLOR);
     py::class_<OptimizerSettings>(m, "OptimizerSettings")
             .def(py::init<>())
             .def_readwrite("learning_rate", &OptimizerSettings::learningRate)

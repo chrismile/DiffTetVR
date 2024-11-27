@@ -256,7 +256,7 @@ if uses_pip:
         fullname = build_cmd.get_ext_fullname(ext.name)
         filename = build_cmd.get_ext_filename(fullname)
         difftetvr_so_file = os.path.basename(filename)
-    with open( 'difftetvr/__init__.py', 'w') as file:
+    with open('difftetvr/__init__.py', 'w') as file:
         file.write('import torch\n\n')
         file.write('def __bootstrap__():\n')
         file.write('    global __bootstrap__, __loader__, __file__\n')

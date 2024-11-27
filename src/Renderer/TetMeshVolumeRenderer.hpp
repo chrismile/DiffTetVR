@@ -35,6 +35,10 @@
 #include <Graphics/Color.hpp>
 #include <Graphics/Scene/Camera.hpp>
 
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#include <Graphics/Vulkan/Utils/InteropCuda.hpp>
+#endif
+
 #include "Tet/TetQuality.hpp"
 
 namespace sgl { namespace vk {
@@ -112,6 +116,7 @@ public:
     virtual void renderAdjoint()=0;
 
     [[nodiscard]] inline sgl::vk::Renderer* getRenderer() const { return renderer; }
+    [[nodiscard]] inline const sgl::CameraPtr& getCamera() const { return *camera; }
     [[nodiscard]] inline const TetMeshPtr& getTetMesh() const { return tetMesh; }
     [[nodiscard]] inline const sgl::vk::ImageViewPtr& getOutputImageView() const { return outputImageView; }
     [[nodiscard]] inline size_t getFragmentBufferSize() const { return fragmentBufferSize; }
@@ -173,6 +178,9 @@ protected:
     sgl::vk::ImageViewPtr adjointPassBackbuffer;
     sgl::vk::BufferPtr vertexPositionGradientBuffer;
     sgl::vk::BufferPtr vertexColorGradientBuffer;
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+    sgl::vk::ImageCudaDriverApiExternalMemoryVkPtr colorAdjointImageCu;
+#endif
 
     // Window data.
     int windowWidth = 0, windowHeight = 0;
