@@ -80,6 +80,8 @@ class TetMesh:
         pass
     def get_bounding_box(self) -> AABB3:
         pass
+    def set_vertices_changed_on_device(self, vertices_changed: bool = True) -> None:
+        pass
 
     def set_force_use_ovm_representation(self) -> None:
         """ Coarse to fine strategy."""
@@ -105,11 +107,14 @@ class TetMesh:
         pass
     def get_vertex_colors(self) -> torch.Tensor:
         pass
+    def get_vertex_boundary_bit_tensor(self) -> torch.Tensor:
+        pass
 
     def unlink_tets(self) -> None:
         """ Removes the links between all tets, i.e., a potentially used shared index representation is reversed. """
         pass
-    def split_by_largest_gradient_magnitudes(self, split_gradient_type: SplitGradientType, splits_ratio: float) -> None:
+    def split_by_largest_gradient_magnitudes(
+            self, renderer: Renderer, split_gradient_type: SplitGradientType, splits_ratio: float) -> None:
         pass
 
 
@@ -129,7 +134,13 @@ class Renderer:
         pass
     def set_attenuation(self, attenuation_coefficient: float) -> None:
         pass
-    def set_viewport_size(self, image_width: int, image_height: int) -> None:
+    def set_coarse_to_fine_target_num_tets(self, target_num_tets: int) -> None:
+        pass
+    def set_clear_color(self, color: vec4) -> None:
+        pass
+    def set_viewport_size(self, image_width: int, image_height: int, recreate_swapchain: bool = True) -> None:
+        pass
+    def reuse_intermediate_buffers_from(self, renderer_other: Renderer) -> None:
         pass
     def set_camera_fovy(self, fovy: float) -> None:
         pass

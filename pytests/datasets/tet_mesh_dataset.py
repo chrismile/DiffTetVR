@@ -34,8 +34,8 @@ from .sample_view import sample_view_matrix_circle, sample_view_matrix_box
 
 class TetMeshDataset(torch.utils.data.Dataset, Dataset3D):
     def __init__(
-            self, tet_mesh_gt: d.TetMesh, num_iterations: int, renderer_opt: d.TetMeshVolumeRenderer,
-            img_width: int, img_height: int):
+            self, tet_mesh_gt: d.TetMesh, num_iterations: int, renderer_opt: d.Renderer,
+            coarse_to_fine: bool, max_num_tets: int, img_width: int, img_height: int):
         super().__init__()
         self.tet_mesh_gt = tet_mesh_gt
         self.num_iterations = num_iterations
@@ -48,9 +48,13 @@ class TetMeshDataset(torch.utils.data.Dataset, Dataset3D):
         radii_sorted = sorted([rx, ry, rz])
         self.is_spherical = radii_sorted[2] / radii_sorted[0] < 1.9
         self.renderer = d.Renderer(renderer_opt.get_renderer_type())
+        if coarse_to_fine:
+            self.renderer.set_coarse_to_fine_target_num_tets(max_num_tets)
+        self.renderer.set_attenuation(renderer_opt.get_attenuation())
+        self.renderer.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))
         self.renderer.set_tet_mesh(self.tet_mesh_gt)
-        self.renderer.set_viewport_size(img_width, img_height)
         self.renderer.set_camera_fovy(self.get_fovy())
+        self.renderer.set_viewport_size(img_width, img_height)
 
     def __len__(self):
         return self.num_iterations

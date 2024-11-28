@@ -52,32 +52,7 @@ float unpackDepth(uint packedDepth) {
     return float((packedDepth >> 2u) & 1073741823u) / 1073741823.0;
 }
 
-layout(binding = 0) uniform UniformDataBuffer {
-    // Inverse of (projectionMatrix * viewMatrix).
-    mat4 inverseViewProjectionMatrix;
-
-    // Number of fragments we can store in total.
-    uint linkedListSize;
-    // Size of the viewport in x direction (in pixels).
-    int viewportW;
-    // Camera near/far plane distance.
-    float zNear, zFar;
-
-    // Camera front vector.
-    vec3 cameraFront;
-    // Volume attenuation.
-    float attenuationCoefficient;
-
-    vec3 cameraPosition;
-    float cameraPositionPadding;
-
-    // Viewport size in x/y direction.
-    uvec2 viewportSize;
-
-    // Size of the viewport in x direction (in pixels) without padding.
-    int viewportLinearW;
-    int paddingUniform;
-};
+#include "LinkedListUniform.glsl"
 
 // Fragment-and-link buffer (linked list). Stores "nodesPerPixel" number of fragments.
 #if defined(FRAGMENT_BUFFER_REFERENCE_ARRAY)

@@ -271,6 +271,7 @@ TetMeshRendererPPLL::TetMeshRendererPPLL(
 }
 
 TetMeshRendererPPLL::~TetMeshRendererPPLL() {
+    renderer->getDevice()->waitIdle();
 }
 
 void TetMeshRendererPPLL::updateLargeMeshMode() {
@@ -308,17 +309,17 @@ void TetMeshRendererPPLL::setTetMeshData(const TetMeshPtr& _tetMesh) {
     gatherRasterPass->setDataDirty();
     resolveRasterPass->setDataDirty();
     clearRasterPass->setDataDirty();
+    if (adjointRasterPass) {
+        adjointRasterPass->setDataDirty();
+    }
     updateLargeMeshMode();
 }
 
 void TetMeshRendererPPLL::setAdjointPassData(
-        sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer,
-        sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer) {
+        sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer) {
     TetMeshVolumeRenderer::setAdjointPassData(
             std::move(_colorAdjointImage),
-            std::move(_adjointPassBackbuffer),
-            std::move(_vertexPositionGradientBuffer),
-            std::move(_vertexColorGradientBuffer));
+            std::move(_adjointPassBackbuffer));
     if (!adjointRasterPass) {
         adjointRasterPass = std::make_shared<AdjointRasterPass>(this);
         adjointRasterPass->setColorWriteEnabled(false);
@@ -473,8 +474,8 @@ void TetMeshRendererPPLL::setFramebufferAttachments(sgl::vk::FramebufferPtr& fra
 }
 
 void TetMeshRendererPPLL::reallocateFragmentBuffer() {
-    int width = int(outputImageView->getImage()->getImageSettings().width);
-    int height = int(outputImageView->getImage()->getImageSettings().height);
+    int width = windowHeight;
+    int height = windowHeight;
     int paddedWidth = width, paddedHeight = height;
     getScreenSizeWithTiling(paddedWidth, paddedHeight);
 
@@ -614,6 +615,7 @@ void TetMeshRendererPPLL::render() {
 #else
     uniformData.inverseViewProjectionMatrix = (*camera)->getInverseViewProjMatrix();
 #endif
+    uniformData.viewProjectionMatrix = (*camera)->getViewProjMatrix();
 
     uniformData.linkedListSize = static_cast<uint32_t>(fragmentBufferSize);
     uniformData.viewportW = paddedWindowWidth;

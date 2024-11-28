@@ -104,7 +104,6 @@ private:
     uint32_t numCellsGT = 0, numCellsOpt = 0;
 
     void onVertexBuffersRecreated();
-    void coarseToFineSubdivide(const glm::vec3* vertexPositionGradients, const glm::vec4* vertexColorGradients);
     const int COARSE_TO_FINE_EPOCH_COLOR = 0;
     const int COARSE_TO_FINE_EPOCH_COLOR_POS = 1;
     const int COARSE_TO_FINE_EPOCH_GATHER = 2;

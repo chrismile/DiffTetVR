@@ -71,8 +71,7 @@ public:
 
     // Public interface, only for backward pass.
     void setAdjointPassData(
-            sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer,
-            sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer) override;
+            sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer) override;
     virtual void recreateSwapchainExternal(
             uint32_t width, uint32_t height, size_t _fragmentBufferSize, const sgl::vk::BufferPtr& _fragmentBuffer,
             const sgl::vk::BufferPtr& _startOffsetBuffer, const sgl::vk::BufferPtr& _fragmentCounterBuffer);
@@ -122,6 +121,7 @@ private:
     struct UniformData {
         // Inverse of (projectionMatrix * viewMatrix).
         glm::mat4 inverseViewProjectionMatrix;
+        glm::mat4 viewProjectionMatrix;
 
         // Number of fragments we can store in total.
         uint32_t linkedListSize;

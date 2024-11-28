@@ -100,7 +100,8 @@ public:
     // Coarse to fine strategy.
     void setForceUseOvmRepresentation();
     void subdivideVertices(const std::vector<float>& gradientMagnitudes, uint32_t numSplits);
-    void splitByLargestGradientMagnitudes(SplitGradientType splitGradientType, float splitsRatio);
+    void splitByLargestGradientMagnitudes(
+            sgl::vk::Renderer* renderer, SplitGradientType splitGradientType, float splitsRatio);
     /// Initialize with tetrahedralized tet mesh with constant color.
     void setHexMeshConst(const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor);
 
@@ -119,6 +120,7 @@ public:
 
     // Gradient interface.
     void setUseGradients(bool _useGradient);
+    [[nodiscard]] inline bool getUseGradients() const { return useGradients; }
     sgl::vk::BufferPtr getVertexPositionGradientBuffer() { return vertexPositionGradientBuffer; }
     sgl::vk::BufferPtr getVertexColorGradientBuffer() { return vertexColorGradientBuffer; }
 
@@ -126,6 +128,7 @@ public:
 #if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
     torch::Tensor getVertexPositionTensor();
     torch::Tensor getVertexColorTensor();
+    torch::Tensor getVertexBoundaryBitTensor();
 #endif
 
     // Get mesh information.
@@ -206,6 +209,7 @@ private:
 #if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
     sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexPositionBufferCu;
     sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexColorBufferCu;
+    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexBoundaryBitBufferCu;
     sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexPositionGradientBufferCu;
     sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexColorGradientBufferCu;
 #endif

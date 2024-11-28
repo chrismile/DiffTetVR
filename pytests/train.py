@@ -25,12 +25,12 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os
-import sys
 import random
 import time
 import argparse
 import torch
 import difftetvr as d
+from pyutils import DifferentiableRenderer
 from datasets.tet_mesh_dataset import TetMeshDataset
 from datasets.images_dataset import ImagesDataset
 
@@ -47,6 +47,20 @@ def enum_action(enum_class):
             setattr(namespace, self.dest, self.table[values])
 
     return EnumAction
+
+
+def replace_tensor_in_optimizer(optimizer, tensor, name):
+    for group in optimizer.param_groups:
+        if group['name'] == name:
+            stored_state = optimizer.state.get(group['params'][0], None)
+            # Zero out exponential moving average (first and second moment) if used by the optimizer.
+            if 'exp_avg' in stored_state:
+                stored_state['exp_avg'] = torch.zeros_like(tensor)
+            if 'exp_avg_sq' in stored_state:
+                stored_state['exp_avg_sq'] = torch.zeros_like(tensor)
+            del optimizer.state[group['params'][0]]
+            group['params'][0] = tensor
+            optimizer.state[group['params'][0]] = stored_state
 
 
 def main():
@@ -69,6 +83,7 @@ def main():
     parser.add_argument('--lr_pos', type=float, default=0.001)
     parser.add_argument('--fix_boundary', action='store_true', default=False)
     parser.add_argument('--exp_decay', type=float, default=0.999)
+    parser.add_argument('--random_seed', type=int, default=None)
 
     # Tetrahedral element regularizer.
     parser.add_argument('--tet_regularizer', action='store_true', default=False)
@@ -85,7 +100,8 @@ def main():
     # Coarse-to-fine strategy.
     parser.add_argument('--coarse_to_fine', default=False)
     parser.add_argument('--max_num_tets', type=int, default=60_000)
-    parser.add_argument('--split_grad_type', action=enum_action(d.SplitGradientType), default=d.SplitGradientType.ABS_COLOR)
+    parser.add_argument(
+        '--split_grad_type', action=enum_action(d.SplitGradientType), default=d.SplitGradientType.ABS_COLOR)
     parser.add_argument('--splits_ratio', type=float, default=0.05)
 
     # Ground truth data sources.
@@ -94,51 +110,64 @@ def main():
     parser.add_argument('--img_width', type=int, default=512)
     parser.add_argument('--img_height', type=int, default=512)
     # Test case (B): Use images from disk as ground truth.
-    parser.add_argument('--gt_images_path', type=int, default=None)
+    parser.add_argument('--gt_images_path', type=str, default=None)
 
     args = parser.parse_args()
+    if args.random_seed is not None:
+        random.seed(args.random_seed)
 
     renderer = d.Renderer()
     renderer.set_attenuation(args.attenuation)
+    renderer.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))
 
     # Create the ground truth data set.
-    dataset = None
     tet_mesh_gt = None
     if args.gt_grid_path is not None:
         tet_mesh_gt = d.TetMesh()
-        dataset = TetMeshDataset(tet_mesh_gt, args.num_iterations, renderer, args.img_width, args.img_height)
+        dataset = TetMeshDataset(
+            tet_mesh_gt, args.num_iterations, renderer, args.coarse_to_fine, args.max_num_tets,
+            args.img_width, args.img_height)
     elif args.gt_images_path is not None:
         dataset = ImagesDataset(args.gt_images_path)
     else:
         raise RuntimeError(
-            'Error: Either \'--gt_grid_path\' or \'--gt_grid_path\' needs to '
+            'Either \'--gt_grid_path\' or \'--gt_images_path\' needs to '
             'be passed to the script to specify the used ground truth data.')
     img_width = dataset.get_img_width()
     img_height = dataset.get_img_height()
 
     tet_mesh_opt = d.TetMesh()
     tet_mesh_opt.set_use_gradients(True)
-    #tet_mesh_opt.load_test_data(d.TestCase.SINGLE_TETRAHEDRON)
-    #print(f'#Cells: {tet_mesh_opt.get_num_cells()}')
-    #print(f'#Vertices: {tet_mesh_opt.get_num_vertices()}')
+    if args.coarse_to_fine:
+        tet_mesh_opt.set_force_use_ovm_representation()
     if args.tet_mesh_opt is not args.init_grid_path:
+        print(f'Loading initialization tet mesh from file {args.init_grid_path}...')
         tet_mesh_opt.load_from_file(args.init_grid_path)
     else:
+        print(f'Creating initialization grid of size {args.init_grid_x}x{args.init_grid_y}x{args.init_grid_z}...')
         const_color = d.vec4(0.5, 0.5, 0.5, args.init_grid_opacity)
         aabb = dataset.get_aabb()
         tet_mesh_opt.set_hex_mesh_const(aabb, args.init_grid_x, args.init_grid_y, args.init_grid_z, const_color)
+    print(f'#Cells (init): {tet_mesh_opt.get_num_cells()}')
+    print(f'#Vertices (init): {tet_mesh_opt.get_num_vertices()}')
 
     renderer.set_tet_mesh(tet_mesh_opt)
-    diff_renderer = d.pyutils.DifferentiableRenderer(renderer, args)
-    renderer.set_viewport_size(img_width, img_height)
+    diff_renderer = DifferentiableRenderer(
+        renderer, args.tet_regularizer, args.tet_reg_lambda, args.tet_reg_softplus_beta)
     renderer.set_camera_fovy(dataset.get_fovy())
+    if tet_mesh_gt is None:
+        renderer.set_viewport_size(img_width, img_height)
+    else:
+        renderer.set_viewport_size(img_width, img_height, False)
+        renderer.reuse_intermediate_buffers_from(tet_mesh_gt)
 
     variables = []
+    vertex_colors = tet_mesh_opt.get_vertex_colors()
+    vertex_positions = tet_mesh_opt.get_vertex_positions()
+    vertex_boundary_bit_tensor = tet_mesh_opt.get_vertex_boundary_bit_tensor()
     if args.lr_col > 0.0:
-        vertex_colors = tet_mesh_opt.get_vertex_colors()
         variables.append({'params': [vertex_colors], 'lr': args.lr_col, 'name': 'vertex_colors'})
     if args.lr_pos > 0.0:
-        vertex_positions = tet_mesh_opt.get_vertex_positions()
         variables.append(
             {'params': [vertex_positions], 'lr': args.lr_pos, 'name': 'vertex_positions'})
     optimizer = torch.optim.Adam(variables)
@@ -150,18 +179,22 @@ def main():
     elif loss_name == 'l2':
         loss_fn = torch.nn.MSELoss()
     else:
-        raise RuntimeError(f'Error: Unknown loss name \'{loss_name}\'.')
+        raise RuntimeError(f'Unknown loss name \'{loss_name}\'.')
 
-    def training_step(optimizer_step=True):
+    def training_step(view_matrix_array, optimizer_step=True):
         if optimizer_step:
             optimizer.zero_grad()
         renderer.set_view_matrix(view_matrix_array)
         image_opt = diff_renderer()
         loss = loss_fn(image_opt, image_gt)
         loss.backward()
+        if args.fix_boundary:
+            vertex_positions.grad = torch.where(vertex_boundary_bit_tensor > 0, 0.0, vertex_positions.grad)
         if optimizer_step:
             optimizer.step()
 
+    print('Starting optimization...')
+    time_start = time.time()
     if args.coarse_to_fine:
         use_accum_abs_grads = \
             args.split_grad_type == d.SplitGradientType.ABS_POSITION or \
@@ -169,11 +202,11 @@ def main():
         while True:
             # Train colors.
             for image_gt, view_matrix_array in dataset:
-                training_step()
+                training_step(view_matrix_array)
 
             # Train positions + colors.
             for image_gt, view_matrix_array in dataset:
-                training_step()
+                training_step(view_matrix_array)
 
             if tet_mesh_opt.get_num_cells() >= args.max_num_tets:
                 break
@@ -183,11 +216,16 @@ def main():
                 diff_renderer.set_use_abs_grad(True)
             optimizer.zero_grad()
             for image_gt, view_matrix_array in dataset:
-                training_step(False)
+                training_step(view_matrix_array, False)
             if use_accum_abs_grads:
                 diff_renderer.set_use_abs_grad(False)
             # Split the tets incident to the vertices with the largest gradients.
-            tet_mesh_opt.split_by_largest_gradient_magnitudes(args.split_grad_type, args.splits_ratio)
+            tet_mesh_opt.split_by_largest_gradient_magnitudes(renderer, args.split_grad_type, args.splits_ratio)
+            vertex_colors = tet_mesh_opt.get_vertex_colors()
+            vertex_positions = tet_mesh_opt.get_vertex_positions()
+            vertex_boundary_bit_tensor = tet_mesh_opt.get_vertex_boundary_bit_tensor()
+            replace_tensor_in_optimizer(optimizer, vertex_colors, 'vertex_colors')
+            replace_tensor_in_optimizer(optimizer, vertex_positions, 'vertex_positions')
 
             scheduler.step()
             # if epoch_idx % args.num_epochs == args.num_epochs - 1:
@@ -198,8 +236,16 @@ def main():
     else:
         for epoch_idx in range(args.num_epochs):
             for image_gt, view_matrix_array in dataset:
-                training_step()
+                training_step(view_matrix_array)
             scheduler.step()
+    time_end = time.time()
+    print(f'Optimization finished ({time_end - time_start}s).')
+
+    mesh_out_path = os.path.join(args.out_dir, f'{args.name}.bintet')
+    print(f'Saving mesh to "{mesh_out_path}"...')
+    tet_mesh_opt.set_vertices_changed_on_device()
+    tet_mesh_opt.save_to_file(mesh_out_path)
+    print('All done.')
 
 
 if __name__ == '__main__':

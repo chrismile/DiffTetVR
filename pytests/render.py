@@ -24,14 +24,13 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import os
-import sys
-import random
-import time
 import argparse
+import numpy as np
 import torch
 import difftetvr as d
-from imgutils import save_array_png
+
+from datasets.imgutils import save_array_png
+from datasets.images_dataset import ImagesDataset
 
 
 def main():
@@ -48,20 +47,33 @@ def main():
     parser.add_argument('--img_height', type=int, default=512)
 
     # TODO: Add camera settings (fovy, position, rotation).
+    parser.add_argument('--gt_images_path', type=str, default=None)
+    parser.add_argument('--image_index', type=int, default=0)
 
     args = parser.parse_args()
 
-    opt_tet_mesh = d.TetMesh()
-    if args.opt_tet_mesh is not None:
-        opt_tet_mesh.load_from_file(args.tet_mesh_file)
+    tet_mesh = d.TetMesh()
+    if args.tet_mesh_file is not None:
+        tet_mesh.load_from_file(args.tet_mesh_file)
     else:
-        raise RuntimeError('Error: No tet mesh file was specified using the argument \'--tet_mesh_file\'.')
+        raise RuntimeError('No tet mesh file was specified using the argument \'--tet_mesh_file\'.')
 
-    renderer = d.create_renderer()
-    renderer.set_rendering_resolution(args.img_width, args.img_height)
+    if args.gt_images_path is not None:
+        dataset = ImagesDataset(args.gt_images_path)
+    else:
+        raise RuntimeError(
+            '\'--gt_images_path\' needs to be passed to the script to specify the used ground truth data.')
+
+    renderer = d.Renderer()
+    renderer.set_tet_mesh(tet_mesh)
+    renderer.set_attenuation(args.attenuation)
+    renderer.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))
+    renderer.set_camera_fovy(dataset.get_fovy())
+    renderer.set_view_matrix(dataset.get_view_matrix_array(args.image_index))
+    renderer.set_viewport_size(args.img_width, args.img_height)
 
     rendered_image = renderer.render()
-    save_array_png(args.image_output_file, rendered_image.detach().cpu().numpy())
+    save_array_png(args.image_output_file, np.transpose(rendered_image.detach().cpu().numpy(), (2, 0, 1)))
 
 
 if __name__ == '__main__':

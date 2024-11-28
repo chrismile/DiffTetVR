@@ -382,6 +382,7 @@ TetMeshRendererIntersection::TetMeshRendererIntersection(
 }
 
 TetMeshRendererIntersection::~TetMeshRendererIntersection() {
+    renderer->getDevice()->waitIdle();
 #ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
     sgl::vk::Device* device = renderer->getDevice();
     if (radixSortVk) {
@@ -477,16 +478,16 @@ void TetMeshRendererIntersection::recreateSortingBuffers() {
     generateTrianglesPass->setDataDirty();
     computeTrianglesDepthPass->setDataDirty();
     intersectRasterPass->setDataDirty();
+    if (adjointIntersectRasterPass) {
+        adjointIntersectRasterPass->setDataDirty();
+    }
 }
 
 void TetMeshRendererIntersection::setAdjointPassData(
-        sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer,
-        sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer) {
+        sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer) {
     TetMeshVolumeRenderer::setAdjointPassData(
             std::move(_colorAdjointImage),
-            std::move(_adjointPassBackbuffer),
-            std::move(_vertexPositionGradientBuffer),
-            std::move(_vertexColorGradientBuffer));
+            std::move(_adjointPassBackbuffer));
     if (!adjointIntersectRasterPass) {
         adjointIntersectRasterPass = std::make_shared<AdjointIntersectRasterPass>(this);
     }

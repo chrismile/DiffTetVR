@@ -32,6 +32,8 @@
 
 #extension GL_EXT_scalar_block_layout : require
 
+#include "LinkedListUniform.glsl"
+
 layout(binding = 4, scalar) readonly buffer TriangleIndicesBuffer {
     uint triangleIndices[];
 };
@@ -49,7 +51,7 @@ void main() {
     const uint vertexIndex = triangleIndices[gl_VertexIndex];
     vec3 vertexPosition = vertexPositions[vertexIndex];
     faceBits = (faceBoundaryBitArray[faceIndex] << 1u) | (faceIndex << 2u);
-    gl_Position = mvpMatrix * vec4(vertexPosition, 1.0);
+    gl_Position = viewProjectionMatrix * vec4(vertexPosition, 1.0);
 }
 
 

@@ -28,6 +28,7 @@
 
 #include <Graphics/Vulkan/Buffers/Framebuffer.hpp>
 #include <Graphics/Vulkan/Render/Data.hpp>
+#include <Graphics/Vulkan/Render/Renderer.hpp>
 #include <ImGui/Widgets/TransferFunctionWindow.hpp>
 #ifndef DISABLE_IMGUI
 #include <ImGui/Widgets/PropertyEditor.hpp>
@@ -44,7 +45,7 @@ TetMeshVolumeRenderer::TetMeshVolumeRenderer(
 }
 
 TetMeshVolumeRenderer::~TetMeshVolumeRenderer() {
-    ;
+    renderer->getDevice()->waitIdle();
 }
 void TetMeshVolumeRenderer::setCoarseToFineTargetNumTets(uint32_t _coarseToFineMaxNumTets) {
     useCoarseToFine = true;
@@ -74,12 +75,9 @@ void TetMeshVolumeRenderer::setOutputImage(sgl::vk::ImageViewPtr& colorImage) {
 }
 
 void TetMeshVolumeRenderer::setAdjointPassData(
-        sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer,
-        sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer) {
+        sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer) {
     colorAdjointImage = std::move(_colorAdjointImage);
     adjointPassBackbuffer = std::move(_adjointPassBackbuffer);
-    vertexPositionGradientBuffer = std::move(_vertexPositionGradientBuffer);
-    vertexColorGradientBuffer = std::move(_vertexColorGradientBuffer);
 }
 
 void TetMeshVolumeRenderer::recreateSwapchain(uint32_t width, uint32_t height) {
@@ -100,6 +98,92 @@ void TetMeshVolumeRenderer::recreateSwapchainExternal(
     paddedWindowWidth = windowWidth, paddedWindowHeight = windowHeight;
     getScreenSizeWithTiling(paddedWindowWidth, paddedWindowHeight);
 }
+
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+void TetMeshVolumeRenderer::setViewportSize(uint32_t viewportWidth, uint32_t viewportHeight) {
+    outputImageView = {};
+    colorAdjointImage = {};
+    adjointPassBackbuffer = {};
+    colorImageBuffer = {};
+    colorAdjointImageBuffer = {};
+    colorImageBufferCu = {};
+    colorAdjointImageBufferCu = {};
+
+    sgl::vk::ImageSettings imageSettings{};
+    imageSettings.width = viewportWidth;
+    imageSettings.height = viewportHeight;
+    imageSettings.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    imageSettings.usage =
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+            | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+    imageSettings.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+    sgl::vk::Device* device = renderer->getDevice();
+    outputImageView = std::make_shared<sgl::vk::ImageView>(std::make_shared<sgl::vk::Image>(device, imageSettings));
+
+    colorImageBuffer = std::make_shared<sgl::vk::Buffer>(
+            device, viewportWidth * viewportHeight * sizeof(float) * 4,
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+    colorImageBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(colorImageBuffer);
+
+    if (tetMesh && tetMesh->getUseGradients()) {
+        colorAdjointImage = std::make_shared<sgl::vk::ImageView>(
+                std::make_shared<sgl::vk::Image>(device, imageSettings));
+        renderer->insertImageMemoryBarrier(
+                colorAdjointImage->getImage(),
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_ACCESS_NONE_KHR, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+        imageSettings.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        imageSettings.format = VK_FORMAT_R8G8B8A8_UNORM;
+        adjointPassBackbuffer = std::make_shared<sgl::vk::ImageView>(std::make_shared<sgl::vk::Image>(
+                device, imageSettings));
+
+        colorAdjointImageBuffer = std::make_shared<sgl::vk::Buffer>(
+                device, viewportWidth * viewportHeight * sizeof(float) * 4,
+                VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+        colorAdjointImageBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(
+                colorAdjointImageBuffer);
+
+        setAdjointPassData(colorAdjointImage, adjointPassBackbuffer);
+    }
+}
+
+torch::Tensor TetMeshVolumeRenderer::getImageTensor() {
+    auto imageWidth = outputImageView->getImage()->getImageSettings().width;
+    auto imageHeight = outputImageView->getImage()->getImageSettings().height;
+    bool useGradients = tetMesh->getUseGradients();
+    torch::Tensor imageTensor = torch::from_blob(
+            reinterpret_cast<float*>(colorImageBufferCu->getCudaDevicePtr()),
+            { int(imageHeight), int(imageWidth), int(4) },
+            torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(useGradients));
+    if (useGradients) {
+        torch::Tensor imageAdjointTensor = torch::from_blob(
+                reinterpret_cast<float*>(colorAdjointImageBufferCu->getCudaDevicePtr()),
+                { int(imageHeight), int(imageWidth), int(4) },
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
+        imageTensor.mutable_grad() = imageAdjointTensor;
+    }
+    return imageTensor;
+}
+
+void TetMeshVolumeRenderer::copyOutputImageToBuffer() {
+    renderer->transitionImageLayout(outputImageView, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    outputImageView->getImage()->copyToBuffer(colorImageBuffer, renderer->getVkCommandBuffer());
+}
+
+void TetMeshVolumeRenderer::copyAdjointBufferToImage(void* devicePtr) {
+    if (reinterpret_cast<CUdeviceptr>(devicePtr) != colorAdjointImageBufferCu->getCudaDevicePtr()) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMeshVolumeRenderer::copyAdjointBufferToImage: "
+                "Mismatch in internal adjoint buffer device address and tensor content.");
+    }
+    renderer->transitionImageLayout(colorAdjointImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    colorAdjointImage->getImage()->copyFromBuffer(colorImageBuffer, renderer->getVkCommandBuffer());
+}
+#endif
 
 void TetMeshVolumeRenderer::setUseLinearRGB(bool _useLinearRGB) {
 }
@@ -152,8 +236,8 @@ void TetMeshVolumeRenderer::setRenderDataBindings(const sgl::vk::RenderDataPtr& 
     }
 
     // For resolve pass.
-    renderData->setStaticBufferOptional(vertexPositionGradientBuffer, "VertexPositionGradientBuffer");
-    renderData->setStaticBufferOptional(vertexColorGradientBuffer, "VertexColorGradientBuffer");
+    renderData->setStaticBufferOptional(tetMesh->getVertexPositionGradientBuffer(), "VertexPositionGradientBuffer");
+    renderData->setStaticBufferOptional(tetMesh->getVertexColorGradientBuffer(), "VertexColorGradientBuffer");
     renderData->setStaticImageViewOptional(outputImageView, "colorImageOpt");
     renderData->setStaticImageViewOptional(colorAdjointImage, "adjointColors");
 }

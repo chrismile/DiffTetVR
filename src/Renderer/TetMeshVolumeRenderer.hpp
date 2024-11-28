@@ -36,6 +36,7 @@
 #include <Graphics/Scene/Camera.hpp>
 
 #if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#include <torch/types.h>
 #include <Graphics/Vulkan/Utils/InteropCuda.hpp>
 #endif
 
@@ -102,8 +103,7 @@ public:
 
     // Public interface, only for backward pass.
     virtual void setAdjointPassData(
-            sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer,
-            sgl::vk::BufferPtr _vertexPositionGradientBuffer, sgl::vk::BufferPtr _vertexColorGradientBuffer);
+            sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer);
     void setUseExternalFragmentBuffer(bool _useExternal) { useExternalFragmentBuffer = _useExternal; }
     virtual void recreateSwapchainExternal(
             uint32_t width, uint32_t height, size_t _fragmentBufferSize, const sgl::vk::BufferPtr& _fragmentBuffer,
@@ -114,6 +114,14 @@ public:
     virtual void setFramebufferAttachments(sgl::vk::FramebufferPtr& framebuffer, VkAttachmentLoadOp loadOp);
     virtual void render()=0;
     virtual void renderAdjoint()=0;
+
+    // PyTorch buffer interface.
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+    void setViewportSize(uint32_t viewportWidth, uint32_t viewportHeight);
+    torch::Tensor getImageTensor();
+    void copyOutputImageToBuffer();
+    void copyAdjointBufferToImage(void* devicePtr);
+#endif
 
     [[nodiscard]] inline sgl::vk::Renderer* getRenderer() const { return renderer; }
     [[nodiscard]] inline const sgl::CameraPtr& getCamera() const { return *camera; }
@@ -176,10 +184,12 @@ protected:
     // For adjoint pass.
     sgl::vk::ImageViewPtr colorAdjointImage;
     sgl::vk::ImageViewPtr adjointPassBackbuffer;
-    sgl::vk::BufferPtr vertexPositionGradientBuffer;
-    sgl::vk::BufferPtr vertexColorGradientBuffer;
+
 #if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
-    sgl::vk::ImageCudaDriverApiExternalMemoryVkPtr colorAdjointImageCu;
+    sgl::vk::BufferPtr colorImageBuffer;
+    sgl::vk::BufferPtr colorAdjointImageBuffer;
+    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr colorImageBufferCu;
+    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr colorAdjointImageBufferCu;
 #endif
 
     // Window data.

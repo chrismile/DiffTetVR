@@ -33,6 +33,7 @@
 #include <Utils/File/FileUtils.hpp>
 #include <Graphics/Vulkan/Utils/Device.hpp>
 #include <Graphics/Vulkan/Buffers/Buffer.hpp>
+#include <Graphics/Vulkan/Render/Renderer.hpp>
 #include <ImGui/Widgets/TransferFunctionWindow.hpp>
 
 #ifdef USE_OPEN_VOLUME_MESH
@@ -45,6 +46,7 @@
 
 #include "Loaders/BinTetLoader.hpp"
 #include "Loaders/TxtTetLoader.hpp"
+#include "Loaders/LoadersUtil.hpp"
 #include "CSP/CSPSolver.hpp"
 #include "CSP/FlipSolver.hpp"
 #include "TetQualityFunctions.hpp"
@@ -169,6 +171,14 @@ torch::Tensor TetMesh::getVertexColorTensor() {
     }
     return vertexColorTensor;
 }
+
+torch::Tensor TetMesh::getVertexBoundaryBitTensor() {
+    torch::Tensor vertexBoundaryBitTensor = torch::from_blob(
+            reinterpret_cast<float*>(vertexBoundaryBitBufferCu->getCudaDevicePtr()),
+            { int(vertexPositions.size()), int(1) },
+            torch::TensorOptions().dtype(torch::kUInt8).device(torch::kCUDA));
+    return vertexBoundaryBitTensor;
+}
 #endif
 
 void TetMesh::setTetMeshData(
@@ -255,6 +265,7 @@ void TetMesh::uploadDataToDevice() {
 #if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
     vertexPositionBufferCu = {};
     vertexColorBufferCu = {};
+    vertexBoundaryBitBufferCu = {};
     vertexPositionGradientBufferCu = {};
     vertexColorGradientBufferCu = {};
 #endif
@@ -271,10 +282,6 @@ void TetMesh::uploadDataToDevice() {
             device, sizeof(uint32_t) * facesBoundarySlim.size(), facesBoundarySlim.data(),
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY);
-    vertexBoundaryBitBuffer = std::make_shared<sgl::vk::Buffer>(
-            device, sizeof(uint32_t) * verticesBoundarySlim.size(), verticesBoundarySlim.data(),
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
     faceToTetMapBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(glm::uvec2) * faceToTetMapArray.size(), faceToTetMapArray.data(),
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
@@ -289,8 +296,13 @@ void TetMesh::uploadDataToDevice() {
             device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+    vertexBoundaryBitBuffer = std::make_shared<sgl::vk::Buffer>(
+            device, sizeof(uint32_t) * verticesBoundarySlim.size(), verticesBoundarySlim.data(),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY, true, true);
     vertexPositionBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(vertexPositionBuffer);
     vertexColorBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(vertexColorBuffer);
+    vertexBoundaryBitBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(vertexBoundaryBitBuffer);
     if (useGradients) {
         vertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(
                 device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
@@ -311,6 +323,10 @@ void TetMesh::uploadDataToDevice() {
     vertexColorBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY);
+    vertexBoundaryBitBuffer = std::make_shared<sgl::vk::Buffer>(
+            device, sizeof(uint32_t) * verticesBoundarySlim.size(), verticesBoundarySlim.data(),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY);
     if (useGradients) {
         vertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(
@@ -1060,7 +1076,8 @@ void TetMesh::subdivideVertices(const std::vector<float>& gradientMagnitudes, ui
 #endif
 }
 
-void TetMesh::splitByLargestGradientMagnitudes(SplitGradientType splitGradientType, float numSplitsRatio) {
+void TetMesh::splitByLargestGradientMagnitudes(
+        sgl::vk::Renderer* renderer, SplitGradientType splitGradientType, float numSplitsRatio) {
     if (!vertexPositionGradientStagingBuffer
             || vertexPositionGradientStagingBuffer->getSizeInBytes() != vertexPositionGradientBuffer->getSizeInBytes()) {
         vertexPositionGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
@@ -1095,7 +1112,6 @@ void TetMesh::splitByLargestGradientMagnitudes(SplitGradientType splitGradientTy
     }
     auto numSplits = uint32_t(std::ceil(double(numSplitsRatio) * double(getNumVertices())));
     subdivideVertices(gradientMagnitudes, numSplits);
-    tetMeshVolumeRendererOpt->setTetMeshData(tetMeshOpt);
 
     vertexPositionGradientStagingBuffer->unmapMemory();
     vertexColorGradientStagingBuffer->unmapMemory();

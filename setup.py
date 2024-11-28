@@ -71,6 +71,7 @@ if not os.path.exists('third_party/sgl'):
 
 include_dirs = [
     'src',
+    'third_party',
     'third_party/sgl/src',
     'third_party/sgl/src/Graphics/Vulkan/libs',
     'third_party/sgl/src/Graphics/Vulkan/libs/Vulkan-Headers',
@@ -78,6 +79,7 @@ include_dirs = [
     'third_party/jsoncpp/include',
     'third_party/OpenVolumeMesh/src',
     'third_party/custom',
+    'third_party/glslang',
 ]
 source_files = []
 source_files += find_all_sources_in_dir('src/Module')
@@ -174,6 +176,15 @@ source_files += [
     'third_party/OpenVolumeMesh/src/OpenVolumeMesh/Unstable/Topology/TriangleTopology.cc',
 ]
 source_files += find_all_sources_in_dir('third_party/jsoncpp/src/lib_json')
+source_files += find_all_sources_in_dir('third_party/glslang/SPIRV')
+source_files += find_all_sources_in_dir('third_party/glslang/glslang/CInterface')
+source_files += find_all_sources_in_dir('third_party/glslang/glslang/GenericCodeGen')
+source_files += find_all_sources_in_dir('third_party/glslang/glslang/MachineIndependent')
+source_files += find_all_sources_in_dir('third_party/glslang/glslang/ResourceLimits')
+if IS_WINDOWS:
+    source_files += find_all_sources_in_dir('third_party/glslang/glslang/OSDependent/Windows')
+else:
+    source_files += find_all_sources_in_dir('third_party/glslang/glslang/OSDependent/Unix')
 
 data_files_all = []
 data_files = ['src/Module/difftetvr.pyi']
@@ -182,9 +193,12 @@ extra_objects = []
 defines = [
     ('USE_GLM',),
     ('SUPPORT_VULKAN',),
+    ('SUPPORT_GLSLANG_BACKEND',),
     ('DISABLE_IMGUI',),
     ('BUILD_PYTHON_MODULE',),
-    ('USE_OPEN_VOLUME_MESH',)
+    ('USE_OPEN_VOLUME_MESH',),
+    # For glslang.
+    ('ENABLE_SPIRV',),
 ]
 # Change symbol visibility?
 if IS_WINDOWS:
@@ -193,10 +207,12 @@ if IS_WINDOWS:
     # According to https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-pathremovefilespecw,
     # shlwapi.lib and shlwapi.dll both exist. Maybe this should rather be a extra_objects file?
     libraries.append('shlwapi')
+    defines.append(('GLSLANG_OSINCLUDE_WIN32', ''))
 else:
     defines.append(('DLL_OBJECT', ''))
-    #extra_compile_args.append('-g')  # For debugging tests.
+    extra_compile_args.append('-g')  # For debugging tests.
     libraries.append('dl')
+    defines.append(('GLSLANG_OSINCLUDE_UNIX', ''))
 
 
 # TODO: Add support for not using CUDA.
@@ -237,6 +253,7 @@ if uses_pip:
         shutil.rmtree('difftetvr')
     Path('difftetvr/Data').mkdir(parents=True, exist_ok=True)
     shutil.copy('src/Module/difftetvr.pyi', 'difftetvr/__init__.pyi')
+    shutil.copy('src/Module/pyutils.py', 'difftetvr/pyutils.py')
     shutil.copytree('docs', 'difftetvr/docs')
     shutil.copytree('Data/Shaders', 'difftetvr/Data/Shaders')
     ext_modules = [
@@ -272,7 +289,7 @@ if uses_pip:
         author='Christoph Neuhauser',
         ext_modules=ext_modules,
         packages=find_packages(include=['difftetvr', 'difftetvr.*']),
-        package_data={'difftetvr': ['**/*.pyi', '**/*.md', '**/*.txt', '**/*.glsl']},
+        package_data={'difftetvr': ['**/*.py', '**/*.pyi', '**/*.md', '**/*.txt', '**/*.glsl']},
         #include_package_data=True,
         cmdclass={
             'build_ext': BuildExtension,

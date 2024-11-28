@@ -31,7 +31,7 @@ import torch
 import torch.utils.data
 import difftetvr as d
 from .dataset import Dataset3D
-from ..imgutils import load_image_array
+from .imgutils import load_image_array
 
 
 class ImagesDataset(torch.utils.data.Dataset, Dataset3D):
@@ -40,7 +40,7 @@ class ImagesDataset(torch.utils.data.Dataset, Dataset3D):
 
         images_dir = os.path.join(img_dir, 'images')
         cameras_path = os.path.join(img_dir, 'cameras.json')
-        if not os.path.isfile(images_dir):
+        if not os.path.isdir(images_dir):
             raise RuntimeError(f'Error: Images directory "{images_dir}" does not exist.')
         if not os.path.isfile(cameras_path):
             raise RuntimeError(f'Error: Cameras file "{cameras_path}" does not exist.')
@@ -60,13 +60,8 @@ class ImagesDataset(torch.utils.data.Dataset, Dataset3D):
         self.cameras_json = cameras_json
         self.images_dir = images_dir
 
-    def __len__(self):
-        return len(self.cameras_json)
-
-    def __getitem__(self, idx):
+    def get_view_matrix_array(self, idx):
         camera_json = self.cameras_json[idx]
-        image_path = os.path.join(self.images_dir, camera_json['img_name'])
-        image = torch.from_numpy(load_image_array(image_path)).cuda()
         position = camera_json['position']
         rotation = camera_json['rotation']
         ivm = np.empty((4, 4))
@@ -80,7 +75,16 @@ class ImagesDataset(torch.utils.data.Dataset, Dataset3D):
         for k in range(4):
             for j in range(4):
                 view_matrix_array[k * 4 + j] = vm[j, k]
-        return image, view_matrix_array
+        return view_matrix_array
+
+    def __len__(self):
+        return len(self.cameras_json)
+
+    def __getitem__(self, idx):
+        camera_json = self.cameras_json[idx]
+        image_path = os.path.join(self.images_dir, camera_json['img_name'])
+        image = torch.from_numpy(load_image_array(image_path)).cuda()
+        return image, self.get_view_matrix_array(idx)
 
     def get_fovy(self) -> float:
         return self.fovy

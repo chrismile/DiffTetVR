@@ -80,10 +80,9 @@ class ApplicationState {
 public:
     ApplicationState();
     ~ApplicationState();
-    void checkSettings(
-            uint32_t widthIn, uint32_t heightIn, uint32_t widthOut, uint32_t heightOut, uint32_t numColorChannels,
-            caffe2::TypeMeta dtypeColor, caffe2::TypeMeta dtypeDepth, caffe2::TypeMeta dtypeMotionVector,
-            float exposure);
+    void vulkanBegin();
+    void vulkanFinished();
+    void selectNextCommandBuffer();
 
     sgl::vk::Device* device = nullptr;
     sgl::vk::Renderer* renderer = nullptr;
@@ -94,12 +93,14 @@ public:
     uint32_t cachedWidth = 0, cachedHeight = 0;
 
     // For invocation of Vulkan command buffer in CUDA stream.
+    size_t commandBufferIdx = 0;
+    std::vector<sgl::vk::CommandBufferPtr> commandBuffers;
+    std::vector<sgl::vk::FencePtr> fences;
+    sgl::vk::CommandBufferPtr commandBuffer;
+    sgl::vk::FencePtr fence;
     sgl::vk::SemaphoreVkCudaDriverApiInteropPtr renderReadySemaphore;
     sgl::vk::SemaphoreVkCudaDriverApiInteropPtr renderFinishedSemaphore;
     uint64_t timelineValue = 0;
-    sgl::vk::ImageViewPtr colorImageVk;
-    sgl::vk::BufferPtr colorBufferVk;
-    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr colorBufferCu;
 };
 static ApplicationState* sState = nullptr;
 
@@ -163,55 +164,39 @@ ApplicationState::ApplicationState() {
     optionalDeviceExtensions = sgl::vk::Device::getCudaInteropDeviceExtensions();
 #endif
     sgl::vk::DeviceFeatures requestedDeviceFeatures{};
+    requestedDeviceFeatures.requestedPhysicalDeviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
+    requestedDeviceFeatures.optionalPhysicalDeviceFeatures.shaderStorageBufferArrayDynamicIndexing = VK_TRUE;
+    requestedDeviceFeatures.optionalPhysicalDeviceFeatures.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
+    requestedDeviceFeatures.optionalPhysicalDeviceFeatures.shaderInt64 = VK_TRUE;
+    requestedDeviceFeatures.optionalVulkan12Features.descriptorIndexing = VK_TRUE;
+    requestedDeviceFeatures.optionalVulkan12Features.descriptorBindingVariableDescriptorCount = VK_TRUE;
+    requestedDeviceFeatures.optionalVulkan12Features.runtimeDescriptorArray = VK_TRUE;
+    requestedDeviceFeatures.optionalVulkan12Features.shaderStorageBufferArrayNonUniformIndexing = VK_TRUE;
 
     sgl::vk::Instance* instance = sgl::AppSettings::get()->getVulkanInstance();
     sgl::AppSettings::get()->getVulkanInstance()->setDebugCallback(&vulkanErrorCallbackHeadless);
     device = new sgl::vk::Device;
-
-#ifdef SUPPORT_DLSS
-    auto physicalDeviceCheckCallback = [instance](
-            VkPhysicalDevice physicalDevice,
-            VkPhysicalDeviceProperties physicalDeviceProperties,
-            std::vector<const char*>& requiredDeviceExtensions,
-            std::vector<const char*>& optionalDeviceExtensions,
-            sgl::vk::DeviceFeatures& requestedDeviceFeatures) {
-        if (physicalDeviceProperties.apiVersion < VK_API_VERSION_1_1) {
-            return false;
-        }
-        getPhysicalDeviceDlssSupportInfo(
-                instance, physicalDevice, optionalDeviceExtensions, requestedDeviceFeatures);
-        if (physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_2) {
-            bool needsDeviceAddressFeature = false;
-            for (size_t i = 0; i < optionalDeviceExtensions.size();) {
-                const char* extensionName = optionalDeviceExtensions.at(i);
-                if (strcmp(extensionName, VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME) == 0) {
-                    optionalDeviceExtensions.erase(optionalDeviceExtensions.begin() + i);
-                    needsDeviceAddressFeature = true;
-                    continue;
-                }
-                if (strcmp(extensionName, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME) == 0) {
-                    optionalDeviceExtensions.erase(optionalDeviceExtensions.begin() + i);
-                    needsDeviceAddressFeature = true;
-                    continue;
-                }
-                i++;
-            }
-            if (needsDeviceAddressFeature) {
-                requestedDeviceFeatures.optionalVulkan12Features.bufferDeviceAddress = VK_TRUE;
-            }
-        }
-        return true;
-    };
-    device->setPhysicalDeviceCheckCallback(physicalDeviceCheckCallback);
-#endif
-
     device->createDeviceHeadless(
             instance, {
                     VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME
             },
             optionalDeviceExtensions, requestedDeviceFeatures);
     sgl::AppSettings::get()->setPrimaryDevice(device);
+    sgl::AppSettings::get()->setUseMatrixBlock(false);
     sgl::AppSettings::get()->initializeSubsystems();
+
+    // Synchronize needs to be called to make sure cuInit has been called.
+    torch::cuda::synchronize();
+#ifdef SUPPORT_CUDA_INTEROP
+    if (!sgl::vk::getIsCudaDeviceApiFunctionTableInitialized()) {
+        bool success = sgl::vk::initializeCudaDeviceApiFunctionTable();
+        if (!success) {
+            sgl::Logfile::get()->throwError(
+                    "Error in VolumetricPathTracingModuleRenderer::setRenderingResolution: "
+                    "sgl::vk::initializeCudaDeviceApiFunctionTable() failed.", false);
+        }
+    }
+#endif
 
     renderer = new sgl::vk::Renderer(sgl::AppSettings::get()->getPrimaryDevice());
     camera = std::make_shared<sgl::Camera>();
@@ -224,15 +209,30 @@ ApplicationState::ApplicationState() {
             renderer, [](const TetMeshPtr&, float) {},
             false, []() -> std::string { return ""; },
             transferFunctionWindow);
+
+    renderReadySemaphore = std::make_shared<sgl::vk::SemaphoreVkCudaDriverApiInterop>(
+            device, 0, VK_SEMAPHORE_TYPE_TIMELINE, timelineValue);
+    renderFinishedSemaphore = std::make_shared<sgl::vk::SemaphoreVkCudaDriverApiInterop>(
+            device, 0, VK_SEMAPHORE_TYPE_TIMELINE, timelineValue);
+    const uint32_t maxNumFrames = 20;
+    sgl::vk::CommandPoolType commandPoolType;
+    commandPoolType.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    for (uint32_t frameIdx = 0; frameIdx < maxNumFrames; frameIdx++) {
+        commandBuffers.push_back(std::make_shared<sgl::vk::CommandBuffer>(device, commandPoolType));
+        fences.push_back(std::make_shared<sgl::vk::Fence>(device, VK_FENCE_CREATE_SIGNALED_BIT));
+    }
 }
 
 ApplicationState::~ApplicationState() {
+    torch::cuda::synchronize();
     device->waitIdle();
+    commandBuffers = {};
+    fences = {};
+    commandBuffer = {};
+    fence = {};
     renderReadySemaphore = {};
     renderFinishedSemaphore = {};
-    colorImageVk = {};
-    colorBufferVk = {};
-    colorBufferCu = {};
+
     delete optimizer;
     delete transferFunctionWindow;
     delete renderer;
@@ -242,6 +242,35 @@ ApplicationState::~ApplicationState() {
     }
 #endif
     sgl::AppSettings::get()->release();
+}
+
+void ApplicationState::vulkanBegin() {
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+    timelineValue++;
+    selectNextCommandBuffer();
+    fence->wait();
+    fence->reset();
+    commandBuffer->setFence(fence);
+    renderReadySemaphore->signalSemaphoreCuda(stream, timelineValue);
+    renderReadySemaphore->setWaitSemaphoreValue(timelineValue);
+    commandBuffer->pushWaitSemaphore(renderReadySemaphore, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    renderer->pushCommandBuffer(commandBuffer);
+    renderer->beginCommandBuffer();
+}
+
+void ApplicationState::vulkanFinished() {
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+    renderFinishedSemaphore->setSignalSemaphoreValue(timelineValue);
+    commandBuffer->pushSignalSemaphore(renderFinishedSemaphore);
+    renderer->endCommandBuffer();
+    renderer->submitToQueue();
+    renderFinishedSemaphore->waitSemaphoreCuda(stream, timelineValue);
+}
+
+void ApplicationState::selectNextCommandBuffer() {
+    commandBuffer = commandBuffers.at(commandBufferIdx);
+    fence = fences.at(commandBufferIdx);
+    commandBufferIdx = (commandBufferIdx + 1) % commandBuffers.size();
 }
 
 static void ensureStateExists() {
@@ -261,49 +290,25 @@ torch::Tensor forward(torch::Tensor X) {
     return X;
 }
 
-struct CameraSettings {
-    glm::vec3 position;
-    uint32_t width, height;
-};
-
-TetMeshPtr createTetMesh(CameraSettings cameraSettings, torch::Tensor colorImage) {
-    // TODO
-    return TetMeshPtr();
-}
-
-/*TetMeshPtr createEmptyGridMesh(
-        const sgl::AABB3& aabb, uint32_t width, uint32_t height, uint32_t depth) {
-    // TODO
-    tetMeshOpt->setHexMeshConst(
-            tetMeshGT->getBoundingBox(), settings.initGridResolution.x,
-            settings.initGridResolution.y, settings.initGridResolution.z,
-            glm::vec4(0.5f, 0.5f, 0.5f, 0.1f));
-}*/
-
-torch::Tensor renderForward(CameraSettings cameraSettings, torch::Tensor colorImage) {
-    // Use enable_grad() on tensor on Python side if backpropagation should be used.
-    // https://pytorch.org/docs/stable/generated/torch.enable_grad.html
-    return colorImage;
-}
-
-torch::Tensor renderAdjoint(CameraSettings cameraSettings, torch::Tensor colorImage) {
-    auto adjointImage = colorImage.grad();
-    return colorImage;
-}
-
 class TetRegularizer {
 public:
     TetRegularizer(sgl::vk::Renderer* renderer, const TetMeshPtr& tetMesh, float lambda, float softplusBeta)
             : tetMeshOpt(tetMesh) {
         tetRegularizerPass = std::make_shared<TetRegularizerPass>(renderer);
         tetRegularizerPass->setSettings(lambda, softplusBeta);
+        renderer->insertMemoryBarrier(
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
     }
     void computeGrad() {
         auto cellIndicesBuffer = tetMeshOpt->getCellIndicesBuffer();
         auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
         auto vertexPositionGradientBuffer = tetMeshOpt->getVertexPositionGradientBuffer();
-        if (vertexPositionBuffer != cellIndicesBufferPrev) {
-            cellIndicesBufferPrev = vertexPositionBuffer;
+        if (cellIndicesBuffer != cellIndicesBufferPrev.lock() || vertexPositionBuffer != vertexPositionBufferPrev.lock()
+                || vertexPositionGradientBuffer != vertexPositionGradientBufferPrev.lock()) {
+            cellIndicesBufferPrev = cellIndicesBuffer;
+            vertexPositionBufferPrev = vertexPositionBuffer;
+            vertexPositionGradientBufferPrev = vertexPositionGradientBuffer;
             tetRegularizerPass->setBuffers(cellIndicesBuffer, vertexPositionBuffer, vertexPositionGradientBuffer);
         }
         tetRegularizerPass->render();
@@ -311,15 +316,41 @@ public:
 
 private:
     TetMeshPtr tetMeshOpt;
-    sgl::vk::BufferPtr cellIndicesBufferPrev;
+    std::weak_ptr<sgl::vk::Buffer> cellIndicesBufferPrev;
+    std::weak_ptr<sgl::vk::Buffer> vertexPositionBufferPrev;
+    std::weak_ptr<sgl::vk::Buffer> vertexPositionGradientBufferPrev;
     std::shared_ptr<TetRegularizerPass> tetRegularizerPass;
 };
 
 PYBIND11_MODULE(difftetvr, m) {
+    // The code block below can help to avoid pybind11 exception handling when using a debugger like gdb.
+    // See: https://pybind11.readthedocs.io/en/stable/advanced/exceptions.html
+    /*py::register_exception_translator([](std::exception_ptr p) {
+        try {
+            if (p) std::rethrow_exception(p);
+        } catch (const std::out_of_range &e) {
+            std::terminate();
+        }
+    });*/
+
     py::class_<glm::vec3>(m, "vec3")
+            .def(py::init<float, float, float>(), py::arg("x"), py::arg("y"), py::arg("z"))
             .def_readwrite("x", &glm::vec3::x)
             .def_readwrite("y", &glm::vec3::y)
             .def_readwrite("z", &glm::vec3::z);
+
+    py::class_<glm::vec4>(m, "vec4")
+            .def(py::init<float, float, float, float>(), py::arg("x"), py::arg("y"), py::arg("z"), py::arg("w"))
+            .def_readwrite("x", &glm::vec4::x)
+            .def_readwrite("y", &glm::vec4::y)
+            .def_readwrite("z", &glm::vec4::z)
+            .def_readwrite("w", &glm::vec4::w);
+
+    py::class_<glm::uvec3>(m, "uvec3")
+            .def(py::init<uint32_t, uint32_t, uint32_t>(), py::arg("x"), py::arg("y"), py::arg("z"))
+            .def_readwrite("x", &glm::uvec3::x)
+            .def_readwrite("y", &glm::uvec3::y)
+            .def_readwrite("z", &glm::uvec3::z);
 
     py::class_<sgl::AABB3>(m, "AABB3")
             .def(py::init<>())
@@ -349,6 +380,7 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("load_from_file", &TetMesh::loadFromFile, py::arg("file_path"))
             .def("save_to_file", &TetMesh::saveToFile, py::arg("file_path"))
             .def("get_bounding_box", &TetMesh::getBoundingBox)
+            .def("set_vertices_changed_on_device", &TetMesh::setVerticesChangedOnDevice, py::arg("vertices_changed") = true)
             .def("set_force_use_ovm_representation", &TetMesh::setForceUseOvmRepresentation, "Coarse to fine strategy.")
             .def("set_hex_mesh_const", &TetMesh::setHexMeshConst,
                  py::arg("aabb"), py::arg("xs"), py::arg("ys"), py::arg("zs"), py::arg("const_color"),
@@ -357,11 +389,15 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("get_num_vertices", &TetMesh::getNumVertices)
             .def("get_vertex_positions", &TetMesh::getVertexPositionTensor)
             .def("get_vertex_colors", &TetMesh::getVertexColorTensor)
+            .def("get_vertex_boundary_bit_tensor", &TetMesh::getVertexBoundaryBitTensor)
             .def("unlink_tets", &TetMesh::unlinkTets,
                  "Removes the links between all tets, i.e., a potentially used shared index representation is reversed.")
-            .def("split_by_largest_gradient_magnitudes", [](const TetMeshPtr& self, SplitGradientType splitGradientType, float splitsRatio) {
-                self->splitByLargestGradientMagnitudes(splitGradientType, splitsRatio);
-            }, py::arg("split_gradient_type"), py::arg("splits_ratio"));
+            .def("split_by_largest_gradient_magnitudes", [](
+                    const TetMeshPtr& self, const std::shared_ptr<TetMeshVolumeRenderer>& volumeRenderer,
+                    SplitGradientType splitGradientType, float splitsRatio) {
+                self->splitByLargestGradientMagnitudes(sState->renderer, splitGradientType, splitsRatio);
+                volumeRenderer->setTetMeshData(self);
+            }, py::arg("volume_renderer"), py::arg("split_gradient_type"), py::arg("splits_ratio"));
 
     py::enum_<RendererType>(m, "RendererType")
             .value("PPLL", RendererType::PPLL)
@@ -387,17 +423,40 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("set_tet_mesh", &TetMeshVolumeRenderer::setTetMeshData, py::arg("tet_mesh"))
             .def("get_attenuation", &TetMeshVolumeRenderer::getAttenuationCoefficient)
             .def("set_attenuation", &TetMeshVolumeRenderer::setAttenuationCoefficient, py::arg("attenuation_coefficient"))
-            .def("set_viewport_size", [](const std::shared_ptr<TetMeshVolumeRenderer>& self, uint32_t imageWidth, uint32_t imageHeight) {
+            .def("set_coarse_to_fine_target_num_tets", &TetMeshVolumeRenderer::setCoarseToFineTargetNumTets, py::arg("target_num_tets"))
+            .def("set_clear_color", [](const std::shared_ptr<TetMeshVolumeRenderer>& self, const glm::vec4& color) {
+                self->setClearColor(sgl::colorFromVec4(color));
+            }, py::arg("color"))
+            .def("set_viewport_size", [](
+                    const std::shared_ptr<TetMeshVolumeRenderer>& self, uint32_t imageWidth, uint32_t imageHeight,
+                    bool recreateSwapchain) {
                 auto camera = self->getCamera();
                 auto renderTarget = std::make_shared<sgl::RenderTarget>(int(imageWidth), int(imageHeight));
                 camera->setRenderTarget(renderTarget, false);
                 camera->onResolutionChanged({});
-            }, py::arg("image_width"), py::arg("image_height"))
+                self->setViewportSize(imageWidth, imageHeight);
+                if (recreateSwapchain) {
+                    self->recreateSwapchain(imageWidth, imageHeight);
+                }
+            }, py::arg("image_width"), py::arg("image_height"), py::arg("recreate_swapchain") = true)
+            .def("reuse_intermediate_buffers_from", [](
+                    const std::shared_ptr<TetMeshVolumeRenderer>& self,
+                    const std::shared_ptr<TetMeshVolumeRenderer>& other) {
+                const auto& imageSettings = self->getOutputImageView()->getImage()->getImageSettings();
+                auto fragmentBufferSize = other->getFragmentBufferSize();
+                auto fragmentBuffer = other->getFragmentBuffer();
+                auto startOffsetBuffer = other->getStartOffsetBuffer();
+                auto fragmentCounterBuffer = other->getFragmentCounterBuffer();
+                self->recreateSwapchainExternal(
+                        imageSettings.width, imageSettings.height, fragmentBufferSize,
+                        fragmentBuffer, startOffsetBuffer, fragmentCounterBuffer);
+            }, py::arg("renderer_other"))
             .def("set_camera_fovy", [](const std::shared_ptr<TetMeshVolumeRenderer>& self, float fovy) {
                 auto camera = self->getCamera();
                 camera->setFOVy(fovy);
             }, py::arg("fovy"))
-            .def("set_view_matrix", [](const std::shared_ptr<TetMeshVolumeRenderer>& self, const std::vector<float>& viewMatrixData) {
+            .def("set_view_matrix", [](
+                    const std::shared_ptr<TetMeshVolumeRenderer>& self, const std::vector<float>& viewMatrixData) {
                 glm::mat4 viewMatrix;
                 for (int i = 0; i < 16; i++) {
                     viewMatrix[i / 4][i % 4] = viewMatrixData[i];
@@ -405,14 +464,11 @@ PYBIND11_MODULE(difftetvr, m) {
                 self->getCamera()->overwriteViewMatrix(viewMatrix);
             }, py::arg("view_matrix_array"))
             .def("render", [](const std::shared_ptr<TetMeshVolumeRenderer>& self) {
+                sState->vulkanBegin();
                 self->render();
-                const auto& outputImageView = self->getOutputImageView();
-                auto imageWidth = outputImageView->getImage()->getImageSettings().width;
-                auto imageHeight = outputImageView->getImage()->getImageSettings().height;
-                torch::Tensor imageTensor = torch::from_blob(
-                        imageDataPtr, { int(imageHeight), int(imageWidth), int(4) },
-                        torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
-                return imageTensor;
+                self->copyOutputImageToBuffer();
+                sState->vulkanFinished();
+                return self->getImageTensor();
             })
             .def("render_adjoint", [](const std::shared_ptr<TetMeshVolumeRenderer>& self, torch::Tensor imageAdjointTensor, bool useAbsGrad) {
                 if (imageAdjointTensor.device().type() != torch::DeviceType::CUDA) {
@@ -437,15 +493,15 @@ PYBIND11_MODULE(difftetvr, m) {
                     imageAdjointTensor = imageAdjointTensor.contiguous();
                 }
 
-                self->getOutputImageView()
-
-                imageAdjointTensor.data_ptr();
                 if (useAbsGrad) {
                     self->setUseAbsGrad(true);
                 }
+                sState->vulkanBegin();
+                self->copyAdjointBufferToImage(imageAdjointTensor.data_ptr());
                 self->renderAdjoint();
+                sState->vulkanFinished();
                 self->setUseAbsGrad(false);
-            }, py::arg("image_adjoint"));
+            }, py::arg("image_adjoint"), py::arg("use_abs_grad"));
 
     py::class_<TetRegularizer, std::shared_ptr<TetRegularizer>>(m, "TetRegularizer")
             .def(py::init([](const TetMeshPtr& tetMesh, float lambda, float softplusBeta) {
@@ -453,7 +509,9 @@ PYBIND11_MODULE(difftetvr, m) {
                 return std::make_shared<TetRegularizer>(sState->renderer, tetMesh, lambda, softplusBeta);
             }), py::arg("tet_mesh"), py::arg("reg_lambda"), py::arg("softplus_beta"))
             .def("compute_grad", [](const std::shared_ptr<TetRegularizer>& self) {
+                sState->vulkanBegin();
                 self->computeGrad();
+                sState->vulkanFinished();
             });
 
     py::enum_<OptimizerType>(m, "OptimizerType")
