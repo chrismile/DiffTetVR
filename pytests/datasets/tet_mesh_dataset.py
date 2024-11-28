@@ -50,9 +50,9 @@ class TetMeshDataset(torch.utils.data.Dataset, Dataset3D):
         self.renderer = d.Renderer(renderer_opt.get_renderer_type())
         if coarse_to_fine:
             self.renderer.set_coarse_to_fine_target_num_tets(max_num_tets)
+        self.renderer.set_tet_mesh(self.tet_mesh_gt)
         self.renderer.set_attenuation(renderer_opt.get_attenuation())
         self.renderer.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))
-        self.renderer.set_tet_mesh(self.tet_mesh_gt)
         self.renderer.set_camera_fovy(self.get_fovy())
         self.renderer.set_viewport_size(img_width, img_height)
 

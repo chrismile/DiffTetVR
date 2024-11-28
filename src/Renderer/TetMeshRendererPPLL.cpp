@@ -70,7 +70,7 @@ protected:
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
                 { "LinkedListGather.Vertex", "LinkedListGather.Fragment" }, preprocessorDefines);
     }
-    void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) {
+    void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) override {
         rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
         const auto& tetMesh = volumeRenderer->getTetMesh();
         //rasterData->setIndexBuffer(tetMesh->getTriangleIndexBuffer());
@@ -84,7 +84,7 @@ protected:
         rasterData->setNumVertices(numIndexedVertices);
         volumeRenderer->setRenderDataBindings(rasterData);
     }
-    void setGraphicsPipelineInfo(sgl::vk::GraphicsPipelineInfo& pipelineInfo) {
+    void setGraphicsPipelineInfo(sgl::vk::GraphicsPipelineInfo& pipelineInfo) override {
         //pipelineInfo.setCullMode(sgl::vk::CullMode::CULL_BACK);
         pipelineInfo.setCullMode(sgl::vk::CullMode::CULL_NONE);
         pipelineInfo.setIsFrontFaceCcw(true);
@@ -132,7 +132,7 @@ protected:
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(shaderIds, preprocessorDefines);
     }
-    void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) {
+    void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) override {
         rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
         rasterData->setIndexBuffer(indexBuffer);
         rasterData->setVertexBuffer(vertexBuffer, 0);
@@ -223,7 +223,7 @@ protected:
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(shaderIds, preprocessorDefines);
     }
-    void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) {
+    void createRasterData(sgl::vk::Renderer* renderer, sgl::vk::GraphicsPipelinePtr& graphicsPipeline) override {
         rasterData = std::make_shared<sgl::vk::RasterData>(renderer, graphicsPipeline);
         rasterData->setIndexBuffer(indexBuffer);
         rasterData->setVertexBuffer(vertexBuffer, 0);

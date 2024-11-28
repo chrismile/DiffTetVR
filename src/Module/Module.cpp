@@ -214,10 +214,10 @@ ApplicationState::ApplicationState() {
             device, 0, VK_SEMAPHORE_TYPE_TIMELINE, timelineValue);
     renderFinishedSemaphore = std::make_shared<sgl::vk::SemaphoreVkCudaDriverApiInterop>(
             device, 0, VK_SEMAPHORE_TYPE_TIMELINE, timelineValue);
-    const uint32_t maxNumFrames = 20;
+    const uint32_t maxNumCommandBuffers = 30;
     sgl::vk::CommandPoolType commandPoolType;
     commandPoolType.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    for (uint32_t frameIdx = 0; frameIdx < maxNumFrames; frameIdx++) {
+    for (uint32_t frameIdx = 0; frameIdx < maxNumCommandBuffers; frameIdx++) {
         commandBuffers.push_back(std::make_shared<sgl::vk::CommandBuffer>(device, commandPoolType));
         fences.push_back(std::make_shared<sgl::vk::Fence>(device, VK_FENCE_CREATE_SIGNALED_BIT));
     }
@@ -421,6 +421,7 @@ PYBIND11_MODULE(difftetvr, m) {
             }), py::arg("renderer_type") = RendererType::PPLL)
             .def("get_renderer_type", &TetMeshVolumeRenderer::getRendererType)
             .def("set_tet_mesh", &TetMeshVolumeRenderer::setTetMeshData, py::arg("tet_mesh"))
+            .def("get_tet_mesh", &TetMeshVolumeRenderer::getTetMeshData)
             .def("get_attenuation", &TetMeshVolumeRenderer::getAttenuationCoefficient)
             .def("set_attenuation", &TetMeshVolumeRenderer::setAttenuationCoefficient, py::arg("attenuation_coefficient"))
             .def("set_coarse_to_fine_target_num_tets", &TetMeshVolumeRenderer::setCoarseToFineTargetNumTets, py::arg("target_num_tets"))
@@ -434,10 +435,12 @@ PYBIND11_MODULE(difftetvr, m) {
                 auto renderTarget = std::make_shared<sgl::RenderTarget>(int(imageWidth), int(imageHeight));
                 camera->setRenderTarget(renderTarget, false);
                 camera->onResolutionChanged({});
+                sState->vulkanBegin();
                 self->setViewportSize(imageWidth, imageHeight);
                 if (recreateSwapchain) {
                     self->recreateSwapchain(imageWidth, imageHeight);
                 }
+                sState->vulkanFinished();
             }, py::arg("image_width"), py::arg("image_height"), py::arg("recreate_swapchain") = true)
             .def("reuse_intermediate_buffers_from", [](
                     const std::shared_ptr<TetMeshVolumeRenderer>& self,

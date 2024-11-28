@@ -130,6 +130,8 @@ class Renderer:
         pass
     def set_tet_mesh(self, tet_mesh: TetMesh) -> None:
         pass
+    def get_tet_mesh(self) -> TetMesh:
+        pass
     def get_attenuation(self) -> float:
         pass
     def set_attenuation(self, attenuation_coefficient: float) -> None:

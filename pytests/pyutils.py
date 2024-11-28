@@ -4,21 +4,25 @@ import difftetvr as d
 
 class DifferentiableRenderingFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, renderer, vertex_positions, vertex_colors):
-        image = renderer.render(input)
+    def forward(ctx, renderer, tet_regularizer, use_abs_grad, vertex_positions, vertex_colors):
+        image = renderer.render()
         # ctx.save_for_backward(image)
         ctx.renderer = renderer
+        ctx.tet_regularizer = tet_regularizer
+        ctx.use_abs_grad = use_abs_grad
         return image
 
     @staticmethod
     @torch.autograd.function.once_differentiable
     def backward(ctx, image_adj):
         # image = ctx.saved_tensors
-        if ctx.renderer.tet_regularizer is not None:
-            ctx.renderer.tet_regularizer.compute_grad()
-        d_vertex_positions, d_vertex_colors = ctx.renderer.render_adjoint(image_adj, ctx.renderer.use_abs_grad)
+        if ctx.tet_regularizer is not None:
+            ctx.tet_regularizer.compute_grad()
+        d_vertex_positions, d_vertex_colors = ctx.renderer.render_adjoint(image_adj, ctx.use_abs_grad)
         del ctx.renderer
-        return None, d_vertex_positions, d_vertex_colors
+        del ctx.tet_regularizer
+        del ctx.use_abs_grad
+        return None, None, None, d_vertex_positions, d_vertex_colors
 
 
 class DifferentiableRenderer(torch.nn.Module):
@@ -37,4 +41,5 @@ class DifferentiableRenderer(torch.nn.Module):
         tet_mesh = self.renderer.get_tet_mesh()
         vertex_positions = tet_mesh.get_vertex_positions()
         vertex_colors = tet_mesh.get_vertex_colors()
-        return DifferentiableRenderingFunction.apply(self.renderer, vertex_positions, vertex_colors)
+        return DifferentiableRenderingFunction.apply(
+            self.renderer, self.tet_regularizer, self.use_abs_grad, vertex_positions, vertex_colors)

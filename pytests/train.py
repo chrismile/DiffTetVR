@@ -49,6 +49,21 @@ def enum_action(enum_class):
     return EnumAction
 
 
+class SplitGradientTypeAction(argparse.Action):
+    def __init__(self, *args, **kwargs):
+        table = {
+            "POSITION".casefold(): d.SplitGradientType.POSITION,
+            "COLOR".casefold(): d.SplitGradientType.COLOR,
+            "ABS_POSITION".casefold(): d.SplitGradientType.ABS_POSITION,
+            "ABS_COLOR".casefold(): d.SplitGradientType.ABS_COLOR,
+        }
+        super().__init__(*args, choices=table, **kwargs)
+        self.table = table
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, self.table[values])
+
+
 def replace_tensor_in_optimizer(optimizer, tensor, name):
     for group in optimizer.param_groups:
         if group['name'] == name:
@@ -101,7 +116,7 @@ def main():
     parser.add_argument('--coarse_to_fine', default=False)
     parser.add_argument('--max_num_tets', type=int, default=60_000)
     parser.add_argument(
-        '--split_grad_type', action=enum_action(d.SplitGradientType), default=d.SplitGradientType.ABS_COLOR)
+        '--split_grad_type', action=SplitGradientTypeAction, default=d.SplitGradientType.ABS_COLOR)
     parser.add_argument('--splits_ratio', type=float, default=0.05)
 
     # Ground truth data sources.
@@ -124,6 +139,7 @@ def main():
     tet_mesh_gt = None
     if args.gt_grid_path is not None:
         tet_mesh_gt = d.TetMesh()
+        tet_mesh_gt.load_from_file(args.gt_grid_path)
         dataset = TetMeshDataset(
             tet_mesh_gt, args.num_iterations, renderer, args.coarse_to_fine, args.max_num_tets,
             args.img_width, args.img_height)
@@ -140,7 +156,7 @@ def main():
     tet_mesh_opt.set_use_gradients(True)
     if args.coarse_to_fine:
         tet_mesh_opt.set_force_use_ovm_representation()
-    if args.tet_mesh_opt is not args.init_grid_path:
+    if args.init_grid_path is not None:
         print(f'Loading initialization tet mesh from file {args.init_grid_path}...')
         tet_mesh_opt.load_from_file(args.init_grid_path)
     else:
@@ -159,7 +175,7 @@ def main():
         renderer.set_viewport_size(img_width, img_height)
     else:
         renderer.set_viewport_size(img_width, img_height, False)
-        renderer.reuse_intermediate_buffers_from(tet_mesh_gt)
+        renderer.reuse_intermediate_buffers_from(dataset.renderer)
 
     variables = []
     vertex_colors = tet_mesh_opt.get_vertex_colors()

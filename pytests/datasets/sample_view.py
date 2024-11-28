@@ -59,7 +59,7 @@ def sample_view_matrix_circle(aabb):
     global_up = np.array([0.0, 1.0, 0.0])
     theta = 2.0 * np.pi * random.random()
     phi = np.arccos(1.0 - 2.0 * random.random())
-    r_total = 0.5 * vec_length(np.array([aabb[1] - aabb[0], aabb[3] - aabb[2], aabb[5] - aabb[4]]))
+    r_total = 0.5 * vec_length(np.array([aabb.max.x - aabb.min.x, aabb.max.y - aabb.min.y, aabb.max.z - aabb.min.z]))
     #if test_case == 'Cloud' or test_case == 'Cloud Fog':
     #    r = r_total * 1.7
     # main_energy.py: r = random.uniform(r_total * 1.35, r_total * 1.7)
@@ -101,9 +101,9 @@ def jitter_direction(camera_forward, jitter_rad):
 
 def sample_view_matrix_box(aabb):
     global_up = np.array([0.0, 1.0, 0.0])
-    rx = 0.5 * (aabb[1] - aabb[0])
-    ry = 0.5 * (aabb[3] - aabb[2])
-    rz = 0.5 * (aabb[5] - aabb[4])
+    rx = 0.5 * (aabb.max.x - aabb.min.x)
+    ry = 0.5 * (aabb.max.y - aabb.min.y)
+    rz = 0.5 * (aabb.max.z - aabb.min.z)
     radii_sorted = sorted([rx, ry, rz])
     r_base = np.sqrt(radii_sorted[0] ** 2 + radii_sorted[1] ** 2)
     #if random.randint(0, 1) == 0:
@@ -188,9 +188,9 @@ def sample_random_view_parametrized(params):
 
 
 def get_position_random_range(aabb):
-    rx = 0.5 * (aabb[1] - aabb[0])
-    ry = 0.5 * (aabb[3] - aabb[2])
-    rz = 0.5 * (aabb[5] - aabb[4])
+    rx = 0.5 * (aabb.max.x - aabb.min.x)
+    ry = 0.5 * (aabb.max.y - aabb.min.y)
+    rz = 0.5 * (aabb.max.z - aabb.min.z)
     r_median = np.median([rx, ry, rz])
     return [(aabb[i * 2] - 2.0 * r_median, aabb[i * 2 + 1] + 2.0 * r_median) for i in range(3)]
 
