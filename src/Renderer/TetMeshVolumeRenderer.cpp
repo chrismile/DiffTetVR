@@ -26,6 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <Graphics/Vulkan/Utils/Device.hpp>
 #include <Graphics/Vulkan/Buffers/Framebuffer.hpp>
 #include <Graphics/Vulkan/Render/Data.hpp>
 #include <Graphics/Vulkan/Render/Renderer.hpp>
@@ -33,6 +34,10 @@
 #ifndef DISABLE_IMGUI
 #include <ImGui/Widgets/PropertyEditor.hpp>
 #include <ImGui/Widgets/NumberFormatting.hpp>
+#endif
+
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#include <c10/cuda/CUDAStream.h>
 #endif
 
 #include "Tet/TetMesh.hpp"
@@ -128,6 +133,9 @@ void TetMeshVolumeRenderer::setViewportSize(uint32_t viewportWidth, uint32_t vie
     colorImageBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(colorImageBuffer);
 
     if (tetMesh && tetMesh->getUseGradients()) {
+        imageSettings.usage =
+                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT
+                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         colorAdjointImage = std::make_shared<sgl::vk::ImageView>(
                 std::make_shared<sgl::vk::Image>(device, imageSettings));
         renderer->insertImageMemoryBarrier(
@@ -172,16 +180,34 @@ torch::Tensor TetMeshVolumeRenderer::getImageTensor() {
 void TetMeshVolumeRenderer::copyOutputImageToBuffer() {
     renderer->transitionImageLayout(outputImageView, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     outputImageView->getImage()->copyToBuffer(colorImageBuffer, renderer->getVkCommandBuffer());
+    renderer->transitionImageLayout(outputImageView, VK_IMAGE_LAYOUT_GENERAL);
 }
 
-void TetMeshVolumeRenderer::copyAdjointBufferToImage(void* devicePtr) {
+void TetMeshVolumeRenderer::copyAdjointBufferToImagePreCheck(void* devicePtr) {
     if (reinterpret_cast<CUdeviceptr>(devicePtr) != colorAdjointImageBufferCu->getCudaDevicePtr()) {
-        sgl::Logfile::get()->throwError(
-                "Error in TetMeshVolumeRenderer::copyAdjointBufferToImage: "
-                "Mismatch in internal adjoint buffer device address and tensor content.");
+        //sgl::Logfile::get()->writeError(
+        //        "Error in TetMeshVolumeRenderer::copyAdjointBufferToImagePreCheck: "
+        //        "Mismatch in internal adjoint buffer device address and tensor content.", false);
+        cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+        CUresult cuResult = sgl::vk::g_cudaDeviceApiFunctionTable.cuMemcpyAsync(
+                colorAdjointImageBufferCu->getCudaDevicePtr(), reinterpret_cast<CUdeviceptr>(devicePtr),
+                colorAdjointImageBuffer->getSizeInBytes(), stream);
+        sgl::vk::checkCUresult(cuResult, "Error in cuMemcpyAsync: ");
     }
-    renderer->transitionImageLayout(colorAdjointImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    colorAdjointImage->getImage()->copyFromBuffer(colorImageBuffer, renderer->getVkCommandBuffer());
+}
+
+void TetMeshVolumeRenderer::copyAdjointBufferToImage() {
+    renderer->insertImageMemoryBarrier(
+            colorAdjointImage->getImage(),
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_ACCESS_NONE_KHR, VK_ACCESS_TRANSFER_WRITE_BIT);
+    colorAdjointImage->getImage()->copyFromBuffer(colorAdjointImageBuffer, renderer->getVkCommandBuffer());
+    renderer->insertImageMemoryBarrier(
+            colorAdjointImage->getImage(),
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 }
 #endif
 

@@ -54,7 +54,7 @@ class ImagesDataset(torch.utils.data.Dataset, Dataset3D):
                 self.aabb = d.AABB3(d.vec3(-0.5, -0.5, -0.5), d.vec3(0.5, 0.5, 0.5))
             self.img_width = int(camera0_json['width'])
             self.img_height = int(camera0_json['height'])
-            self.fovy = int(camera0_json['fovy'])
+            self.fovy = float(camera0_json['fovy'])
             self.scale_pos = 1.0
 
         self.cameras_json = cameras_json

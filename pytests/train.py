@@ -29,6 +29,7 @@ import random
 import time
 import argparse
 import torch
+from torch.utils.data import DataLoader
 import difftetvr as d
 from pyutils import DifferentiableRenderer
 from datasets.tet_mesh_dataset import TetMeshDataset
@@ -113,7 +114,7 @@ def main():
     parser.add_argument('--init_grid_opacity', default=0.1)
 
     # Coarse-to-fine strategy.
-    parser.add_argument('--coarse_to_fine', default=False)
+    parser.add_argument('--coarse_to_fine', action='store_true', default=False)
     parser.add_argument('--max_num_tets', type=int, default=60_000)
     parser.add_argument(
         '--split_grad_type', action=SplitGradientTypeAction, default=d.SplitGradientType.ABS_COLOR)
@@ -151,6 +152,7 @@ def main():
             'be passed to the script to specify the used ground truth data.')
     img_width = dataset.get_img_width()
     img_height = dataset.get_img_height()
+    data_loader = DataLoader(dataset, batch_size=None)
 
     tet_mesh_opt = d.TetMesh()
     tet_mesh_opt.set_use_gradients(True)
@@ -200,7 +202,7 @@ def main():
     def training_step(view_matrix_array, optimizer_step=True):
         if optimizer_step:
             optimizer.zero_grad()
-        renderer.set_view_matrix(view_matrix_array)
+        renderer.set_view_matrix(view_matrix_array.numpy())
         image_opt = diff_renderer()
         loss = loss_fn(image_opt, image_gt)
         loss.backward()
@@ -217,21 +219,24 @@ def main():
             args.split_grad_type == d.SplitGradientType.ABS_COLOR
         while True:
             # Train colors.
-            for image_gt, view_matrix_array in dataset:
+            print('Optimizing colors...')
+            for image_gt, view_matrix_array in data_loader:
                 training_step(view_matrix_array)
 
             # Train positions + colors.
-            for image_gt, view_matrix_array in dataset:
+            print('Optimizing positions + colors...')
+            for image_gt, view_matrix_array in data_loader:
                 training_step(view_matrix_array)
 
             if tet_mesh_opt.get_num_cells() >= args.max_num_tets:
                 break
 
             # Accumulate gradients.
+            print('Accumulating gradients...')
             if use_accum_abs_grads:
                 diff_renderer.set_use_abs_grad(True)
             optimizer.zero_grad()
-            for image_gt, view_matrix_array in dataset:
+            for image_gt, view_matrix_array in data_loader:
                 training_step(view_matrix_array, False)
             if use_accum_abs_grads:
                 diff_renderer.set_use_abs_grad(False)
@@ -251,7 +256,7 @@ def main():
             #        param_group['lr'] = lr
     else:
         for epoch_idx in range(args.num_epochs):
-            for image_gt, view_matrix_array in dataset:
+            for image_gt, view_matrix_array in data_loader:
                 training_step(view_matrix_array)
             scheduler.step()
     time_end = time.time()

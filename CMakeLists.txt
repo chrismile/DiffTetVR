@@ -14,7 +14,7 @@ include_directories(src)
 file(GLOB_RECURSE MODULE_SOURCES src/Module/*.cpp src/Module/*.hpp)
 # TODO: Undo when module is excluded.
 foreach(MODULE_SOURCE ${MODULE_SOURCES})
-    #list(REMOVE_ITEM SOURCES ${MODULE_SOURCE})
+    list(REMOVE_ITEM SOURCES ${MODULE_SOURCE})
 endforeach()
 
 file(GLOB_RECURSE SHADER_FILES Data/Shaders/*.glsl)
@@ -296,7 +296,7 @@ if (${SUPPORT_PYTORCH} AND Torch_FOUND AND Python3_FOUND)
     target_link_libraries(DiffTetVR PRIVATE ${TORCH_LIBRARIES})
     target_include_directories(DiffTetVR PRIVATE ${TORCH_INCLUDE_DIR})
     target_compile_definitions(DiffTetVR PRIVATE SUPPORT_PYTORCH)
-    target_compile_definitions(DiffTetVR PRIVATE BUILD_PYTHON_MODULE)   # TODO
+    #target_compile_definitions(DiffTetVR PRIVATE BUILD_PYTHON_MODULE)   # TODO
 endif()
 
 # TODO: Remove when module is excluded.

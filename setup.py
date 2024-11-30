@@ -31,11 +31,12 @@ import shutil
 import subprocess
 from pathlib import Path
 from urllib.request import urlopen
+import setuptools
 from setuptools import setup, find_packages
 from setuptools.command.egg_info import egg_info
 from setuptools.dist import Distribution
 from setuptools.command import bdist_egg
-from torch.utils.cpp_extension import BuildExtension, CppExtension, CUDAExtension, IS_WINDOWS
+from torch.utils.cpp_extension import include_paths, library_paths, BuildExtension, IS_WINDOWS, IS_HIP_EXTENSION, ROCM_VERSION
 
 extra_compile_args = []
 if IS_WINDOWS:
@@ -44,6 +45,9 @@ if IS_WINDOWS:
 else:
     extra_compile_args.append('-std=c++17')
     extra_compile_args.append('-fopenmp')
+    # '-fpermissive' is necessary for compiling C code with torch.utils.cpp_extension.BuildExtension.
+    #extra_compile_args.append('-fpermissive')
+
 
 class EggInfoInstallLicense(egg_info):
     def run(self):
@@ -52,6 +56,35 @@ class EggInfoInstallLicense(egg_info):
             self.copy_file('LICENSE', self.egg_info)
         egg_info.run(self)
 
+
+def TorchExtension(name, sources, *args, **kwargs):
+    include_dirs = kwargs.get('include_dirs', [])
+    include_dirs += include_paths(cuda=True)
+    kwargs['include_dirs'] = include_dirs
+
+    library_dirs = kwargs.get('library_dirs', [])
+    library_dirs += library_paths(cuda=True)
+    kwargs['library_dirs'] = library_dirs
+
+    libraries = kwargs.get('libraries', [])
+    libraries.append('c10')
+    libraries.append('torch')
+    libraries.append('torch_cpu')
+    libraries.append('torch_python')
+    if IS_HIP_EXTENSION:
+        assert ROCM_VERSION is not None
+        libraries.append('amdhip64' if ROCM_VERSION >= (3, 5) else 'hip_hcc')
+        libraries.append('c10_hip')
+        libraries.append('torch_hip')
+    else:
+        libraries.append('cudart')
+        libraries.append('c10_cuda')
+        libraries.append('torch_cuda')
+    kwargs['libraries'] = libraries
+
+    return setuptools.Extension(name, sources, *args, **kwargs)
+
+
 def find_all_sources_in_dir(root_dir):
     source_files = []
     for root, subdirs, files in os.walk(root_dir):
@@ -59,6 +92,7 @@ def find_all_sources_in_dir(root_dir):
             if filename.endswith('.cpp') or filename.endswith('.cc') or filename.endswith('.c'):
                 source_files.append(root + "/" + filename)
     return source_files
+
 
 #sgl_sources = [ 'third_party/sgl/src/Graphics/Vulkan/Utils/Device.cpp' ]
 #sgl_sources += find_all_sources_in_dir('third_party/sgl/src/Graphics/Vulkan/Buffers')
@@ -80,6 +114,10 @@ include_dirs = [
     'third_party/OpenVolumeMesh/src',
     'third_party/custom',
     'third_party/glslang',
+    # 'third_party/fuchsia_radix_sort',
+    # 'third_party/fuchsia_radix_sort/lib',
+    'third_party/fuchsia_radix_sort/include',
+    # 'tmp/fuchsia_radix_sort',
 ]
 source_files = []
 source_files += find_all_sources_in_dir('src/Module')
@@ -186,6 +224,57 @@ if IS_WINDOWS:
 else:
     source_files += find_all_sources_in_dir('third_party/glslang/glslang/OSDependent/Unix')
 
+
+# fuchsia_radix_sort
+#source_files += [
+#    'third_party/fuchsia_radix_sort/lib/radix_sort_vk.c',
+#    'third_party/fuchsia_radix_sort/lib/target.c',
+#    'third_party/fuchsia_radix_sort/lib/target_requirements.c',
+#    'third_party/fuchsia_radix_sort/common/vk/assert.c',
+#    'third_party/fuchsia_radix_sort/common/vk/barrier.c',
+#    'third_party/fuchsia_radix_sort/common/util.c',
+#]
+#source_files += find_all_sources_in_dir('third_party/fuchsia_radix_sort/lib/targets/amd')
+#source_files += find_all_sources_in_dir('third_party/fuchsia_radix_sort/lib/targets/intel')
+#source_files += find_all_sources_in_dir('third_party/fuchsia_radix_sort/lib/targets/nvidia')
+#source_files += find_all_sources_in_dir('third_party/fuchsia_radix_sort/lib/targets/arm')
+#
+#
+#def compile_shader(header_name, shader_path, out_dir, shader_defines):
+#    shader_var_name = Path(header_name).stem.replace('.', '_')
+#    out_file_path = os.path.join(out_dir, header_name)
+#    if os.path.isfile(out_file_path):
+#        return
+#    process_args = [
+#        'glslangValidator', '--target-env', 'vulkan1.2', '--vn', f'{shader_var_name}_shader_binary',
+#        shader_path, '-o', out_file_path
+#    ] + shader_defines
+#    subprocess.run(process_args, check=True)
+#
+#
+#tmp_shaders_path = 'tmp/fuchsia_radix_sort'
+#Path(tmp_shaders_path).mkdir(parents=True, exist_ok=True)
+#for support in ['noi64', 'i64']:
+#    for keyval in ['u32', 'u64']:
+#        a = f'{support}_{keyval}_'
+#        d = []
+#        if support == 'noi64':
+#            d.append('-DRS_DISABLE_SHADER_INT64')
+#        if keyval == 'u32':
+#            d.append('-DRS_KEYVAL_DWORDS=1')
+#        else:
+#            d.append('-DRS_KEYVAL_DWORDS=2')
+#        compile_shader(
+#            f'{a}init.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/init.comp', tmp_shaders_path, d)
+#        compile_shader(
+#            f'{a}fill.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/fill.comp', tmp_shaders_path, d)
+#        compile_shader(
+#            f'{a}histogram.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/histogram.comp', tmp_shaders_path, d)
+#        compile_shader(
+#            f'{a}prefix.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/prefix.comp', tmp_shaders_path, d)
+#        compile_shader(
+#            f'{a}scatter.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/scatter.comp', tmp_shaders_path, d)
+
 data_files_all = []
 data_files = ['src/Module/difftetvr.pyi']
 libraries = []
@@ -197,6 +286,7 @@ defines = [
     ('DISABLE_IMGUI',),
     ('BUILD_PYTHON_MODULE',),
     ('USE_OPEN_VOLUME_MESH',),
+    ('USE_FUCHSIA_RADIX_SORT_CMAKE',),
     # For glslang.
     ('ENABLE_SPIRV',),
 ]
@@ -210,7 +300,8 @@ if IS_WINDOWS:
     defines.append(('GLSLANG_OSINCLUDE_WIN32', ''))
 else:
     defines.append(('DLL_OBJECT', ''))
-    extra_compile_args.append('-g')  # For debugging tests.
+    extra_compile_args.append('-O0')  # For debugging tests.
+    extra_compile_args.append('-ggdb')  # For debugging tests.
     libraries.append('dl')
     defines.append(('GLSLANG_OSINCLUDE_UNIX', ''))
 
@@ -218,6 +309,28 @@ else:
 # TODO: Add support for not using CUDA.
 defines.append(('SUPPORT_CUDA_INTEROP',))
 source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCuda.cpp')
+
+
+tmp_path = 'tmp/fuchsia_radix_sort'
+Path(tmp_path).mkdir(parents=True, exist_ok=True)
+if IS_WINDOWS:
+    radix_sort_lib_path = f'{tmp_path}/build/vk-radix-sort.lib'
+else:
+    radix_sort_lib_path = f'{tmp_path}/build/libvk-radix-sort.a'
+extra_objects.append(radix_sort_lib_path)
+if IS_WINDOWS:
+    libraries.append('vulkan-1')
+else:
+    libraries.append('vulkan')
+if not os.path.isfile(radix_sort_lib_path):
+    volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk/volk.h'
+    subprocess.run([
+        'cmake', '-S', 'third_party/fuchsia_radix_sort', '-B', f'{tmp_path}/build',
+        '-DCMAKE_BUILD_TYPE=DEBUG',
+        f'-DVOLK_INCLUDE_DIR="{os.path.abspath(volk_header_path)}"',
+        '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'], check=True)
+    subprocess.run(['cmake', '--build', f'{tmp_path}/build'], check=True)
+
 
 data_files_all.append(('.', data_files))
 
@@ -257,7 +370,7 @@ if uses_pip:
     shutil.copytree('docs', 'difftetvr/docs')
     shutil.copytree('Data/Shaders', 'difftetvr/Data/Shaders')
     ext_modules = [
-        CppExtension(
+        TorchExtension(
             'difftetvr.difftetvr',
             source_files,
             libraries=libraries,
@@ -303,7 +416,7 @@ else:
         name='difftetvr',
         author='Christoph Neuhauser',
         ext_modules=[
-            CppExtension(
+            TorchExtension(
                 'difftetvr',
                 source_files,
                 libraries=libraries,

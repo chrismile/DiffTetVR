@@ -6,7 +6,7 @@ class DifferentiableRenderingFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, renderer, tet_regularizer, use_abs_grad, vertex_positions, vertex_colors):
         image = renderer.render()
-        # ctx.save_for_backward(image)
+        ctx.save_for_backward(image)
         ctx.renderer = renderer
         ctx.tet_regularizer = tet_regularizer
         ctx.use_abs_grad = use_abs_grad
@@ -15,10 +15,12 @@ class DifferentiableRenderingFunction(torch.autograd.Function):
     @staticmethod
     @torch.autograd.function.once_differentiable
     def backward(ctx, image_adj):
-        # image = ctx.saved_tensors
+        image, = ctx.saved_tensors
         if ctx.tet_regularizer is not None:
             ctx.tet_regularizer.compute_grad()
-        d_vertex_positions, d_vertex_colors = ctx.renderer.render_adjoint(image_adj, ctx.use_abs_grad)
+        ctx.renderer.render_adjoint(image_adj, ctx.use_abs_grad)
+        d_vertex_positions = ctx.renderer.get_tet_mesh().get_vertex_positions().grad
+        d_vertex_colors = ctx.renderer.get_tet_mesh().get_vertex_colors().grad
         del ctx.renderer
         del ctx.tet_regularizer
         del ctx.use_abs_grad

@@ -121,7 +121,8 @@ public:
     void setViewportSize(uint32_t viewportWidth, uint32_t viewportHeight);
     torch::Tensor getImageTensor();
     void copyOutputImageToBuffer();
-    void copyAdjointBufferToImage(void* devicePtr);
+    void copyAdjointBufferToImagePreCheck(void* devicePtr);
+    void copyAdjointBufferToImage();
 #endif
 
     [[nodiscard]] inline sgl::vk::Renderer* getRenderer() const { return renderer; }

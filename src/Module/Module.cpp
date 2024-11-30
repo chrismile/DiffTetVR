@@ -61,6 +61,10 @@
 #include <Renderer/OptimizerDefines.hpp>
 #include <Renderer/Optimizer.hpp>
 
+#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
+#include <radix_sort/radix_sort_vk.h>
+#endif
+
 #ifdef __linux__
 #include <dlfcn.h>
 #endif
@@ -163,6 +167,10 @@ ApplicationState::ApplicationState() {
 #ifdef SUPPORT_CUDA_INTEROP
     optionalDeviceExtensions = sgl::vk::Device::getCudaInteropDeviceExtensions();
 #endif
+    optionalDeviceExtensions.push_back(VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
+    optionalDeviceExtensions.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+    optionalDeviceExtensions.push_back(VK_EXT_FRAGMENT_SHADER_INTERLOCK_EXTENSION_NAME); // for raster adjoint pass
+
     sgl::vk::DeviceFeatures requestedDeviceFeatures{};
     requestedDeviceFeatures.requestedPhysicalDeviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
     requestedDeviceFeatures.optionalPhysicalDeviceFeatures.shaderStorageBufferArrayDynamicIndexing = VK_TRUE;
@@ -176,6 +184,73 @@ ApplicationState::ApplicationState() {
     sgl::vk::Instance* instance = sgl::AppSettings::get()->getVulkanInstance();
     sgl::AppSettings::get()->getVulkanInstance()->setDebugCallback(&vulkanErrorCallbackHeadless);
     device = new sgl::vk::Device;
+
+#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
+    auto physicalDeviceCheckCallback = [](
+            VkPhysicalDevice physicalDevice,
+            VkPhysicalDeviceProperties physicalDeviceProperties,
+            std::vector<const char*>& requiredDeviceExtensions,
+            std::vector<const char*>& optionalDeviceExtensions,
+            sgl::vk::DeviceFeatures& requestedDeviceFeatures) {
+        if (physicalDeviceProperties.apiVersion < VK_API_VERSION_1_1) {
+            return false;
+        }
+
+        VkPhysicalDeviceSubgroupProperties subgroupProperties{};
+        subgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+        VkPhysicalDeviceProperties2 deviceProperties2 = {};
+        deviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        deviceProperties2.pNext = &subgroupProperties;
+        sgl::vk::getPhysicalDeviceProperties2(physicalDevice, deviceProperties2);
+
+        auto* target = radix_sort_vk_target_auto_detect(&physicalDeviceProperties, &subgroupProperties, 2u);
+        if (!target) {
+            return false;
+        }
+        VkPhysicalDeviceFeatures physicalDeviceFeatures{};
+        VkPhysicalDeviceVulkan11Features physicalDeviceVulkan11Features{};
+        physicalDeviceVulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+        VkPhysicalDeviceVulkan12Features physicalDeviceVulkan12Features{};
+        physicalDeviceVulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        radix_sort_vk_target_requirements_t targetRequirements{};
+        targetRequirements.pdf = &physicalDeviceFeatures;
+        targetRequirements.pdf11 = &physicalDeviceVulkan11Features;
+        targetRequirements.pdf12 = &physicalDeviceVulkan12Features;
+        radix_sort_vk_target_get_requirements(target, &targetRequirements);
+        if (targetRequirements.ext_name_count > 0) {
+            targetRequirements.ext_names = new const char*[targetRequirements.ext_name_count];
+        }
+        if (!radix_sort_vk_target_get_requirements(target, &targetRequirements)) {
+            return false;
+        }
+
+        for (uint32_t i = 0; i < targetRequirements.ext_name_count; i++) {
+            requiredDeviceExtensions.push_back(targetRequirements.ext_names[i]);
+        }
+        if (targetRequirements.pdf) {
+            sgl::vk::mergePhysicalDeviceFeatures(
+                    requestedDeviceFeatures.requestedPhysicalDeviceFeatures,
+                    *targetRequirements.pdf);
+        }
+        if (targetRequirements.pdf11) {
+            sgl::vk::mergePhysicalDeviceFeatures11(
+                    requestedDeviceFeatures.requestedVulkan11Features,
+                    *targetRequirements.pdf11);
+        }
+        if (targetRequirements.pdf12) {
+            sgl::vk::mergePhysicalDeviceFeatures12(
+                    requestedDeviceFeatures.requestedVulkan12Features,
+                    *targetRequirements.pdf12);
+        }
+
+        if (targetRequirements.ext_name_count > 0) {
+            delete[] targetRequirements.ext_names;
+        }
+        return true;
+    };
+    device->setPhysicalDeviceCheckCallback(physicalDeviceCheckCallback);
+#endif
+
     device->createDeviceHeadless(
             instance, {
                     VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME
@@ -200,9 +275,11 @@ ApplicationState::ApplicationState() {
 
     renderer = new sgl::vk::Renderer(sgl::AppSettings::get()->getPrimaryDevice());
     camera = std::make_shared<sgl::Camera>();
-    camera->setFOVy(std::atan(1.0f / 2.0f) * 2.0f);
-    camera->setNearClipDistance(0.001f);
+    camera->setNearClipDistance(0.01f);
     camera->setFarClipDistance(100.0f);
+    camera->setFOVy(std::atan(1.0f / 2.0f) * 2.0f);
+    camera->setOrientation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    camera->setPosition(glm::vec3(0.0f, 0.0f, 0.8f));
     transferFunctionWindow = new sgl::TransferFunctionWindow;
     // TODO: Callbacks
     optimizer = new TetMeshOptimizer(
@@ -395,8 +472,11 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("split_by_largest_gradient_magnitudes", [](
                     const TetMeshPtr& self, const std::shared_ptr<TetMeshVolumeRenderer>& volumeRenderer,
                     SplitGradientType splitGradientType, float splitsRatio) {
+                sState->vulkanBegin();
+                torch::cuda::synchronize();
                 self->splitByLargestGradientMagnitudes(sState->renderer, splitGradientType, splitsRatio);
                 volumeRenderer->setTetMeshData(self);
+                sState->vulkanFinished();
             }, py::arg("volume_renderer"), py::arg("split_gradient_type"), py::arg("splits_ratio"));
 
     py::enum_<RendererType>(m, "RendererType")
@@ -499,8 +579,10 @@ PYBIND11_MODULE(difftetvr, m) {
                 if (useAbsGrad) {
                     self->setUseAbsGrad(true);
                 }
+                self->copyAdjointBufferToImagePreCheck(imageAdjointTensor.data_ptr());
+
                 sState->vulkanBegin();
-                self->copyAdjointBufferToImage(imageAdjointTensor.data_ptr());
+                self->copyAdjointBufferToImage();
                 self->renderAdjoint();
                 sState->vulkanFinished();
                 self->setUseAbsGrad(false);
