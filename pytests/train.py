@@ -201,7 +201,7 @@ def main():
 
     def training_step(view_matrix_array, optimizer_step=True):
         if optimizer_step:
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=False)
         renderer.set_view_matrix(view_matrix_array.numpy())
         image_opt = diff_renderer()
         loss = loss_fn(image_opt, image_gt)
