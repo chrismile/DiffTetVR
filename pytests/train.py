@@ -28,6 +28,8 @@ import os
 import random
 import time
 import argparse
+import cv2
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 import difftetvr as d
@@ -128,6 +130,9 @@ def main():
     # Test case (B): Use images from disk as ground truth.
     parser.add_argument('--gt_images_path', type=str, default=None)
 
+    # Debugging options.
+    parser.add_argument('--record_video', action='store_true', default=False)
+
     args = parser.parse_args()
     if args.random_seed is not None:
         random.seed(args.random_seed)
@@ -199,6 +204,12 @@ def main():
     else:
         raise RuntimeError(f'Unknown loss name \'{loss_name}\'.')
 
+    if args.record_video:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        # fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        video_out_path = os.path.join(args.out_dir, f'{args.name}.mp4')
+        video = cv2.VideoWriter(video_out_path, fourcc, 5.0, (img_width, img_height))
+
     def training_step(view_matrix_array, optimizer_step=True):
         if optimizer_step:
             optimizer.zero_grad(set_to_none=False)
@@ -210,6 +221,12 @@ def main():
             vertex_positions.grad = torch.where(vertex_boundary_bit_tensor > 0, 0.0, vertex_positions.grad)
         if optimizer_step:
             optimizer.step()
+        if args.record_video:
+            with torch.no_grad():
+                img_numpy = np.clip(image_opt.detach().cpu().numpy(), 0.0, 1.0) * 255.0
+                img_numpy = img_numpy.astype(np.uint8)
+                video.write(cv2.cvtColor(img_numpy[:, :, 0:3], cv2.COLOR_BGR2RGB))
+                del img_numpy
 
     print('Starting optimization...')
     time_start = time.time()
@@ -266,8 +283,9 @@ def main():
     print(f'Saving mesh to "{mesh_out_path}"...')
     tet_mesh_opt.set_vertices_changed_on_device()
     tet_mesh_opt.save_to_file(mesh_out_path)
+    if args.record_video:
+        video.release()
     print('All done.')
-
 
 if __name__ == '__main__':
     main()

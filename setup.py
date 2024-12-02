@@ -300,8 +300,8 @@ if IS_WINDOWS:
     defines.append(('GLSLANG_OSINCLUDE_WIN32', ''))
 else:
     defines.append(('DLL_OBJECT', ''))
-    extra_compile_args.append('-O0')  # For debugging tests.
-    extra_compile_args.append('-ggdb')  # For debugging tests.
+    #extra_compile_args.append('-O0')  # For debugging tests.
+    #extra_compile_args.append('-ggdb')  # For debugging tests.
     libraries.append('dl')
     defines.append(('GLSLANG_OSINCLUDE_UNIX', ''))
 
@@ -326,7 +326,7 @@ if not os.path.isfile(radix_sort_lib_path):
     volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk/volk.h'
     subprocess.run([
         'cmake', '-S', 'third_party/fuchsia_radix_sort', '-B', f'{tmp_path}/build',
-        '-DCMAKE_BUILD_TYPE=DEBUG',
+        # '-DCMAKE_BUILD_TYPE=DEBUG',  # For debugging purposes.
         f'-DVOLK_INCLUDE_DIR="{os.path.abspath(volk_header_path)}"',
         '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'], check=True)
     subprocess.run(['cmake', '--build', f'{tmp_path}/build'], check=True)

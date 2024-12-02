@@ -583,6 +583,7 @@ void TetMeshRendererPPLL::reallocateFragmentBuffer() {
 
 void TetMeshRendererPPLL::onClearColorChanged() {
     resolveRasterPass->setAttachmentClearColor(clearColor.getFloatColorRGBA());
+/*#ifndef BUILD_PYTHON_MODULE
     if ((clearColor.getA() == 0) != (alphaMode == AlphaMode::STRAIGHT)) {
         resolveRasterPass->setShaderDirty();
         alphaMode = clearColor.getA() == 0 ? AlphaMode::STRAIGHT : AlphaMode::PREMUL;
@@ -590,6 +591,7 @@ void TetMeshRendererPPLL::onClearColorChanged() {
                 alphaMode == AlphaMode::PREMUL
                 ? sgl::vk::BlendMode::BACK_TO_FRONT_PREMUL_ALPHA : sgl::vk::BlendMode::OVERWRITE);
     }
+#endif*/
 }
 
 //#define USE_ORTHO_PROJ

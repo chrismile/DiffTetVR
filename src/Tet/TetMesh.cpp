@@ -545,6 +545,7 @@ bool TetMesh::saveToFile(const std::string& filePath) {
     if (!tetMeshWriter) {
         return false;
     }
+    fetchVertexDataFromDeviceIfNecessary();
     updateVerticesIfNecessary();
     updateCellIndicesIfNecessary();
     bool retVal;
