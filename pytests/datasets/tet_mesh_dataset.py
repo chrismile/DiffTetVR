@@ -25,6 +25,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import math
+from enum import Enum, auto
 import torch
 import torch.utils.data
 import difftetvr as d
@@ -32,15 +33,24 @@ from .dataset import Dataset3D
 from .sample_view import sample_view_matrix_circle, sample_view_matrix_box
 
 
+class CameraSampleMethod(Enum):
+    DEFAULT = auto()
+    CIRCLE = auto()
+    BOX = auto()
+    REPLICATE_CPP = auto()
+
+
 class TetMeshDataset(torch.utils.data.Dataset, Dataset3D):
     def __init__(
             self, tet_mesh_gt: d.TetMesh, num_iterations: int, renderer_opt: d.Renderer,
-            coarse_to_fine: bool, max_num_tets: int, img_width: int, img_height: int):
+            coarse_to_fine: bool, max_num_tets: int, img_width: int, img_height: int,
+            cam_sample_method: CameraSampleMethod):
         super().__init__()
         self.tet_mesh_gt = tet_mesh_gt
         self.num_iterations = num_iterations
         self.img_width = img_width
         self.img_height = img_height
+        self.cam_sample_method = cam_sample_method
         self.aabb = self.tet_mesh_gt.get_bounding_box()
         rx = 0.5 * (self.aabb.max.x - self.aabb.min.x)
         ry = 0.5 * (self.aabb.max.y - self.aabb.min.y)
@@ -60,10 +70,19 @@ class TetMeshDataset(torch.utils.data.Dataset, Dataset3D):
         return self.num_iterations
 
     def __getitem__(self, idx):
-        if self.is_spherical:
+        if self.cam_sample_method == CameraSampleMethod.DEFAULT:
+            if self.is_spherical:
+                view_matrix_array, vm, ivm = sample_view_matrix_circle(self.aabb)
+            else:
+                view_matrix_array, vm, ivm = sample_view_matrix_box(self.aabb)
+        elif self.cam_sample_method == CameraSampleMethod.CIRCLE:
             view_matrix_array, vm, ivm = sample_view_matrix_circle(self.aabb)
-        else:
+        elif self.cam_sample_method == CameraSampleMethod.BOX:
             view_matrix_array, vm, ivm = sample_view_matrix_box(self.aabb)
+        elif self.cam_sample_method == CameraSampleMethod.REPLICATE_CPP:
+            view_matrix_array, vm, ivm = sample_view_matrix_circle(self.aabb, uniform_r=True)
+        else:
+            raise RuntimeError('Unknown CameraSampleMethod element.')
         self.renderer.set_view_matrix(view_matrix_array)
         image = self.renderer.render()
         return image, view_matrix_array

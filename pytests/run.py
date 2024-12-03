@@ -95,8 +95,9 @@ commands = [
         '--lr_pos', '0.0',
         '--init_grid_path', os.path.join(preshaded_path, 'tooth_uniform.bintet'),
         '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
-        '--record_video'
+        '--record_video',
         # '--coarse_to_fine', '--fix_boundary',
+        '--cam_sample_method', 'replicate_cpp',
     ],
 ]
 

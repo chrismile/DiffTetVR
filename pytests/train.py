@@ -34,7 +34,7 @@ import torch
 from torch.utils.data import DataLoader
 import difftetvr as d
 from pyutils import DifferentiableRenderer
-from datasets.tet_mesh_dataset import TetMeshDataset
+from datasets.tet_mesh_dataset import TetMeshDataset, CameraSampleMethod
 from datasets.images_dataset import ImagesDataset
 
 
@@ -42,7 +42,11 @@ from datasets.images_dataset import ImagesDataset
 def enum_action(enum_class):
     class EnumAction(argparse.Action):
         def __init__(self, *args, **kwargs):
-            table = {member.name.casefold(): member for member in enum_class}
+            # table = {member.name.casefold(): member for member in enum_class}
+            table = {}
+            for member in enum_class:
+                table[member.name] = member
+                table[member.name.casefold()] = member
             super().__init__(*args, choices=table, **kwargs)
             self.table = table
 
@@ -55,6 +59,10 @@ def enum_action(enum_class):
 class SplitGradientTypeAction(argparse.Action):
     def __init__(self, *args, **kwargs):
         table = {
+            "POSITION": d.SplitGradientType.POSITION,
+            "COLOR": d.SplitGradientType.COLOR,
+            "ABS_POSITION": d.SplitGradientType.ABS_POSITION,
+            "ABS_COLOR": d.SplitGradientType.ABS_COLOR,
             "POSITION".casefold(): d.SplitGradientType.POSITION,
             "COLOR".casefold(): d.SplitGradientType.COLOR,
             "ABS_POSITION".casefold(): d.SplitGradientType.ABS_POSITION,
@@ -127,6 +135,8 @@ def main():
     parser.add_argument('--gt_grid_path', type=str, default=None)
     parser.add_argument('--img_width', type=int, default=512)
     parser.add_argument('--img_height', type=int, default=512)
+    parser.add_argument(
+        '--cam_sample_method', default=CameraSampleMethod.DEFAULT, action=enum_action(CameraSampleMethod))
     # Test case (B): Use images from disk as ground truth.
     parser.add_argument('--gt_images_path', type=str, default=None)
 
@@ -148,7 +158,7 @@ def main():
         tet_mesh_gt.load_from_file(args.gt_grid_path)
         dataset = TetMeshDataset(
             tet_mesh_gt, args.num_iterations, renderer, args.coarse_to_fine, args.max_num_tets,
-            args.img_width, args.img_height)
+            args.img_width, args.img_height, args.cam_sample_method)
     elif args.gt_images_path is not None:
         dataset = ImagesDataset(args.gt_images_path)
     else:
@@ -286,6 +296,7 @@ def main():
     if args.record_video:
         video.release()
     print('All done.')
+
 
 if __name__ == '__main__':
     main()
