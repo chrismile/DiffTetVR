@@ -29,6 +29,7 @@ import numpy as np
 import torch
 import difftetvr as d
 
+from datasets.sample_view import make_view_matrix
 from datasets.imgutils import save_array_png
 from datasets.images_dataset import ImagesDataset
 
@@ -72,8 +73,20 @@ def main():
     renderer.set_view_matrix(dataset.get_view_matrix_array(args.image_index))
     renderer.set_viewport_size(args.img_width, args.img_height)
 
+    view_matrix_array = make_view_matrix(
+        camera_position=[0.6, 0.0, 0.0],
+        camera_right=[0.0, 0.0, -1.0],
+        camera_up=[0.0, 1.0, 0.0],
+        camera_forward=[1.0, 0.0, 0.0],
+
+    )
+    renderer.set_view_matrix(view_matrix_array)
+
     rendered_image = renderer.render()
-    save_array_png(args.image_output_file, np.transpose(rendered_image.detach().cpu().numpy(), (2, 0, 1)))
+    rendered_image_npy = rendered_image.detach().cpu().numpy()
+    rendered_image_npy = rendered_image_npy[110:400, :, :]
+    blend_image_premul(rendered_image_npy, [0.0, 0.0, 0.0, 1.0])
+    save_array_png(args.image_output_file, np.transpose(rendered_image_npy, (2, 0, 1)))
 
 
 if __name__ == '__main__':

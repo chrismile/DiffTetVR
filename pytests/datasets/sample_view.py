@@ -229,3 +229,19 @@ def build_projection_matrix(fovy, aspect):
     result[3, 2] = -1.0
     result[2, 3] = -(z_far * z_near) / (z_far - z_near)
     return result
+
+
+def make_view_matrix(camera_position, camera_right, camera_up, camera_forward):
+    rotation_matrix = np.zeros((4, 4))
+    for i in range(4):
+        rotation_matrix[i, 0] = camera_right[i] if i < 3 else 0.0
+        rotation_matrix[i, 1] = camera_up[i] if i < 3 else 0.0
+        rotation_matrix[i, 2] = camera_forward[i] if i < 3 else 0.0
+        rotation_matrix[i, 3] = 0.0 if i < 3 else 1.0
+    inverse_view_matrix = matrix_translation(camera_position).dot(rotation_matrix)
+    view_matrix = np.linalg.inv(inverse_view_matrix)
+    view_matrix_array = np.empty(16)
+    for i in range(4):
+        for j in range(4):
+            view_matrix_array[i * 4 + j] = view_matrix[j, i]
+    return view_matrix_array

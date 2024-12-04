@@ -204,7 +204,7 @@ def main():
         variables.append(
             {'params': [vertex_positions], 'lr': args.lr_pos, 'name': 'vertex_positions'})
     optimizer = torch.optim.Adam(variables)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.999)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.8)
 
     loss_name = args.loss.lower()
     if loss_name == 'l1':
@@ -227,7 +227,7 @@ def main():
         image_opt = diff_renderer()
         loss = loss_fn(image_opt, image_gt)
         loss.backward()
-        if args.fix_boundary:
+        if args.fix_boundary and optimizer_step:
             vertex_positions.grad = torch.where(vertex_boundary_bit_tensor > 0, 0.0, vertex_positions.grad)
         if optimizer_step:
             optimizer.step()
@@ -262,7 +262,7 @@ def main():
             print('Accumulating gradients...')
             if use_accum_abs_grads:
                 diff_renderer.set_use_abs_grad(True)
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=False)
             for image_gt, view_matrix_array in data_loader:
                 training_step(view_matrix_array, False)
             if use_accum_abs_grads:

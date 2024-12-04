@@ -591,7 +591,10 @@ PYBIND11_MODULE(difftetvr, m) {
     py::class_<TetRegularizer, std::shared_ptr<TetRegularizer>>(m, "TetRegularizer")
             .def(py::init([](const TetMeshPtr& tetMesh, float lambda, float softplusBeta) {
                 ensureStateExists();
-                return std::make_shared<TetRegularizer>(sState->renderer, tetMesh, lambda, softplusBeta);
+                sState->vulkanBegin();
+                auto tetRegularizer = std::make_shared<TetRegularizer>(sState->renderer, tetMesh, lambda, softplusBeta);
+                sState->vulkanFinished();
+                return tetRegularizer;
             }), py::arg("tet_mesh"), py::arg("reg_lambda"), py::arg("softplus_beta"))
             .def("compute_grad", [](const std::shared_ptr<TetRegularizer>& self) {
                 sState->vulkanBegin();

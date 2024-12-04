@@ -29,12 +29,14 @@ import numpy as np
 from PIL import Image
 import OpenEXR
 import Imath
+import numba
 
 
-def save_array_png(file_path, data):
+def save_array_png(file_path, data, conv_linear_to_srgb=False):
     # Convert linear RGB to sRGB.
-    for i in range(3):
-        data[i, :, :] = np.power(data[i, :, :], 1.0 / 2.2)
+    if conv_linear_to_srgb:
+        for i in range(3):
+            data[i, :, :] = np.power(data[i, :, :], 1.0 / 2.2)
     data = np.clip(data, 0.0, 1.0)
     data = data.transpose(1, 2, 0)
     data = (data * 255).astype('uint8')
@@ -59,3 +61,28 @@ def load_image_array(file_path):
         return img
     else:
         raise RuntimeError('Error in load_image_array: Unsupported file extension.')
+
+
+@numba.jit
+def convert_premul_to_postmul_alpha(img):
+    h, w, c = img.shape
+    for y in range(h):
+        for x in range(w):
+            alpha = img[y, x, 3]
+            if alpha > 1e-3:
+                img[y, x, 0] /= alpha
+                img[y, x, 1] /= alpha
+                img[y, x, 2] /= alpha
+
+
+@numba.jit
+def blend_image_premul(img, bg_color):
+    bg_alpha = bg_color[3]
+    bg_color = np.array([bg_color[0], bg_color[1], bg_color[2]])
+    h, w, c = img.shape
+    for y in range(h):
+        for x in range(w):
+            img_alpha = img[y, x, 3]
+            img_color = img[y, x, 0:3]
+            img[y, x, 3] = img_alpha + (1.0 - img_alpha) * bg_alpha
+            img[y, x, 0:3] = img_color + (1.0 - img_alpha) * bg_color

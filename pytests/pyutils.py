@@ -34,7 +34,7 @@ class DifferentiableRenderer(torch.nn.Module):
         self.use_abs_grad = False
         self.tet_regularizer = None
         if use_tet_regularizer:
-            self.tet_regularizer = d.TetRegularizer(tet_reg_lambda, tet_reg_softplus_beta)
+            self.tet_regularizer = d.TetRegularizer(renderer.get_tet_mesh(), tet_reg_lambda, tet_reg_softplus_beta)
 
     def set_use_abs_grad(self, use_abs_grad):
         self.use_abs_grad = use_abs_grad
