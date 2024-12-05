@@ -125,7 +125,7 @@ static std::string getLibraryPath() {
         GetModuleFileNameW(hmodule, modulePath, MAX_PATH);
         PathRemoveFileSpecW(modulePath); //< Needs linking with shlwapi.lib.
         return sgl::wideStringArrayToStdString(modulePath);
-    } else if (_DEBUG) {
+    } else {
         sgl::Logfile::get()->writeError(
                 std::string() + "Error when calling GetModuleHandle: " + std::to_string(GetLastError()));
     }

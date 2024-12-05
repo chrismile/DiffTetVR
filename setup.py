@@ -293,10 +293,13 @@ defines = [
 # Change symbol visibility?
 if IS_WINDOWS:
     defines.append(('DLL_OBJECT', ''))
+    defines.append(('DISABLE_SINGLETON_BOOST_INTERPROCESS',))
     # TODO: Test on Windows.
     # According to https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-pathremovefilespecw,
     # shlwapi.lib and shlwapi.dll both exist. Maybe this should rather be a extra_objects file?
     libraries.append('shlwapi')
+    libraries.append('shell32')
+    libraries.append('user32')
     defines.append(('GLSLANG_OSINCLUDE_WIN32', ''))
 else:
     defines.append(('DLL_OBJECT', ''))
@@ -314,22 +317,33 @@ source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCuda.cpp')
 tmp_path = 'tmp/fuchsia_radix_sort'
 Path(tmp_path).mkdir(parents=True, exist_ok=True)
 if IS_WINDOWS:
-    radix_sort_lib_path = f'{tmp_path}/build/vk-radix-sort.lib'
+    radix_sort_lib_path = f'{tmp_path}/build/Release/vk-radix-sort.lib'
 else:
     radix_sort_lib_path = f'{tmp_path}/build/libvk-radix-sort.a'
 extra_objects.append(radix_sort_lib_path)
-if IS_WINDOWS:
-    libraries.append('vulkan-1')
-else:
-    libraries.append('vulkan')
+#if IS_WINDOWS:
+#    libraries.append('vulkan-1')
+#else:
+#    libraries.append('vulkan')
 if not os.path.isfile(radix_sort_lib_path):
-    volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk/volk.h'
+    volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk'
+    volk_header_path = os.path.abspath(volk_header_path)
+    cmake_exec = 'cmake'
+    if IS_WINDOWS:
+        volk_header_path = volk_header_path.replace('\\', '/')
+        # CMake on Windows is usually not in the PATH. If it is not found, try to use the default location.
+        cmake_exec = shutil.which('cmake')
+        cmake_default_path = 'C:\\Program Files\\CMake\\bin\\cmake.exe'
+        if cmake_exec is None and os.path.isfile(cmake_default_path):
+            cmake_exec = cmake_default_path
     subprocess.run([
-        'cmake', '-S', 'third_party/fuchsia_radix_sort', '-B', f'{tmp_path}/build',
+        cmake_exec, '-S', 'third_party/fuchsia_radix_sort', '-B', f'{tmp_path}/build',
         # '-DCMAKE_BUILD_TYPE=DEBUG',  # For debugging purposes.
-        f'-DVOLK_INCLUDE_DIR="{os.path.abspath(volk_header_path)}"',
+        # '-DCMAKE_VERBOSE_MAKEFILE=ON',
+        '-DCMAKE_BUILD_TYPE=Release',
+        f'-DVOLK_INCLUDE_DIR={volk_header_path}',
         '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'], check=True)
-    subprocess.run(['cmake', '--build', f'{tmp_path}/build'], check=True)
+    subprocess.run([cmake_exec, '--build', f'{tmp_path}/build', '--config', 'Release'], check=True)
 
 
 data_files_all.append(('.', data_files))
@@ -351,16 +365,20 @@ update_data_files_recursive(data_files_all, 'Data/Shaders')
 for define in defines:
     if IS_WINDOWS:
         if len(define) == 1:
-            extra_compile_args.append(f'/D {define[0]}')
+            extra_compile_args.append('/D')
+            extra_compile_args.append(f'{define[0]}')
         else:
-            extra_compile_args.append(f'/D {define[0]}={define[1]}')
+            extra_compile_args.append('/D')
+            extra_compile_args.append(f'{define[0]}={define[1]}')
     else:
         if len(define) == 1:
             extra_compile_args.append(f'-D{define[0]}')
         else:
             extra_compile_args.append(f'-D{define[0]}={define[1]}')
 
-uses_pip = '_' in os.environ and (os.environ['_'].endswith('pip') or os.environ['_'].endswith('pip3'))
+uses_pip = \
+    ('_' in os.environ and (os.environ['_'].endswith('pip') or os.environ['_'].endswith('pip3'))) \
+    or 'PIP_BUILD_TRACKER' in os.environ
 if uses_pip:
     if os.path.exists('difftetvr'):
         shutil.rmtree('difftetvr')

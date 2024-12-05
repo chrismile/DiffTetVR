@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include <optional>
 
 #include <Utils/File/Logfile.hpp>
 #include <Utils/File/FileUtils.hpp>
@@ -35,6 +36,11 @@
 #include <Graphics/Vulkan/Buffers/Buffer.hpp>
 #include <Graphics/Vulkan/Render/Renderer.hpp>
 #include <ImGui/Widgets/TransferFunctionWindow.hpp>
+
+#ifdef USE_TBB
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
+#endif
 
 #ifdef USE_OPEN_VOLUME_MESH
 #include <OpenVolumeMesh/Geometry/VectorT.hh>
@@ -55,9 +61,10 @@
 #ifdef USE_OPEN_VOLUME_MESH
 struct OvmRepresentationData {
     //OpenVolumeMesh::GeometricTetrahedralMeshV3f ovmMesh;
-    OpenVolumeMesh::TetrahedralGeometryKernel<OpenVolumeMesh::Geometry::Vec3f, OpenVolumeMesh::TetrahedralMeshTopologyKernel> ovmMesh;
-    OpenVolumeMesh::VertexPropertyPtr<OpenVolumeMesh::Vec4f> vertexColorProp;
-
+    OpenVolumeMesh::TetrahedralGeometryKernel<OpenVolumeMesh::Geometry::Vec3f, OpenVolumeMesh::TetrahedralMeshTopologyKernel> ovmMesh{};
+    // The constructor is overloaded, but one of them is protected. If we don't use std::optional, then MSVC complains
+    // about "ambiguous call to overloaded function".
+    std::optional<OpenVolumeMesh::VertexPropertyPtr<OpenVolumeMesh::Vec4f>> vertexColorProp{};
 };
 #endif
 
@@ -376,7 +383,7 @@ void TetMesh::fetchVertexDataFromDeviceIfNecessary() {
             // Update OpenVolumeMesh data structure.
             auto& ovmMesh = ovmRepresentationData->ovmMesh;
             auto& vertexPositionsOvm = ovmMesh.vertex_positions();
-            auto& vertexColorProp = ovmRepresentationData->vertexColorProp;
+            auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
             for (size_t vertexIdx = 0; vertexIdx < vertexPositions.size(); vertexIdx++) {
                 OpenVolumeMesh::VertexHandle vh((int)vertexIdx);
                 auto& vp = vertexPositions.at(vertexIdx);
@@ -609,9 +616,9 @@ void buildFacesSlim(
         const std::vector<glm::vec3>& vertices, const std::vector<uint32_t>& cellIndices,
         std::vector<FaceSlim>& facesSlim, std::vector<uint32_t>& isBoundaryFace,
         std::vector<uint32_t>& isBoundaryVertex) {
-    const uint32_t numTets = cellIndices.size() / 4;
-    std::vector<FaceSlim> totalFaces(numTets * 4);
-    std::vector<TempFace> tempFaces(numTets * 4);
+    const auto numTets = uint32_t(cellIndices.size() / 4);
+    std::vector<FaceSlim> totalFaces(size_t(numTets) * 4);
+    std::vector<TempFace> tempFaces(size_t(numTets) * 4);
 
     FaceSlim face{};
     for (uint32_t cellId = 0; cellId < numTets; ++cellId) {
@@ -671,7 +678,7 @@ void TetMesh::rebuildInternalRepresentationIfNecessary_Ovm() {
             ovmVertices.emplace_back(ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(v.x, v.y, v.z)));
         }
 
-        const uint32_t numTets = cellIndices.size() / 4;
+        const auto numTets = uint32_t(cellIndices.size() / 4);
         std::vector<OpenVolumeMesh::VertexHandle> ovmCellVertices(4);
         for (uint32_t cellId = 0; cellId < numTets; ++cellId) {
             for (uint32_t faceIdx = 0; faceIdx < 4; faceIdx++){
@@ -682,7 +689,7 @@ void TetMesh::rebuildInternalRepresentationIfNecessary_Ovm() {
 
         ovmRepresentationData->vertexColorProp =
                 *ovmMesh.create_persistent_vertex_property<OpenVolumeMesh::Vec4f>("vertexColors");
-        auto& vertexColorProp = ovmRepresentationData->vertexColorProp;
+        auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
         for(OpenVolumeMesh::VertexIter v_it = ovmMesh.vertices_begin(); v_it != ovmMesh.vertices_end(); ++v_it) {
             auto vh = *v_it;
             const auto& vertexColor = vertexColors.at(vh.idx());
@@ -750,7 +757,7 @@ const uint32_t PRISM_TO_TET_TABLE[8][12] = {
 void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
     auto& ovmMesh = ovmRepresentationData->ovmMesh;
     auto& vertexPositionsOvm = ovmMesh.vertex_positions();
-    auto& vertexColorProp = ovmRepresentationData->vertexColorProp;
+    auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
     OpenVolumeMesh::VertexHandle vh((int)vertexIndex);
 
 #ifdef USE_SPLIT_EDGE
@@ -952,7 +959,7 @@ void TetMesh::updateVerticesIfNecessary() {
     if (useOvmRepresentation && verticesDirty) {
         // Update vertex data.
         auto& ovmMesh = ovmRepresentationData->ovmMesh;
-        auto& vertexColorProp = ovmRepresentationData->vertexColorProp;
+        auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
         vertexPositions.resize(ovmMesh.n_vertices());
         vertexColors.resize(ovmMesh.n_vertices());
         for (OpenVolumeMesh::VertexIter v_it = ovmMesh.vertices_begin(); v_it != ovmMesh.vertices_end(); v_it++) {
@@ -1249,7 +1256,7 @@ void TetMesh::unlinkTets() {
     for (size_t i = 0; i < numIndices; i++) {
 #endif
         size_t vidx = cellIndices.at(i);
-        cellIndicesUnlinked.at(i) = i;
+        cellIndicesUnlinked.at(i) = uint32_t(i);
         vertexPositionsUnlinked.at(i) = vertexPositions.at(vidx);
         vertexColorsUnlinked.at(i) = vertexColors.at(vidx);
     }

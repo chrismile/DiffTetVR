@@ -21,7 +21,11 @@ conda activate <env-name>
 Necessary packages can be installed, e.g., via conda:
 
 ```sh
-conda install numpy pillow conda-forge::openexr-python
+export CONDA_ALWAYS_YES="true"
+conda create -n diffdvr python=3.12
+conda activate diffdvr
+conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
+conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
 ```
 
 For more details on how to install PyTorch, see: https://pytorch.org/get-started/locally/

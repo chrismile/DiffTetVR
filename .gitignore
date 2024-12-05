@@ -75,6 +75,7 @@ Shipping/*
 .build_*
 dependencies/*
 vcpkg_installed/*
+third_party/vcpkg
 
 # macOS
 .DS_Store

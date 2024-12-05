@@ -337,7 +337,7 @@ void TetMeshRendererProjection::recreateSortingBuffers() {
         bufferSettings.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
 
         bufferSettings.sizeInBytes = memoryRequirements.keyvals_size;
-        bufferSettings.alignment = memoryRequirements.keyvals_alignment;
+        bufferSettings.alignment = uint32_t(memoryRequirements.keyvals_alignment);
         bufferSettings.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         sortingBufferEven = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
         sortingBufferOdd = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
@@ -345,12 +345,12 @@ void TetMeshRendererProjection::recreateSortingBuffers() {
         sortedTriangleKeyValueBuffer = {};
 
         bufferSettings.sizeInBytes = memoryRequirements.internal_size;
-        bufferSettings.alignment = memoryRequirements.internal_alignment;
+        bufferSettings.alignment = uint32_t(memoryRequirements.internal_alignment);
         bufferSettings.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
         sortingInternalBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
 
         bufferSettings.sizeInBytes = memoryRequirements.indirect_size;
-        bufferSettings.alignment = memoryRequirements.indirect_alignment;
+        bufferSettings.alignment = uint32_t(memoryRequirements.indirect_alignment);
         bufferSettings.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
         sortingIndirectBuffer = std::make_shared<sgl::vk::Buffer>(device, bufferSettings);
 #endif
