@@ -98,6 +98,8 @@ if %debug% == true (
 
 if not exist .\third_party\fuchsia_radix_sort\include goto init_submodules
 if not exist .\third_party\glm\glm goto init_submodules
+if not exist .\third_party\glslang\glslang goto init_submodules
+if not exist .\third_party\jsoncpp\src goto init_submodules
 if not exist .\third_party\OpenVolumeMesh\src goto init_submodules
 if not exist .\third_party\sgl\src goto init_submodules
 goto after_init_submodules

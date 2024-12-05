@@ -548,6 +548,9 @@ PYBIND11_MODULE(difftetvr, m) {
             }, py::arg("view_matrix_array"))
             .def("render", [](const std::shared_ptr<TetMeshVolumeRenderer>& self) {
                 sState->vulkanBegin();
+                if (!self->getTetMesh() || self->getTetMesh()->getIsEmpty()) {
+                    sgl::Logfile::get()->throwError("Missing valid tet mesh in Renderer.render.");
+                }
                 self->render();
                 self->copyOutputImageToBuffer();
                 sState->vulkanFinished();

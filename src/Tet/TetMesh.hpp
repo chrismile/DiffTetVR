@@ -134,6 +134,7 @@ public:
     // Get mesh information.
     [[nodiscard]] inline size_t getNumCells() const { return meshNumCells; }
     [[nodiscard]] inline size_t getNumVertices() const { return meshNumVertices; }
+    [[nodiscard]] inline bool getIsEmpty() const { return meshNumCells == 0 || meshNumVertices == 0; }
 
     // File loaders.
     TetMeshLoader* createTetMeshLoaderByExtension(const std::string& fileExtension);
