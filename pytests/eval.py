@@ -1,6 +1,7 @@
 import math
 import os
 import pathlib
+import json
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -41,7 +42,7 @@ def compare_images(tensor_gt, tensor_approx):
     }
 
 
-def plot_test_case(test_name):
+def plot_test_case(test_name, stats_key=None):
     bintet_ext = '.bintet'
     params = []
     for dataset_path in dataset_path_list:
@@ -49,6 +50,10 @@ def plot_test_case(test_name):
             param = dataset_path[len(test_name)+1:len(dataset_path)-len(bintet_ext)]
             params.append(float(param))
     params = sorted(params)
+    if stats_key is None:
+        params_plot = params
+    else:
+        params_plot = []
     results = []
     for param in params:
         tet_mesh = d.TetMesh()
@@ -63,6 +68,12 @@ def plot_test_case(test_name):
         image_metrics = compare_images(rendered_image_gt, rendered_image)
         results.append(image_metrics[metric_name])
 
+        if stats_key is not None:
+            statistics_file_path = os.path.join(dataset_dir, f'{test_name}_{param}.json')
+            with open(statistics_file_path) as f:
+                stats = json.load(f)
+                params_plot.append(stats[stats_key])
+
     plt.plot(params, results, label='Random')
 
 
@@ -76,10 +87,22 @@ def test_case_color():
     plt.show()
 
 
-def test_case_reg():
-    test_name = 'tooth_ctf_reg'
+def test_case_reg_beta():
+    test_name = 'tooth_ctf_reg_beta'
     plot_test_case(test_name)
     plt.xlabel('Regularization beta')
+    plt.ylabel(metric_name)
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.tight_layout()
+    plt.savefig(os.path.join(dataset_dir, f'{test_name}.pdf'), bbox_inches='tight', pad_inches=0.01)
+    plt.show()
+
+
+def test_case_reg_lambda():
+    test_name = 'tooth_ctf_reg_lambda'
+    plot_test_case(test_name)
+    plt.xlabel('Regularization lambda')
     plt.ylabel(metric_name)
     plt.xscale('log')
     plt.yscale('log')
@@ -93,6 +116,18 @@ def test_case_pos():
     plot_test_case(test_name)
     plt.xlabel('Position learning rate')
     plt.ylabel(metric_name)
+    plt.tight_layout()
+    plt.savefig(os.path.join(dataset_dir, f'{test_name}.pdf'), bbox_inches='tight', pad_inches=0.01)
+    plt.show()
+
+
+def test_case_num_tets():
+    test_name = 'tooth_ctf_num_tets'
+    plot_test_case(test_name, stats_key='num_tets')
+    plt.xlabel('#Tets CTF')
+    plt.ylabel(metric_name)
+    plt.xscale('log')
+    plt.yscale('log')
     plt.tight_layout()
     plt.savefig(os.path.join(dataset_dir, f'{test_name}.pdf'), bbox_inches='tight', pad_inches=0.01)
     plt.show()
@@ -133,5 +168,7 @@ if __name__ == '__main__':
     rendered_image_gt = torch.tensor(np.transpose(rendered_image_gt, (2, 0, 1)))
 
     test_case_color()
-    test_case_reg()
+    test_case_reg_beta()
+    test_case_reg_lambda()
     test_case_pos()
+    test_case_num_tets()

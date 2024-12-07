@@ -27,6 +27,7 @@
 import os
 import random
 import time
+import json
 import argparse
 import cv2
 import numpy as np
@@ -142,6 +143,7 @@ def main():
 
     # Debugging options.
     parser.add_argument('--record_video', action='store_true', default=False)
+    parser.add_argument('--save_statistics', action='store_true', default=False)
 
     args = parser.parse_args()
     if args.random_seed is not None:
@@ -240,6 +242,7 @@ def main():
 
     print('Starting optimization...')
     time_start = time.time()
+    num_splits = 0
     if args.coarse_to_fine:
         use_accum_abs_grads = \
             args.split_grad_type == d.SplitGradientType.ABS_POSITION or \
@@ -274,6 +277,7 @@ def main():
             vertex_boundary_bit_tensor = tet_mesh_opt.get_vertex_boundary_bit_tensor()
             replace_tensor_in_optimizer(optimizer, vertex_colors, 'vertex_colors')
             replace_tensor_in_optimizer(optimizer, vertex_positions, 'vertex_positions')
+            num_splits += 1
 
             scheduler.step()
             # if epoch_idx % args.num_epochs == args.num_epochs - 1:
@@ -295,6 +299,15 @@ def main():
     tet_mesh_opt.save_to_file(mesh_out_path)
     if args.record_video:
         video.release()
+    if args.save_statistics:
+        stats = dict()
+        stats['opt_time'] = time_end - time_start
+        stats['num_tets'] = tet_mesh_opt.get_num_cells()
+        stats['num_vertices'] = tet_mesh_opt.get_num_vertices()
+        stats['num_splits'] = num_splits
+        statistics_file_path = os.path.join(args.out_dir, f'{args.name}.json')
+        with open(statistics_file_path, 'w') as f:
+            json.dump(stats, f, ensure_ascii=False, indent=4)
     print('All done.')
 
 

@@ -102,7 +102,7 @@ for lr_col in [0.01, 0.03, 0.05, 0.06, 0.08, 0.1]:
         '--lr_pos', '0.0',
         '--init_grid_path', os.path.join(preshaded_path, 'tooth_uniform.bintet'),
         '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
-        '--record_video',
+        '--record_video', '--save_statistics',
         '--cam_sample_method', 'replicate_cpp',
     ])
 
@@ -110,20 +110,36 @@ for lr_col in [0.01, 0.03, 0.05, 0.06, 0.08, 0.1]:
 for tet_reg_beta in [1.0, 10.0, 100.0, 1000.0]:
     commands.append([
         python_cmd, 'train.py',
-        '--name', f'tooth_ctf_reg_{tet_reg_beta}',
+        '--name', f'tooth_ctf_reg_beta_{tet_reg_beta}',
         '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
         '--attenuation', '10.0',
         '--lr_col', '0.06',
         '--lr_pos', '0.0001',
         '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
-        '--record_video',
+        '--record_video', '--save_statistics',
         '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
         '--tet_regularizer', '--tet_reg_lambda', '1000000.0', '--tet_reg_softplus_beta', str(tet_reg_beta),
         '--cam_sample_method', 'replicate_cpp',
     ])
 
-# (3) Test case for CTF with regularizer and position gradients with different learning rates.
-for lr_pos in [0.0001, 0.0002, 0.0004, 0.0006, 0.0008, 0.001]:
+# (3) Test case for CTF with different regularization lambdas.
+for tet_reg_lambda in [1.0, 10.0, 100.0, 1000.0, 10000.0]:
+    commands.append([
+        python_cmd, 'train.py',
+        '--name', f'tooth_ctf_reg_lambda_{tet_reg_lambda}',
+        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
+        '--attenuation', '10.0',
+        '--lr_col', '0.06',
+        '--lr_pos', '0.0001',
+        '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
+        '--record_video', '--save_statistics',
+        '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
+        '--tet_regularizer', '--tet_reg_lambda', str(tet_reg_lambda), '--tet_reg_softplus_beta', '100.0',
+        '--cam_sample_method', 'replicate_cpp',
+    ])
+
+# (4) Test case for CTF with regularizer and position gradients with different learning rates.
+for lr_pos in [0.00001, 0.00005, 0.0001, 0.0005, 0.001]:
     commands.append([
         python_cmd, 'train.py',
         '--name', f'tooth_ctf_pos_{lr_pos}',
@@ -132,11 +148,29 @@ for lr_pos in [0.0001, 0.0002, 0.0004, 0.0006, 0.0008, 0.001]:
         '--lr_col', '0.06',
         '--lr_pos', str(lr_pos),
         '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
-        '--record_video',
+        '--record_video', '--save_statistics',
         '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
         '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
         '--cam_sample_method', 'replicate_cpp',
     ])
+
+# (5) Test case for CTF with regularizer and position gradients with different learning rates.
+for num_tets in [1000, 10000, 100000, 1000000]:
+    commands.append([
+        python_cmd, 'train.py',
+        '--name', f'tooth_ctf_num_tets_{num_tets}',
+        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
+        '--attenuation', '10.0',
+        '--lr_col', '0.06',
+        '--lr_pos', '0.0001',
+        '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
+        '--record_video', '--save_statistics',
+        '--coarse_to_fine', '--max_num_tets', str(num_tets), '--fix_boundary', '--splits_ratio', '0.05',
+        '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
+        '--cam_sample_method', 'replicate_cpp',
+    ])
+
+commands.append([python_cmd, 'eval.py'])
 
 
 if __name__ == '__main__':
