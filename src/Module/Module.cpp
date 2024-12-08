@@ -467,6 +467,8 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("get_vertex_positions", &TetMesh::getVertexPositionTensor)
             .def("get_vertex_colors", &TetMesh::getVertexColorTensor)
             .def("get_vertex_boundary_bit_tensor", &TetMesh::getVertexBoundaryBitTensor)
+            .def("check_is_any_tet_degenerate", &TetMesh::checkIsAnyTetDegenerate,
+                 "Returns whether any tetrahedral element is degenerate (i.e., has a volume <= 0).")
             .def("unlink_tets", &TetMesh::unlinkTets,
                  "Removes the links between all tets, i.e., a potentially used shared index representation is reversed.")
             .def("split_by_largest_gradient_magnitudes", [](

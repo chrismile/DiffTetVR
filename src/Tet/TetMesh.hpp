@@ -97,6 +97,9 @@ public:
     void setVerticesChangedOnDevice(bool _verticesChanged) { verticesChangedOnDevice = _verticesChanged; }
     void setTetQualityMetric(TetQualityMetric _tetQualityMetric);
 
+    /// Returns whether any tetrahedral element is degenerate (i.e., has a volume <= 0).
+    [[nodiscard]] bool checkIsAnyTetDegenerate();
+
     // Coarse to fine strategy.
     void setForceUseOvmRepresentation();
     void subdivideVertices(const std::vector<float>& gradientMagnitudes, uint32_t numSplits);

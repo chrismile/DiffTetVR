@@ -110,6 +110,10 @@ class TetMesh:
     def get_vertex_boundary_bit_tensor(self) -> torch.Tensor:
         pass
 
+    def check_is_any_tet_degenerate(self) -> bool:
+        """ Returns whether any tetrahedral element is degenerate (i.e., has a volume <= 0). """
+        pass
+
     def unlink_tets(self) -> None:
         """ Removes the links between all tets, i.e., a potentially used shared index representation is reversed. """
         pass

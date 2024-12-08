@@ -48,7 +48,10 @@ def plot_test_case(test_name, stats_key=None):
     for dataset_path in dataset_path_list:
         if dataset_path.startswith(test_name) and dataset_path.endswith(bintet_ext):
             param = dataset_path[len(test_name)+1:len(dataset_path)-len(bintet_ext)]
-            params.append(float(param))
+            if '.' in param or 'e' in param:
+                params.append(float(param))
+            else:
+                params.append(int(param))
     params = sorted(params)
     if stats_key is None:
         params_plot = params
@@ -58,6 +61,8 @@ def plot_test_case(test_name, stats_key=None):
     for param in params:
         tet_mesh = d.TetMesh()
         tet_mesh.load_from_file(os.path.join(dataset_dir, f'{test_name}_{param}.bintet'))
+        if tet_mesh.check_is_any_tet_degenerate():
+            raise RuntimeError(f'Detected degenerate tetrahedral element in {test_name}_{param}.bintet.')
         renderer.set_tet_mesh(tet_mesh)
 
         rendered_image = renderer.render()
@@ -74,6 +79,9 @@ def plot_test_case(test_name, stats_key=None):
                 stats = json.load(f)
                 params_plot.append(stats[stats_key])
 
+    plt.cla()
+    plt.clf()
+    plt.figure(1)
     plt.plot(params, results, label='Random')
 
 

@@ -240,6 +240,22 @@ void TetMesh::setTetMeshDataInternal() {
     }
 }
 
+bool TetMesh::checkIsAnyTetDegenerate() {
+    updateCellIndicesIfNecessary();
+    updateVerticesIfNecessary();
+    for (size_t tet = 0; tet < cellIndices.size(); tet += 4) {
+        glm::vec3 p0 = vertexPositions.at(cellIndices.at(tet + 0));
+        glm::vec3 p1 = vertexPositions.at(cellIndices.at(tet + 1));
+        glm::vec3 p2 = vertexPositions.at(cellIndices.at(tet + 2));
+        glm::vec3 p3 = vertexPositions.at(cellIndices.at(tet + 3));
+        float signVal = glm::sign(glm::dot(glm::cross(p1 - p0, p2 - p0), p3 - p0));
+        if (signVal >= 0.0f) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void TetMesh::uploadDataToDevice() {
     updateCellIndicesIfNecessary();
     updateVerticesIfNecessary();
