@@ -1,5 +1,6 @@
 import torch
 import difftetvr as d
+import pydevd
 
 
 class DifferentiableRenderingFunction(torch.autograd.Function):
@@ -15,6 +16,7 @@ class DifferentiableRenderingFunction(torch.autograd.Function):
     @staticmethod
     @torch.autograd.function.once_differentiable
     def backward(ctx, image_adj):
+        pydevd.settrace(suspend=False, trace_only_current_thread=True)
         image, = ctx.saved_tensors
         if ctx.tet_regularizer is not None:
             ctx.tet_regularizer.compute_grad()
@@ -24,7 +26,10 @@ class DifferentiableRenderingFunction(torch.autograd.Function):
         del ctx.renderer
         del ctx.tet_regularizer
         del ctx.use_abs_grad
-        return None, None, None, d_vertex_positions, d_vertex_colors
+        # We CANNOT return d_vertex_positions, d_vertex_colors, as we automatically do addition of new gradients
+        # onto .grad entry on the Vulkan side.
+        # return None, None, None, d_vertex_positions, d_vertex_colors
+        return None, None, None, None, None
 
 
 class DifferentiableRenderer(torch.nn.Module):

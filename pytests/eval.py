@@ -58,11 +58,11 @@ def plot_test_case(test_name, stats_key=None):
     else:
         params_plot = []
     results = []
+    x_params = []
+    x_results = []
     for param in params:
         tet_mesh = d.TetMesh()
         tet_mesh.load_from_file(os.path.join(dataset_dir, f'{test_name}_{param}.bintet'))
-        if tet_mesh.check_is_any_tet_degenerate():
-            raise RuntimeError(f'Detected degenerate tetrahedral element in {test_name}_{param}.bintet.')
         renderer.set_tet_mesh(tet_mesh)
 
         rendered_image = renderer.render()
@@ -79,10 +79,21 @@ def plot_test_case(test_name, stats_key=None):
                 stats = json.load(f)
                 params_plot.append(stats[stats_key])
 
+        if tet_mesh.check_is_any_tet_degenerate():
+            #raise RuntimeError(f'Detected degenerate tetrahedral element in {test_name}_{param}.bintet.')
+            print(f'Detected degenerate tetrahedral element in {test_name}_{param}.bintet.')
+            x_results.append(results[-1])
+            if stats_key is not None:
+                x_params.append(params_plot[-1])
+            else:
+                x_params.append(param)
+
     plt.cla()
     plt.clf()
     plt.figure(1)
-    plt.plot(params, results, label='Random')
+    plt.plot(params_plot, results, label='Random')
+    if len(x_results) > 0:
+        plt.plot(x_params, x_results, 'x', color='red')
 
 
 def test_case_color():

@@ -24,7 +24,10 @@ class DifferentiableRenderingFunction(torch.autograd.Function):
         del ctx.renderer
         del ctx.tet_regularizer
         del ctx.use_abs_grad
-        return None, None, None, d_vertex_positions, d_vertex_colors
+        # We CANNOT return d_vertex_positions, d_vertex_colors, as we automatically do addition of new gradients
+        # onto .grad entry on the Vulkan side.
+        # return None, None, None, d_vertex_positions, d_vertex_colors
+        return None, None, None, None, None
 
 
 class DifferentiableRenderer(torch.nn.Module):

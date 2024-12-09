@@ -250,10 +250,12 @@ def main():
         while True:
             # Train colors.
             print('Optimizing colors...')
+            # TODO: Remove position
             for image_gt, view_matrix_array in data_loader:
                 training_step(view_matrix_array)
 
             # Train positions + colors.
+            # TODO: Add position
             print('Optimizing positions + colors...')
             for image_gt, view_matrix_array in data_loader:
                 training_step(view_matrix_array)

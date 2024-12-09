@@ -114,7 +114,7 @@ for tet_reg_beta in [1.0, 10.0, 100.0, 1000.0]:
         '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
         '--attenuation', '10.0',
         '--lr_col', '0.06',
-        '--lr_pos', '0.0001',
+        '--lr_pos', '0.00001',
         '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
         '--record_video', '--save_statistics',
         '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
@@ -130,7 +130,7 @@ for tet_reg_lambda in [1.0, 10.0, 100.0, 1000.0, 10000.0]:
         '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
         '--attenuation', '10.0',
         '--lr_col', '0.06',
-        '--lr_pos', '0.0001',
+        '--lr_pos', '0.00001',
         '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
         '--record_video', '--save_statistics',
         '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
@@ -139,7 +139,7 @@ for tet_reg_lambda in [1.0, 10.0, 100.0, 1000.0, 10000.0]:
     ])
 
 # (4) Test case for CTF with regularizer and position gradients with different learning rates.
-for lr_pos in [0.00001, 0.00005, 0.0001, 0.0005, 0.001]:
+for lr_pos in [0.000001, 0.000005, 0.00001, 0.00005, 0.0001]:
     commands.append([
         python_cmd, 'train.py',
         '--name', f'tooth_ctf_pos_{lr_pos}',
@@ -155,14 +155,14 @@ for lr_pos in [0.00001, 0.00005, 0.0001, 0.0005, 0.001]:
     ])
 
 # (5) Test case for CTF with regularizer and position gradients with different learning rates.
-for num_tets in [1000, 10000, 100000, 1000000]:
+for num_tets in [10000, 30000, 100000, 500000, 1000000]:
     commands.append([
         python_cmd, 'train.py',
         '--name', f'tooth_ctf_num_tets_{num_tets}',
         '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
         '--attenuation', '10.0',
         '--lr_col', '0.06',
-        '--lr_pos', '0.0001',
+        '--lr_pos', '0.00001',
         '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
         '--record_video', '--save_statistics',
         '--coarse_to_fine', '--max_num_tets', str(num_tets), '--fix_boundary', '--splits_ratio', '0.05',
