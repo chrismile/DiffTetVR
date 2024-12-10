@@ -69,6 +69,7 @@ protected:
         computeData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
         computeData->setStaticBuffer(volumeRenderer->getTriangleVertexPositionBuffer(), "TriangleVertexPositionBuffer");
         computeData->setStaticBuffer(volumeRenderer->getTriangleVertexColorBuffer(), "TriangleVertexColorBuffer");
+        computeData->setStaticBuffer(volumeRenderer->getTriangleVertexDepthBuffer(), "TriangleVertexDepthBuffer");
         volumeRenderer->setRenderDataBindings(computeData);
     }
     void setComputePipelineInfo(sgl::vk::ComputePipelineInfo& pipelineInfo) override {
@@ -90,6 +91,10 @@ protected:
                 VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                 volumeRenderer->getTriangleVertexColorBuffer());
+        renderer->insertBufferMemoryBarrier(
+                VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                volumeRenderer->getTriangleVertexDepthBuffer());
     }
 
 private:
@@ -215,6 +220,7 @@ protected:
         rasterData->setStaticBufferOptional(volumeRenderer->getTriangleCounterBuffer(), "TriangleCounterBuffer");
         rasterData->setStaticBuffer(volumeRenderer->getTriangleVertexPositionBuffer(), "TriangleVertexPositionBuffer");
         rasterData->setStaticBuffer(volumeRenderer->getTriangleVertexColorBuffer(), "TriangleVertexColorBuffer");
+        rasterData->setStaticBuffer(volumeRenderer->getTriangleVertexDepthBuffer(), "TriangleVertexDepthBuffer");
         rasterData->setIndirectDrawBuffer(volumeRenderer->getDrawIndirectBuffer(), sizeof(VkDrawIndirectCommand));
         rasterData->setIndirectDrawCount(1);
         volumeRenderer->setRenderDataBindings(rasterData);
@@ -296,6 +302,9 @@ void TetMeshRendererProjection::setTetMeshData(const TetMeshPtr& _tetMesh) {
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
     triangleVertexColorBuffer = std::make_shared<sgl::vk::Buffer>(
             device, maxNumProjectedVertices * sizeof(glm::vec4),
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    triangleVertexDepthBuffer = std::make_shared<sgl::vk::Buffer>(
+            device, maxNumProjectedVertices * sizeof(float),
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
     recreateSortingBuffers();

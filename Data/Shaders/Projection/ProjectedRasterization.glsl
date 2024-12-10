@@ -43,13 +43,17 @@ layout(binding = 1, std430) readonly buffer TriangleVertexPositionBuffer {
 layout(binding = 2, std430) readonly buffer TriangleVertexColorBuffer {
     vec4 vertexColors[];
 };
+layout(binding = 3, std430) readonly buffer TriangleVertexDepthBuffer {
+    float vertexDepths[];
+};
 #ifdef BACK_TO_FRONT_BLENDING
-layout(binding = 3) uniform TriangleCounterBuffer {
+layout(binding = 4) uniform TriangleCounterBuffer {
     uint numTriangles;
 };
 #endif
 
 layout(location = 0) out vec4 fragmentColor;
+layout(location = 1) out float fragmentDepth;
 
 void main() {
 #ifdef BACK_TO_FRONT_BLENDING
@@ -61,6 +65,7 @@ void main() {
     triangleIdx = triangleKeyValues[gl_VertexIndex / 3u].index;
     uint vertexIdx = triangleIdx * 3u + (gl_VertexIndex % 3u);
     fragmentColor = vertexColors[vertexIdx];
+    fragmentDepth = vertexDepths[vertexIdx];
     gl_Position = vertexPositions[vertexIdx];
 }
 
@@ -70,6 +75,7 @@ void main() {
 #version 450
 
 layout(location = 0) in vec4 fragmentColor;
+layout(location = 1) in float fragmentDepth;
 layout(location = 0) out vec4 outputColor;
 
 #ifdef SHOW_DEPTH_COMPLEXITY
@@ -91,6 +97,11 @@ void main() {
     atomicAdd(depthComplexityCounterBuffer[addrGenLinear(fragCoordUvec)], 1u);
 #endif
 
-    //outputColor = fragmentColor;
-    outputColor = vec4(fragmentColor.rgb * fragmentColor.a, fragmentColor.a);
+    /*
+     * We separate the terms within "exp" for interpolation as suggested in:
+     * Stein, C., Becker, B., Max, N., "Sorting and Hardware Assisted Rendering for Volume Visualization",
+     * Proceedings of the 1994 Symposium on Volume Visualization.
+     */
+    float alpha = 1.0 - exp(-fragmentColor.a * fragmentDepth);
+    outputColor = vec4(fragmentColor.rgb * alpha, alpha);
 }

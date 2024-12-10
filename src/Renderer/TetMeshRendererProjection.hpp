@@ -68,6 +68,7 @@ public:
     [[nodiscard]] const sgl::vk::BufferPtr& getTriangleCounterBuffer() { return triangleCounterBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexPositionBuffer() { return triangleVertexPositionBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexColorBuffer() { return triangleVertexColorBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexDepthBuffer() { return triangleVertexDepthBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getDrawIndirectBuffer() { return drawIndirectBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getDispatchIndirectBuffer() { return dispatchIndirectBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getTriangleKeyValueBuffer() { return triangleKeyValueBuffer; }
@@ -119,6 +120,7 @@ private:
     sgl::vk::BufferPtr triangleCounterBuffer; // 1x uint
     sgl::vk::BufferPtr triangleVertexPositionBuffer; // ?x vec4
     sgl::vk::BufferPtr triangleVertexColorBuffer; // ?x vec4
+    sgl::vk::BufferPtr triangleVertexDepthBuffer; // ?x float
     sgl::vk::BufferPtr drawIndirectBuffer; // 1x VkDrawIndirectCommand (4x uint32_t)
     sgl::vk::BufferPtr dispatchIndirectBuffer; // 1x VkDispatchIndirectCommand (3x uint32_t)
     sgl::vk::BufferPtr triangleKeyValueBuffer; // ?x uint64_t

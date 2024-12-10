@@ -19,8 +19,8 @@ class DifferentiableRenderingFunction(torch.autograd.Function):
         if ctx.tet_regularizer is not None:
             ctx.tet_regularizer.compute_grad()
         ctx.renderer.render_adjoint(image_adj, ctx.use_abs_grad)
-        d_vertex_positions = ctx.renderer.get_tet_mesh().get_vertex_positions().grad
-        d_vertex_colors = ctx.renderer.get_tet_mesh().get_vertex_colors().grad
+        # d_vertex_positions = ctx.renderer.get_tet_mesh().get_vertex_positions().grad
+        # d_vertex_colors = ctx.renderer.get_tet_mesh().get_vertex_colors().grad
         del ctx.renderer
         del ctx.tet_regularizer
         del ctx.use_abs_grad

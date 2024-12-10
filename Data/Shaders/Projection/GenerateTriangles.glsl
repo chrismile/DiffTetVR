@@ -59,7 +59,7 @@ layout(binding = 2, std430) readonly buffer TetIndexBuffer {
 layout(binding = 3, scalar) readonly buffer TetVertexPositionBuffer {
     vec3 tetsVertexPositions[];
 };
-layout(binding = 4, scalar) readonly buffer TetVertexColorBuffer {
+layout(binding = 4, std430) readonly buffer TetVertexColorBuffer {
     vec4 tetsVertexColors[];
 };
 
@@ -70,6 +70,9 @@ layout(binding = 5, scalar) writeonly buffer TriangleVertexPositionBuffer {
 layout(binding = 6, std430) writeonly buffer TriangleVertexColorBuffer {
     vec4 vertexColors[];
 };
+layout(binding = 7, std430) writeonly buffer TriangleVertexDepthBuffer {
+    float vertexDepths[];
+};
 
 float computeAlpha(float thickness) {
     float alpha = 1.0 - exp(-thickness * attenuationCoefficient);
@@ -77,7 +80,7 @@ float computeAlpha(float thickness) {
 }
 
 vec4 integrateColor(vec4 cF, vec4 cB, float t) {
-    const float INV_N_SUB = 1.0 / float(NUM_SUBDIVS);
+    /*const float INV_N_SUB = 1.0 / float(NUM_SUBDIVS);
     float tSeg = t / float(NUM_SUBDIVS);
     vec4 rayColor = vec4(0.0);
     for (int s = 0; s < NUM_SUBDIVS; s++) {
@@ -91,10 +94,11 @@ vec4 integrateColor(vec4 cF, vec4 cB, float t) {
         rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
         rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
     }
-    return rayColor;
+    return rayColor;*/
+    return 0.5 * (cF + cB); // TODO
 }
 
-void pushTri(inout uint triOffset, vec3 pF, vec3 pB, vec3 pC, vec4 cF, vec4 cB, vec4 cC) {
+void pushTri(inout uint triOffset, float thickness, vec3 pF, vec3 pB, vec3 pC, vec4 cF, vec4 cB, vec4 cC) {
     uint idx0 = triOffset * 3u;
     vertexPositions[idx0] = vec4(pF, 1.0);
     vertexPositions[idx0 + 1] = vec4(pB, 1.0);
@@ -106,9 +110,15 @@ void pushTri(inout uint triOffset, vec3 pF, vec3 pB, vec3 pC, vec4 cF, vec4 cB, 
     //vertexColors[idx0] = vec4(cF.rgb, alpha);
     //vertexColors[idx0 + 1] = vec4(cB.rgb, 0.0);
     //vertexColors[idx0 + 2] = vec4(cC.rgb, 0.0);
-    vertexColors[idx0] = vec4(cF.rgb / cF.a, cF.a);
-    vertexColors[idx0 + 1] = vec4(cB.rgb, 0.0);
-    vertexColors[idx0 + 2] = vec4(cC.rgb, 0.0);
+    //vertexColors[idx0] = vec4(cF.rgb / cF.a, cF.a);
+    //vertexColors[idx0 + 1] = vec4(cB.rgb, 0.0);
+    //vertexColors[idx0 + 2] = vec4(cC.rgb, 0.0);
+    vertexColors[idx0] = vec4(cF.rgb, cF.a * attenuationCoefficient);
+    vertexColors[idx0 + 1] = vec4(cB.rgb, cB.a * attenuationCoefficient);
+    vertexColors[idx0 + 2] = vec4(cC.rgb, cC.a * attenuationCoefficient);
+    vertexDepths[idx0] = thickness;
+    vertexDepths[idx0 + 1] = 0.0;
+    vertexDepths[idx0 + 2] = 0.0;
     triOffset++;
 }
 
@@ -223,9 +233,9 @@ void main() {
         }
         vec4 colorIntegrated = integrateColor(colorFront, colorBack, thickness);
 
-        pushTri(triOffset, pT, pA, pB, colorIntegrated, cA, cB);
-        pushTri(triOffset, pT, pB, pC, colorIntegrated, cB, cC);
-        pushTri(triOffset, pT, pC, pA, colorIntegrated, cC, cA);
+        pushTri(triOffset, thickness, pT, pA, pB, colorIntegrated, cA, cB);
+        pushTri(triOffset, thickness, pT, pB, pC, colorIntegrated, cB, cC);
+        pushTri(triOffset, thickness, pT, pC, pA, colorIntegrated, cC, cA);
     } else if (caseIdx == 2) {
         // Find vertices forming lines lp and lm, which are formed by faces with sign (1, 1) and sign (-1, -1).
         uint ff0 = 4, ff1 = 4; // faces plus
@@ -286,10 +296,10 @@ void main() {
         float thickness = distance(pFW.xyz / pFW.w, pBW.xyz / pBW.w);
         vec4 colorIntegrated = integrateColor(cF, cB, thickness);
 
-        pushTri(triOffset, pF, pf0, pb0, colorIntegrated, cf0, cb0);
-        pushTri(triOffset, pF, pf0, pb1, colorIntegrated, cf0, cb1);
-        pushTri(triOffset, pF, pf1, pb0, colorIntegrated, cf1, cb0);
-        pushTri(triOffset, pF, pf1, pb1, colorIntegrated, cf1, cb1);
+        pushTri(triOffset, thickness, pF, pf0, pb0, colorIntegrated, cf0, cb0);
+        pushTri(triOffset, thickness, pF, pf0, pb1, colorIntegrated, cf0, cb1);
+        pushTri(triOffset, thickness, pF, pf1, pb0, colorIntegrated, cf1, cb0);
+        pushTri(triOffset, thickness, pF, pf1, pb1, colorIntegrated, cf1, cb1);
     } else if (caseIdx == 3) {
         // 2 triangles; find the two tris formed by 2x negative or 2x positive faces.
 
@@ -352,8 +362,8 @@ void main() {
         }
         vec4 colorIntegrated = integrateColor(colorFront, colorBack, thickness);
 
-        pushTri(triOffset, pF, pA, pB, colorIntegrated, cA, cB);
-        pushTri(triOffset, pF, pA, pC, colorIntegrated, cA, cC);
+        pushTri(triOffset, thickness, pF, pA, pB, colorIntegrated, cA, cB);
+        pushTri(triOffset, thickness, pF, pA, pC, colorIntegrated, cA, cC);
     } else if (caseIdx == 4) {
         // The protruding vertex is not shared by front and back face.
         uint ff = 4, fb = 4; // face front, back
@@ -392,6 +402,6 @@ void main() {
         float thickness = distance(tetVertexPosition[ivUnique0], tetVertexPosition[ivUnique1]);
         vec4 colorIntegrated = integrateColor(cF, cB, thickness);
 
-        pushTri(triOffset, pF, pB, pC, colorIntegrated, cB, cC);
+        pushTri(triOffset, thickness, pF, pB, pC, colorIntegrated, cB, cC);
     }
 }

@@ -28,6 +28,7 @@ import os
 import random
 import time
 import json
+import pathlib
 import argparse
 import cv2
 import numpy as np
@@ -148,6 +149,8 @@ def main():
     args = parser.parse_args()
     if args.random_seed is not None:
         random.seed(args.random_seed)
+    if not os.path.isdir(args.out_dir):
+        pathlib.Path(args.out_dir).mkdir(parents=False, exist_ok=True)
 
     renderer = d.Renderer()
     renderer.set_attenuation(args.attenuation)
