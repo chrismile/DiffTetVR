@@ -42,6 +42,10 @@
 
 #include "RegularGridLoaders/FieldType.hpp"
 
+namespace sgl {
+class TransferFunctionWindow;
+}
+
 namespace sgl { namespace vk {
 class Device;
 class ImageView;
@@ -58,7 +62,7 @@ class HostCacheEntryType;
  */
 class RegularGrid {
 public:
-    explicit RegularGrid(sgl::vk::Device* device);
+    RegularGrid(sgl::vk::Device* device, sgl::TransferFunctionWindow* transferFunctionWindow);
     bool loadFromFile(const std::string& filePath);
     [[nodiscard]] inline int getGridSizeX() const { return xs; }
     [[nodiscard]] inline int getGridSizeY() const { return ys; }
@@ -90,6 +94,7 @@ public:
 
 private:
     sgl::vk::Device* device;
+    sgl::TransferFunctionWindow* transferFunctionWindow;
     sgl::vk::ImageViewPtr gridDataImageView;
 
     /// Size in x, y, z, time and ensemble dimensions.

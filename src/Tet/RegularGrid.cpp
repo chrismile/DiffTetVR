@@ -33,6 +33,7 @@
 #include <Utils/File/Logfile.hpp>
 #include <Utils/File/FileUtils.hpp>
 #include <Graphics/Vulkan/Image/Image.hpp>
+#include <ImGui/Widgets/TransferFunctionWindow.hpp>
 
 #include "RegularGridLoaders/RegularGridLoader.hpp"
 #include "RegularGridLoaders/DatRawFileLoader.hpp"
@@ -55,7 +56,8 @@ RegularGridLoader* RegularGrid::createRegularGridLoaderByExtension(const std::st
     }
 }
 
-RegularGrid::RegularGrid(sgl::vk::Device* device) : device(device) {
+RegularGrid::RegularGrid(sgl::vk::Device* device, sgl::TransferFunctionWindow* transferFunctionWindow)
+        : device(device), transferFunctionWindow(transferFunctionWindow) {
     // Create the list of regular grid loaders.
     std::map<std::vector<std::string>, std::function<RegularGridLoader*()>> factoriesLoaderMap = {
             registerRegularGridLoader<DatRawFileLoader>(),
@@ -92,6 +94,10 @@ bool RegularGrid::loadFromFile(const std::string& filePath) {
         delete regularGridLoader;
         return false;
     }
+
+    const float* attributesPointer = fieldEntry->getDataFloat();
+    std::vector<float> attributes(attributesPointer, attributesPointer + fieldEntry->getNumEntries());
+    transferFunctionWindow->computeHistogram(attributes);
 
     FieldType fieldType = FieldType::SCALAR; // TODO
     ScalarDataFormat dataFormat = fieldEntry->getScalarDataFormatNative();

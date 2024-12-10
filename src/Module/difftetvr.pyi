@@ -199,6 +199,10 @@ class RegularGridRenderer:
         pass
     def set_clear_color(self, color: vec4) -> None:
         pass
+    def get_step_size(self) -> float:
+        pass
+    def set_step_size(self, step_size: float) -> None:
+        pass
     def set_viewport_size(self, image_width: int, image_height: int, recreate_swapchain: bool = True) -> None:
         pass
     def set_camera_fovy(self, fovy: float) -> None:

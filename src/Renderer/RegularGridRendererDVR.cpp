@@ -104,6 +104,15 @@ void RegularGridRendererDVR::setRegularGridData(const RegularGridPtr& _regularGr
     regularGrid = _regularGrid;
     regularGridDvrPass->setDataDirty();
     reRender = true;
+
+    const sgl::AABB3& aabb = regularGrid->getBoundingBox();
+    float voxelSizeX = aabb.getDimensions().x / float(regularGrid->getGridSizeX());
+    float voxelSizeY = aabb.getDimensions().y / float(regularGrid->getGridSizeY());
+    float voxelSizeZ = aabb.getDimensions().z / float(regularGrid->getGridSizeZ());
+    voxelSize = std::min(voxelSizeX, std::min(voxelSizeY, voxelSizeZ));
+    renderSettingsData.minBoundingBox = aabb.min;
+    renderSettingsData.maxBoundingBox = aabb.max;
+    renderSettingsData.stepSize = voxelSize * stepSize;
 }
 
 bool RegularGridRendererDVR::loadTransferFunctionFromFile(const std::string& filePath) {
@@ -202,6 +211,9 @@ void RegularGridRendererDVR::createImageSampler() {
 }
 
 void RegularGridRendererDVR::render() {
+    renderSettingsData.stepSize = voxelSize * stepSize;
+    renderSettingsData.inverseViewMatrix = glm::inverse((*camera)->getViewMatrix());
+    renderSettingsData.inverseProjectionMatrix = glm::inverse((*camera)->getProjectionMatrix());
     renderSettingsData.backgroundColor = clearColor.getFloatColorRGBA();
     renderSettingsData.attenuationCoefficient = attenuationCoefficient;
     rendererUniformDataBuffer->updateData(

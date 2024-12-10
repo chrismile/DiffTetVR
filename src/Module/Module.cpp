@@ -612,7 +612,7 @@ PYBIND11_MODULE(difftetvr, m) {
     py::class_<RegularGrid, RegularGridPtr>(m, "RegularGrid")
             .def(py::init([]() {
                 ensureStateExists();
-                return std::make_shared<RegularGrid>(sState->device);
+                return std::make_shared<RegularGrid>(sState->device, sState->transferFunctionWindow);
             }))
             .def("load_from_file", &RegularGrid::loadFromFile, py::arg("file_path"))
             .def("get_grid_size_x", &RegularGrid::getGridSizeX)
@@ -637,6 +637,8 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("set_clear_color", [](const std::shared_ptr<RegularGridRendererDVR>& self, const glm::vec4& color) {
                 self->setClearColor(sgl::colorFromVec4(color));
             }, py::arg("color"))
+            .def("get_step_size", &RegularGridRendererDVR::getStepSize)
+            .def("set_step_size", &RegularGridRendererDVR::setStepSize, py::arg("step_size"))
             .def("set_viewport_size", [](
                     const std::shared_ptr<RegularGridRendererDVR>& self, uint32_t imageWidth, uint32_t imageHeight,
                     bool recreateSwapchain) {

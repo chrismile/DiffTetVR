@@ -89,6 +89,8 @@ public:
     [[nodiscard]] inline float getAttenuationCoefficient() const { return attenuationCoefficient; }
     void setAttenuationCoefficient(float _attenuationCoefficient) { attenuationCoefficient = _attenuationCoefficient; reRender = true; }
     virtual void setClearColor(const sgl::Color& _clearColor);
+    [[nodiscard]] inline float getStepSize() const { return stepSize; }
+    void setStepSize(float _stepSize) { stepSize = _stepSize; reRender = true; }
     [[nodiscard]] inline sgl::vk::Renderer* getRenderer() const { return renderer; }
     [[nodiscard]] inline const sgl::CameraPtr& getCamera() const { return *camera; }
     [[nodiscard]] inline sgl::TransferFunctionWindow* getTransferFunctionWindow() { return transferFunctionWindow; }
@@ -124,13 +126,14 @@ private:
 
     float attenuationCoefficient = 100.0f;
     float stepSize = 0.1f;
+    float voxelSize = 1.0f;
 
     // Clip plane data.
     struct RenderSettingsData {
         glm::mat4 inverseViewMatrix;
         glm::mat4 inverseProjectionMatrix;
-        glm::vec3 minBoundingBox;
         glm::vec4 backgroundColor;
+        glm::vec3 minBoundingBox;
         float attenuationCoefficient = 100.0f;
         glm::vec3 maxBoundingBox;
         float stepSize;

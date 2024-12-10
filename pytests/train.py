@@ -40,6 +40,7 @@ from datasets.camera_sample_method import CameraSampleMethod
 from datasets.tet_mesh_dataset import TetMeshDataset
 from datasets.regular_grid_dataset import RegularGridDataset
 from datasets.images_dataset import ImagesDataset
+from datasets.imgutils import save_array_png, blend_image_premul
 
 
 # https://stackoverflow.com/questions/78750965/how-to-make-argparse-work-nicely-with-enums-and-default-values

@@ -71,6 +71,7 @@ void main() {
     vec3 rayDirection = (inverseViewMatrix * vec4(normalizedTarget, 0.0)).xyz;
     float zFactor = abs(normalizedTarget.z);
 
+    vec4 outputColor = vec4(0.0);
     float tNear, tFar;
     if (rayBoxIntersectionRayCoords(rayOrigin, rayDirection, minBoundingBox, maxBoundingBox, tNear, tFar)) {
         vec3 entrancePoint = rayOrigin + rayDirection * tNear;
@@ -88,7 +89,6 @@ void main() {
         closestDepth = closestDepth / zFactor;
 #endif
 
-        vec4 outputColor = vec4(0.0);
         while (length(currentPoint - entrancePoint) < volumeDepth) {
 #ifdef SUPPORT_DEPTH_BUFFER
             if (length(currentPoint - rayOrigin) >= closestDepth) {
@@ -118,11 +118,8 @@ void main() {
         blend(backgroundColor, outputColor);
 
         //outputColor = vec4(outputColor.rgb / outputColor.a, outputColor.a);
-        imageStore(outputImage, imageCoords, outputColor);
-#ifdef SUPPORT_DEPTH_BUFFER
-         // Convert depth to distance.
-        //closestDepth = closestDepth * zFactor;
-        //imageStore(depthBuffer, imageCoords, vec4(convertLinearDepthToDepthBufferValue(closestDepth)));
-#endif
+    } else {
+        outputColor = backgroundColor;
     }
+    imageStore(outputImage, imageCoords, outputColor);
 }
