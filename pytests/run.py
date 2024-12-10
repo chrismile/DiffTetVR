@@ -26,6 +26,7 @@
 
 import os
 import sys
+import getpass
 import itertools
 import pathlib
 import subprocess
@@ -84,6 +85,13 @@ def escape_html(s):
 
 
 preshaded_path = os.path.join(pathlib.Path.home(), 'Programming/C++/Correrender/Data/VolumeDataSets/preshaded')
+regular_grids_path = '/mnt/data/Flow/Scalar'
+if not os.path.isdir(regular_grids_path):
+    regular_grids_path = os.path.join(pathlib.Path.home(), 'datasets/Scalar')
+if not os.path.isdir(regular_grids_path):
+    regular_grids_path = os.path.join(pathlib.Path.home(), 'datasets/Flow/Scalar')
+if not os.path.isdir(regular_grids_path):
+    regular_grids_path = f'/media/{getpass.getuser()}/Elements/Datasets/Scalar'
 
 if os.name == 'nt':
     python_cmd = 'python'
@@ -97,78 +105,83 @@ for lr_col in [0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14]:
         python_cmd, 'train.py',
         '--name', f'tooth_color_{lr_col}',
         '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
-        '--attenuation', '10.0',
+        '--attenuation', '100.0',
         '--lr_col', str(lr_col),
         '--lr_pos', '0.0',
         '--init_grid_path', os.path.join(preshaded_path, 'tooth_uniform.bintet'),
-        '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
+        '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
+        '--gt_tf', 'Tooth3Gauss.xml',
         '--record_video', '--save_statistics',
         '--cam_sample_method', 'replicate_cpp',
     ])
 
 # (2) Test case for CTF with different regularization beta.
-#for tet_reg_beta in [1.0, 10.0, 100.0, 1000.0]:
-#    commands.append([
-#        python_cmd, 'train.py',
-#        '--name', f'tooth_ctf_reg_beta_{tet_reg_beta}',
-#        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
-#        '--attenuation', '10.0',
-#        '--lr_col', '0.06',
-#        '--lr_pos', '0.00001',
-#        '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
-#        '--record_video', '--save_statistics',
-#        '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
-#        '--tet_regularizer', '--tet_reg_lambda', '1000000.0', '--tet_reg_softplus_beta', str(tet_reg_beta),
-#        '--cam_sample_method', 'replicate_cpp',
-#    ])
-#
-## (3) Test case for CTF with different regularization lambdas.
-#for tet_reg_lambda in [1.0, 10.0, 100.0, 1000.0, 10000.0]:
-#    commands.append([
-#        python_cmd, 'train.py',
-#        '--name', f'tooth_ctf_reg_lambda_{tet_reg_lambda}',
-#        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
-#        '--attenuation', '10.0',
-#        '--lr_col', '0.06',
-#        '--lr_pos', '0.00001',
-#        '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
-#        '--record_video', '--save_statistics',
-#        '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
-#        '--tet_regularizer', '--tet_reg_lambda', str(tet_reg_lambda), '--tet_reg_softplus_beta', '100.0',
-#        '--cam_sample_method', 'replicate_cpp',
-#    ])
-#
-## (4) Test case for CTF with regularizer and position gradients with different learning rates.
-#for lr_pos in [0.000001, 0.000005, 0.00001, 0.00005, 0.0001]:
-#    commands.append([
-#        python_cmd, 'train.py',
-#        '--name', f'tooth_ctf_pos_{lr_pos}',
-#        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
-#        '--attenuation', '10.0',
-#        '--lr_col', '0.06',
-#        '--lr_pos', str(lr_pos),
-#        '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
-#        '--record_video', '--save_statistics',
-#        '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
-#        '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
-#        '--cam_sample_method', 'replicate_cpp',
-#    ])
-#
-## (5) Test case for CTF with regularizer and position gradients with different learning rates.
-#for num_tets in [10000, 30000, 100000, 500000, 1000000]:
-#    commands.append([
-#        python_cmd, 'train.py',
-#        '--name', f'tooth_ctf_num_tets_{num_tets}',
-#        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
-#        '--attenuation', '10.0',
-#        '--lr_col', '0.06',
-#        '--lr_pos', '0.00001',
-#        '--gt_grid_path', os.path.join(preshaded_path, 'tooth.bintet'),
-#        '--record_video', '--save_statistics',
-#        '--coarse_to_fine', '--max_num_tets', str(num_tets), '--fix_boundary', '--splits_ratio', '0.05',
-#        '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
-#        '--cam_sample_method', 'replicate_cpp',
-#    ])
+for tet_reg_beta in [1.0, 10.0, 100.0, 1000.0]:
+    commands.append([
+        python_cmd, 'train.py',
+        '--name', f'tooth_ctf_reg_beta_{tet_reg_beta}',
+        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
+        '--attenuation', '100.0',
+        '--lr_col', '0.06',
+        '--lr_pos', '0.00001',
+        '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
+        '--gt_tf', 'Tooth3Gauss.xml',
+        '--record_video', '--save_statistics',
+        '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
+        '--tet_regularizer', '--tet_reg_lambda', '1000000.0', '--tet_reg_softplus_beta', str(tet_reg_beta),
+        '--cam_sample_method', 'replicate_cpp',
+    ])
+
+# (3) Test case for CTF with different regularization lambdas.
+for tet_reg_lambda in [1.0, 10.0, 100.0, 1000.0, 10000.0]:
+    commands.append([
+        python_cmd, 'train.py',
+        '--name', f'tooth_ctf_reg_lambda_{tet_reg_lambda}',
+        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
+        '--attenuation', '100.0',
+        '--lr_col', '0.06',
+        '--lr_pos', '0.00001',
+        '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
+        '--gt_tf', 'Tooth3Gauss.xml',
+        '--record_video', '--save_statistics',
+        '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
+        '--tet_regularizer', '--tet_reg_lambda', str(tet_reg_lambda), '--tet_reg_softplus_beta', '100.0',
+        '--cam_sample_method', 'replicate_cpp',
+    ])
+
+# (4) Test case for CTF with regularizer and position gradients with different learning rates.
+for lr_pos in [0.000001, 0.000005, 0.00001, 0.00005, 0.0001]:
+    commands.append([
+        python_cmd, 'train.py',
+        '--name', f'tooth_ctf_pos_{lr_pos}',
+        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
+        '--attenuation', '100.0',
+        '--lr_col', '0.06',
+        '--lr_pos', str(lr_pos),
+        '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
+        '--gt_tf', 'Tooth3Gauss.xml',
+        '--record_video', '--save_statistics',
+        '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
+        '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
+        '--cam_sample_method', 'replicate_cpp',
+    ])
+
+# (5) Test case for CTF with regularizer and position gradients with different learning rates.
+for num_tets in [10000, 30000, 100000, 500000, 1000000]:
+    commands.append([
+        python_cmd, 'train.py',
+        '--name', f'tooth_ctf_num_tets_{num_tets}',
+        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
+        '--attenuation', '100.0',
+        '--lr_col', '0.06',
+        '--lr_pos', '0.00001',
+        '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
+        '--gt_tf', 'Tooth3Gauss.xml',
+        '--record_video', '--save_statistics',
+        '--coarse_to_fine', '--max_num_tets', str(num_tets), '--fix_boundary', '--splits_ratio', '0.05',
+        '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
+        '--cam_sample_method', 'replicate_cpp',
+    ])
 
 commands.append([python_cmd, 'eval.py'])
 

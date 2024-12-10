@@ -110,6 +110,7 @@ include_dirs = [
     'third_party/sgl/src/Graphics/Vulkan/libs',
     'third_party/sgl/src/Graphics/Vulkan/libs/Vulkan-Headers',
     'third_party/glm',
+    'third_party/tinyxml2',
     'third_party/jsoncpp/include',
     'third_party/OpenVolumeMesh/src',
     'third_party/custom',

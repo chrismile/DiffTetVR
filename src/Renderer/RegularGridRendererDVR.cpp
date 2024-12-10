@@ -94,6 +94,7 @@ RegularGridRendererDVR::RegularGridRendererDVR(
             renderer->getDevice(), sizeof(RenderSettingsData),
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
     regularGridDvrPass = std::make_shared<RegularGridDvrPass>(this, rendererUniformDataBuffer);
+    createImageSampler();
 }
 
 RegularGridRendererDVR::~RegularGridRendererDVR() {
@@ -154,12 +155,16 @@ torch::Tensor RegularGridRendererDVR::getImageTensor() {
     torch::Tensor imageTensor = torch::from_blob(
             reinterpret_cast<float*>(colorImageBufferCu->getCudaDevicePtr()),
             { int(imageHeight), int(imageWidth), int(4) },
-            torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(useGradients));
+            torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
     return imageTensor;
 }
 
 void RegularGridRendererDVR::copyOutputImageToBuffer() {
-    renderer->transitionImageLayout(outputImageView, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    renderer->insertImageMemoryBarrier(
+            outputImageView->getImage(),
+            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT);
     outputImageView->getImage()->copyToBuffer(colorImageBuffer, renderer->getVkCommandBuffer());
     renderer->transitionImageLayout(outputImageView, VK_IMAGE_LAYOUT_GENERAL);
 }
@@ -204,5 +209,10 @@ void RegularGridRendererDVR::render() {
     renderer->insertMemoryBarrier(
             VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT,
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+    renderer->insertImageMemoryBarrier(
+            outputImageView->getImage(),
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_ACCESS_NONE_KHR, VK_ACCESS_SHADER_WRITE_BIT);
     regularGridDvrPass->render();
 }

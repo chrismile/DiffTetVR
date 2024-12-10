@@ -36,7 +36,9 @@ import torch
 from torch.utils.data import DataLoader
 import difftetvr as d
 from pyutils import DifferentiableRenderer
-from datasets.tet_mesh_dataset import TetMeshDataset, CameraSampleMethod
+from datasets.camera_sample_method import CameraSampleMethod
+from datasets.tet_mesh_dataset import TetMeshDataset
+from datasets.regular_grid_dataset import RegularGridDataset
 from datasets.images_dataset import ImagesDataset
 
 
@@ -139,6 +141,7 @@ def main():
     parser.add_argument('--img_height', type=int, default=512)
     parser.add_argument(
         '--cam_sample_method', default=CameraSampleMethod.DEFAULT, action=enum_action(CameraSampleMethod))
+    parser.add_argument('--gt_tf', type=str, default=None)  # Optional if regular grid is used as GT
     # Test case (B): Use images from disk as ground truth.
     parser.add_argument('--gt_images_path', type=str, default=None)
 
@@ -159,11 +162,20 @@ def main():
     # Create the ground truth data set.
     tet_mesh_gt = None
     if args.gt_grid_path is not None:
-        tet_mesh_gt = d.TetMesh()
-        tet_mesh_gt.load_from_file(args.gt_grid_path)
-        dataset = TetMeshDataset(
-            tet_mesh_gt, args.num_iterations, renderer, args.coarse_to_fine, args.max_num_tets,
-            args.img_width, args.img_height, args.cam_sample_method)
+        _, file_extension = os.path.splitext(args.gt_grid_path)
+        tet_mesh_extensions = ['.bintet', '.txt', '.ovm', '.ovmb', '.vtk']
+        if file_extension in tet_mesh_extensions:
+            tet_mesh_gt = d.TetMesh()
+            tet_mesh_gt.load_from_file(args.gt_grid_path)
+            dataset = TetMeshDataset(
+                tet_mesh_gt, args.num_iterations, renderer, args.coarse_to_fine, args.max_num_tets,
+                args.img_width, args.img_height, args.cam_sample_method)
+        else:
+            regular_grid = d.RegularGrid()
+            regular_grid.load_from_file(args.gt_grid_path)
+            dataset = RegularGridDataset(
+                regular_grid, args.num_iterations, args.attenuation, args.coarse_to_fine, args.max_num_tets,
+                args.img_width, args.img_height, args.gt_tf, args.cam_sample_method)
     elif args.gt_images_path is not None:
         dataset = ImagesDataset(args.gt_images_path)
     else:
@@ -194,6 +206,7 @@ def main():
         renderer, args.tet_regularizer, args.tet_reg_lambda, args.tet_reg_softplus_beta)
     renderer.set_camera_fovy(dataset.get_fovy())
     if tet_mesh_gt is None:
+        renderer.set_coarse_to_fine_target_num_tets(args.max_num_tets)
         renderer.set_viewport_size(img_width, img_height)
     else:
         renderer.set_viewport_size(img_width, img_height, False)

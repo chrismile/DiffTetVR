@@ -102,7 +102,7 @@ void main() {
             vec4 volumeColor = texture(scalarField, texCoords);
 #else
             float scalarValue = texture(scalarField, texCoords).r;
-            vec4 volumeColor = transferFunction(scalarValue, 0);
+            vec4 volumeColor = transferFunction(scalarValue);
 #endif
             float alpha = 1.0 - exp(-volumeColor.a * stepSize * attenuationCoefficient);
             vec4 color = vec4(volumeColor.rgb, alpha);

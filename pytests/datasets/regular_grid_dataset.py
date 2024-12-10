@@ -33,28 +33,28 @@ from .sample_view import sample_view_matrix_circle, sample_view_matrix_box
 from .camera_sample_method import CameraSampleMethod
 
 
-class TetMeshDataset(torch.utils.data.Dataset, Dataset3D):
+class RegularGridDataset(torch.utils.data.Dataset, Dataset3D):
     def __init__(
-            self, tet_mesh_gt: d.TetMesh, num_iterations: int, renderer_opt: d.Renderer,
+            self, regular_grid: d.RegularGrid, num_iterations: int, attenuation: float,
             coarse_to_fine: bool, max_num_tets: int, img_width: int, img_height: int,
-            cam_sample_method: CameraSampleMethod):
+            gt_tf: str, cam_sample_method: CameraSampleMethod):
         super().__init__()
-        self.tet_mesh_gt = tet_mesh_gt
+        self.regular_grid = regular_grid
         self.num_iterations = num_iterations
         self.img_width = img_width
         self.img_height = img_height
         self.cam_sample_method = cam_sample_method
-        self.aabb = self.tet_mesh_gt.get_bounding_box()
+        self.aabb = self.regular_grid.get_bounding_box()
         rx = 0.5 * (self.aabb.max.x - self.aabb.min.x)
         ry = 0.5 * (self.aabb.max.y - self.aabb.min.y)
         rz = 0.5 * (self.aabb.max.z - self.aabb.min.z)
         radii_sorted = sorted([rx, ry, rz])
         self.is_spherical = radii_sorted[2] / radii_sorted[0] < 1.9
-        self.renderer = d.Renderer(renderer_opt.get_renderer_type())
-        if coarse_to_fine:
-            self.renderer.set_coarse_to_fine_target_num_tets(max_num_tets)
-        self.renderer.set_tet_mesh(self.tet_mesh_gt)
-        self.renderer.set_attenuation(renderer_opt.get_attenuation())
+        self.renderer = d.RegularGridRenderer()
+        if gt_tf is not None:
+            self.renderer.load_transfer_function_from_file(gt_tf)
+        self.renderer.set_regular_grid(self.regular_grid)
+        self.renderer.set_attenuation(attenuation)
         self.renderer.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))
         self.renderer.set_camera_fovy(self.get_fovy())
         self.renderer.set_viewport_size(img_width, img_height)
