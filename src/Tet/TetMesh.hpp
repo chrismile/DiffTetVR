@@ -111,15 +111,15 @@ public:
     [[nodiscard]] const std::vector<uint32_t>& getCellIndices() const { return cellIndices; }
     [[nodiscard]] const std::vector<glm::vec3>& getVertexPositions() const { return vertexPositions; }
     [[nodiscard]] const std::vector<glm::vec4>& getVertexColors() const { return vertexColors; }
-    sgl::vk::BufferPtr getCellIndicesBuffer() { return cellIndicesBuffer; }
-    sgl::vk::BufferPtr getTriangleIndexBuffer() { return triangleIndexBuffer; }
-    sgl::vk::BufferPtr getVertexPositionBuffer() { return vertexPositionBuffer; }
-    sgl::vk::BufferPtr getVertexColorBuffer() { return vertexColorBuffer; }
-    sgl::vk::BufferPtr getFaceBoundaryBitBuffer() { return faceBoundaryBitBuffer; }
-    sgl::vk::BufferPtr getVertexBoundaryBitBuffer() { return vertexBoundaryBitBuffer; }
+    const sgl::vk::BufferPtr& getCellIndicesBuffer() { return cellIndicesBuffer; }
+    const sgl::vk::BufferPtr& getTriangleIndexBuffer() { return triangleIndexBuffer; }
+    const sgl::vk::BufferPtr& getVertexPositionBuffer() { return vertexPositionBuffer; }
+    const sgl::vk::BufferPtr& getVertexColorBuffer() { return vertexColorBuffer; }
+    const sgl::vk::BufferPtr& getFaceBoundaryBitBuffer() { return faceBoundaryBitBuffer; }
+    const sgl::vk::BufferPtr& getVertexBoundaryBitBuffer() { return vertexBoundaryBitBuffer; }
     // Buffers below are only used for tet quality renderer.
-    sgl::vk::BufferPtr getFaceToTetMapBuffer() { return faceToTetMapBuffer; }
-    sgl::vk::BufferPtr getTetQualityBuffer();
+    const sgl::vk::BufferPtr& getFaceToTetMapBuffer() { return faceToTetMapBuffer; }
+    const sgl::vk::BufferPtr& getTetQualityBuffer();
 
     // Gradient interface.
     void setUseGradients(bool _useGradient);
@@ -142,7 +142,6 @@ public:
     // File loaders.
     TetMeshLoader* createTetMeshLoaderByExtension(const std::string& fileExtension);
     std::map<std::string, std::function<TetMeshLoader*()>> factoriesLoader;
-    std::vector<TetMeshLoader*> tetMeshLoaders;
 
     // File writers.
     TetMeshWriter* createTetMeshWriterByExtension(const std::string& fileExtension);

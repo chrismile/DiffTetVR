@@ -165,6 +165,50 @@ class TetRegularizer:
         pass
 
 
+class RegularGrid:
+    def __init__(self) -> None:
+        pass
+    def load_from_file(self, file_path: str) -> bool:
+        pass
+    def get_grid_size_x(self) -> int:
+        pass
+    def get_grid_size_y(self) -> int:
+        pass
+    def get_grid_size_z(self) -> int:
+        pass
+    def get_bounding_box(self) -> AABB3:
+        pass
+
+
+class RegularGridInterpolationMode(enum.Enum):
+    NEAREST = enum.auto() # (= 0)
+    LINEAR = enum.auto() # (= 1)
+
+class RegularGridRenderer:
+    def __init__(self) -> None:
+        pass
+    def set_regular_grid(self, regular_grid: RegularGrid) -> None:
+        pass
+    def get_regular_grid(self) -> RegularGrid:
+        pass
+    def get_attenuation(self) -> float:
+        pass
+    def set_attenuation(self, attenuation_coefficient: float) -> None:
+        pass
+    def load_transfer_function_from_file(self, file_path: str) -> bool:
+        pass
+    def set_clear_color(self, color: vec4) -> None:
+        pass
+    def set_viewport_size(self, image_width: int, image_height: int, recreate_swapchain: bool = True) -> None:
+        pass
+    def set_camera_fovy(self, fovy: float) -> None:
+        pass
+    def set_view_matrix(self, view_matrix_array: list[float]) -> None:
+        pass
+    def render(self) -> torch.Tensor:
+        pass
+
+
 class OptimizerType(enum.Enum):
     SGD = enum.auto()  # (= 0)
     ADAM = enum.auto() # (= 1)

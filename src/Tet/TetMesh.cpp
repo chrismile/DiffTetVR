@@ -423,7 +423,7 @@ void TetMesh::fetchVertexDataFromDeviceIfNecessary() {
     }
 }
 
-sgl::vk::BufferPtr TetMesh::getTetQualityBuffer() {
+const sgl::vk::BufferPtr& TetMesh::getTetQualityBuffer() {
     fetchVertexDataFromDeviceIfNecessary();
 
     const size_t numCells = cellIndices.size() / 4;

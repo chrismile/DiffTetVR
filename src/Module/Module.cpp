@@ -53,10 +53,12 @@
 #include <ImGui/Widgets/TransferFunctionWindow.hpp>
 
 #include <Tet/TetMesh.hpp>
+#include <Tet/RegularGrid.hpp>
 #include <Renderer/TetMeshVolumeRenderer.hpp>
 #include <Renderer/TetMeshRendererPPLL.hpp>
 #include <Renderer/TetMeshRendererProjection.hpp>
 #include <Renderer/TetMeshRendererIntersection.hpp>
+#include <Renderer/RegularGridRendererDVR.hpp>
 #include <Renderer/TetRegularizerPass.hpp>
 #include <Renderer/OptimizerDefines.hpp>
 #include <Renderer/Optimizer.hpp>
@@ -605,6 +607,71 @@ PYBIND11_MODULE(difftetvr, m) {
                 sState->vulkanBegin();
                 self->computeGrad();
                 sState->vulkanFinished();
+            });
+
+    py::class_<RegularGrid, RegularGridPtr>(m, "RegularGrid")
+            .def(py::init([]() {
+                ensureStateExists();
+                return std::make_shared<RegularGrid>(sState->device);
+            }))
+            .def("load_from_file", &RegularGrid::loadFromFile, py::arg("file_path"))
+            .def("get_grid_size_x", &RegularGrid::getGridSizeX)
+            .def("get_grid_size_y", &RegularGrid::getGridSizeY)
+            .def("get_grid_size_z", &RegularGrid::getGridSizeZ)
+            .def("get_bounding_box", &RegularGrid::getBoundingBox);
+
+    py::enum_<RegularGridInterpolationMode>(m, "RegularGridInterpolationMode")
+            .value("NEAREST", RegularGridInterpolationMode::NEAREST)
+            .value("LINEAR", RegularGridInterpolationMode::LINEAR);
+    py::class_<RegularGridRendererDVR, std::shared_ptr<RegularGridRendererDVR>>(m, "RegularGridRenderer")
+            .def(py::init([]() {
+                ensureStateExists();
+                return std::make_shared<RegularGridRendererDVR>(
+                        sState->renderer, &sState->camera, sState->transferFunctionWindow);
+            }))
+            .def("set_regular_grid", &RegularGridRendererDVR::setRegularGridData, py::arg("regular_grid"))
+            .def("get_regular_grid", &RegularGridRendererDVR::getRegularGridData)
+            .def("get_attenuation", &RegularGridRendererDVR::getAttenuationCoefficient)
+            .def("set_attenuation", &RegularGridRendererDVR::setAttenuationCoefficient, py::arg("attenuation_coefficient"))
+            .def("load_transfer_function_from_file", &RegularGridRendererDVR::loadTransferFunctionFromFile, py::arg("file_path"))
+            .def("set_clear_color", [](const std::shared_ptr<RegularGridRendererDVR>& self, const glm::vec4& color) {
+                self->setClearColor(sgl::colorFromVec4(color));
+            }, py::arg("color"))
+            .def("set_viewport_size", [](
+                    const std::shared_ptr<RegularGridRendererDVR>& self, uint32_t imageWidth, uint32_t imageHeight,
+                    bool recreateSwapchain) {
+                auto camera = self->getCamera();
+                auto renderTarget = std::make_shared<sgl::RenderTarget>(int(imageWidth), int(imageHeight));
+                camera->setRenderTarget(renderTarget, false);
+                camera->onResolutionChanged({});
+                sState->vulkanBegin();
+                self->setViewportSize(imageWidth, imageHeight);
+                if (recreateSwapchain) {
+                    self->recreateSwapchain(imageWidth, imageHeight);
+                }
+                sState->vulkanFinished();
+            }, py::arg("image_width"), py::arg("image_height"), py::arg("recreate_swapchain") = true)
+            .def("set_camera_fovy", [](const std::shared_ptr<RegularGridRendererDVR>& self, float fovy) {
+                auto camera = self->getCamera();
+                camera->setFOVy(fovy);
+            }, py::arg("fovy"))
+            .def("set_view_matrix", [](
+                    const std::shared_ptr<RegularGridRendererDVR>& self, const std::vector<float>& viewMatrixData) {
+                glm::mat4 viewMatrix;
+                for (int i = 0; i < 16; i++) {
+                    viewMatrix[i / 4][i % 4] = viewMatrixData[i];
+                }
+                self->getCamera()->overwriteViewMatrix(viewMatrix);
+            }, py::arg("view_matrix_array"))
+            .def("render", [](const std::shared_ptr<RegularGridRendererDVR>& self) {
+                sState->vulkanBegin();
+                if (!self->getRegularGridData() || self->getRegularGridData()->getIsEmpty()) {
+                    sgl::Logfile::get()->throwError("Missing valid tet mesh in Renderer.render.");
+                }
+                self->render();
+                self->copyOutputImageToBuffer();
+                sState->vulkanFinished();
+                return self->getImageTensor();
             });
 
     py::enum_<OptimizerType>(m, "OptimizerType")

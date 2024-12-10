@@ -133,6 +133,7 @@ source_files += [
     'third_party/sgl/src/Utils/Convert.cpp',
     'third_party/sgl/src/Utils/AppSettings.cpp',
     'third_party/sgl/src/Utils/Timer.cpp',
+    'third_party/sgl/src/Utils/XML.cpp',
     'third_party/sgl/src/Utils/File/Logfile.cpp',
     'third_party/sgl/src/Utils/File/FileUtils.cpp',
     'third_party/sgl/src/Utils/File/Execute.cpp',
@@ -213,6 +214,9 @@ source_files += [
     'third_party/OpenVolumeMesh/src/OpenVolumeMesh/Unstable/Topology/TetTopology.cc',
     'third_party/OpenVolumeMesh/src/OpenVolumeMesh/Unstable/Topology/TriangleTopology.cc',
 ]
+source_files += [
+    'third_party/tinyxml2/tinyxml2.cpp',
+]
 source_files += find_all_sources_in_dir('third_party/jsoncpp/src/lib_json')
 source_files += find_all_sources_in_dir('third_party/glslang/SPIRV')
 source_files += find_all_sources_in_dir('third_party/glslang/glslang/CInterface')
@@ -283,6 +287,7 @@ defines = [
     ('USE_GLM',),
     ('SUPPORT_VULKAN',),
     ('SUPPORT_GLSLANG_BACKEND',),
+    ('SUPPORT_TINYXML2',),
     ('DISABLE_IMGUI',),
     ('BUILD_PYTHON_MODULE',),
     ('USE_OPEN_VOLUME_MESH',),
@@ -361,6 +366,7 @@ def update_data_files_recursive(data_files_all, directory):
 
 update_data_files_recursive(data_files_all, 'docs')
 update_data_files_recursive(data_files_all, 'Data/Shaders')
+update_data_files_recursive(data_files_all, 'Data/TransferFunctions')
 
 for define in defines:
     if IS_WINDOWS:
@@ -387,6 +393,7 @@ if uses_pip:
     shutil.copy('src/Module/pyutils.py', 'difftetvr/pyutils.py')
     shutil.copytree('docs', 'difftetvr/docs')
     shutil.copytree('Data/Shaders', 'difftetvr/Data/Shaders')
+    shutil.copytree('Data/TransferFunctions', 'difftetvr/Data/TransferFunctions')
     ext_modules = [
         TorchExtension(
             'difftetvr.difftetvr',
@@ -420,7 +427,7 @@ if uses_pip:
         author='Christoph Neuhauser',
         ext_modules=ext_modules,
         packages=find_packages(include=['difftetvr', 'difftetvr.*']),
-        package_data={'difftetvr': ['**/*.py', '**/*.pyi', '**/*.md', '**/*.txt', '**/*.glsl']},
+        package_data={'difftetvr': ['**/*.py', '**/*.pyi', '**/*.md', '**/*.txt', '**/*.xml', '**/*.glsl']},
         #include_package_data=True,
         cmdclass={
             'build_ext': BuildExtension,
