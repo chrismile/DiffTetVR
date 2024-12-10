@@ -33,6 +33,9 @@
 #extension GL_EXT_scalar_block_layout : require
 
 #include "LinkedListUniform.glsl"
+#ifdef USE_CLIP_PLANE
+#include "ClipPlane.glsl"
+#endif
 
 layout(binding = 4, scalar) readonly buffer TriangleIndicesBuffer {
     uint triangleIndices[];
@@ -45,12 +48,22 @@ layout(binding = 6, scalar) readonly buffer FaceBoundaryBitBuffer {
 };
 
 layout(location = 0) flat out uint faceBits;
+#ifdef USE_CLIP_PLANE
+layout(location = 1) out float vertexDiscarded;
+#endif
 
 void main() {
     const uint faceIndex = gl_VertexIndex / 3u;
     const uint vertexIndex = triangleIndices[gl_VertexIndex];
     vec3 vertexPosition = vertexPositions[vertexIndex];
     faceBits = (faceBoundaryBitArray[faceIndex] << 1u) | (faceIndex << 2u);
+#ifdef USE_CLIP_PLANE
+    if (checkIsPointOutsideClipPlane(vertexPosition)) {
+        vertexDiscarded = 1.0;
+    } else {
+        vertexDiscarded = 0.0;
+    }
+#endif
     gl_Position = viewProjectionMatrix * vec4(vertexPosition, 1.0);
 }
 
@@ -62,10 +75,19 @@ void main() {
 #include "LinkedListHeader.glsl"
 
 layout(location = 0) flat in uint faceBits;
+#ifdef USE_CLIP_PLANE
+layout(location = 1) in float vertexDiscarded;
+#endif
 
 layout(location = 0) out vec4 fragColor;
 
 void main() {
+#ifdef USE_CLIP_PLANE
+    if (vertexDiscarded > 0.0) {
+        return;
+    }
+#endif
+
     int x = int(gl_FragCoord.x);
     int y = int(gl_FragCoord.y);
     uint pixelIndex = addrGen(uvec2(x,y));

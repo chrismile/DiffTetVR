@@ -226,6 +226,15 @@ protected:
     sgl::vk::BufferPtr startOffsetBuffer;
     sgl::vk::BufferPtr fragmentCounterBuffer;
 
+    // Clip plane data.
+    bool useClipPlane = false;
+    struct ClipPlaneData {
+        glm::vec3 clipPlaneNormal = glm::vec3(0.0f, 0.0f, 1.0f);
+        float clipPlaneDistance = 0.0f;
+    };
+    ClipPlaneData clipPlaneData{};
+    sgl::vk::BufferPtr clipPlaneDataBuffer;
+
     // Tiling mode.
     int tilingModeIndex = 2;
     int tileWidth = 2;

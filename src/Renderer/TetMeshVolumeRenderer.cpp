@@ -46,7 +46,9 @@
 TetMeshVolumeRenderer::TetMeshVolumeRenderer(
         sgl::vk::Renderer* renderer, sgl::CameraPtr* camera, sgl::TransferFunctionWindow* transferFunctionWindow)
         : renderer(renderer), camera(camera), transferFunctionWindow(transferFunctionWindow) {
-    ;
+    clipPlaneDataBuffer = std::make_shared<sgl::vk::Buffer>(
+            renderer->getDevice(), sizeof(ClipPlaneData), &clipPlaneData,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 }
 
 TetMeshVolumeRenderer::~TetMeshVolumeRenderer() {
@@ -128,7 +130,7 @@ void TetMeshVolumeRenderer::setViewportSize(uint32_t viewportWidth, uint32_t vie
 
     colorImageBuffer = std::make_shared<sgl::vk::Buffer>(
             device, viewportWidth * viewportHeight * sizeof(float) * 4,
-            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY, true, true);
     colorImageBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(colorImageBuffer);
 
@@ -150,7 +152,7 @@ void TetMeshVolumeRenderer::setViewportSize(uint32_t viewportWidth, uint32_t vie
 
         colorAdjointImageBuffer = std::make_shared<sgl::vk::Buffer>(
                 device, viewportWidth * viewportHeight * sizeof(float) * 4,
-                VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                 VMA_MEMORY_USAGE_GPU_ONLY, true, true);
         colorAdjointImageBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(
                 colorAdjointImageBuffer);
@@ -224,6 +226,9 @@ void TetMeshVolumeRenderer::getVulkanShaderPreprocessorDefines(
     if (showDepthComplexity) {
         preprocessorDefines.insert(std::make_pair("SHOW_DEPTH_COMPLEXITY", ""));
     }
+    if (useClipPlane) {
+        preprocessorDefines.insert(std::make_pair("USE_CLIP_PLANE", ""));
+    }
 
     if (tileWidth == 1 && tileHeight == 1) {
         // No tiling
@@ -266,6 +271,11 @@ void TetMeshVolumeRenderer::setRenderDataBindings(const sgl::vk::RenderDataPtr& 
     renderData->setStaticBufferOptional(tetMesh->getVertexColorGradientBuffer(), "VertexColorGradientBuffer");
     renderData->setStaticImageViewOptional(outputImageView, "colorImageOpt");
     renderData->setStaticImageViewOptional(colorAdjointImage, "adjointColors");
+
+    // For clip plane data.
+    if (useClipPlane) {
+        renderData->setStaticBufferOptional(clipPlaneDataBuffer, "ClipPlaneDataBuffer");
+    }
 }
 
 void TetMeshVolumeRenderer::setFramebufferAttachments(sgl::vk::FramebufferPtr& framebuffer, VkAttachmentLoadOp loadOp) {
@@ -308,6 +318,26 @@ void TetMeshVolumeRenderer::renderGuiShared(sgl::PropertyEditor& propertyEditor)
     if (propertyEditor.addSliderFloat("Attenuation", &attenuationCoefficient, 1.0f, 1000.0f)) {
         reRender = true;
     }
+
+    if (propertyEditor.addCheckbox("Use Clip Plane", &useClipPlane)) {
+        setShadersDirty(VolumeRendererPassType::ALL);
+        reRender = true;
+    }
+    if (useClipPlane) {
+        bool clipPlaneOptionChanged = false;
+        if (propertyEditor.addSliderFloat3("Clip Plane Normal", &clipPlaneData.clipPlaneNormal.x, -1.0f, 1.0f)) {
+            reRender = true;
+            clipPlaneOptionChanged = true;
+        }
+        if (propertyEditor.addSliderFloat("Clip Plane Distance", &clipPlaneData.clipPlaneDistance, -0.5f, 0.5f)) {
+            reRender = true;
+            clipPlaneOptionChanged = true;
+        }
+        if (clipPlaneOptionChanged) {
+            clipPlaneDataBuffer->updateData(sizeof(ClipPlaneData), &clipPlaneData, renderer->getVkCommandBuffer());
+        }
+    }
+
     bool depthComplexityJustChanged = false;
     if (propertyEditor.addCheckbox("Show Depth Complexity", &showDepthComplexity)) {
         setShadersDirty(VolumeRendererPassType::ALL);

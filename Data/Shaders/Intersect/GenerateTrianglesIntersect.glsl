@@ -37,6 +37,9 @@ layout(local_size_x = BLOCK_SIZE) in;
 
 #include "TetFaceTable.glsl"
 #include "IntersectUniform.glsl"
+#ifdef USE_CLIP_PLANE
+#include "ClipPlane.glsl"
+#endif
 
 // Atomically increased linear append index.
 layout(binding = 1, std430) buffer TriangleCounterBuffer {
@@ -85,6 +88,18 @@ void main() {
         vertexPosNdc.w = 1.0;
         tetVertexPositionsNdc[tetVertIdx] = vertexPosNdc;
     }
+
+#ifdef USE_CLIP_PLANE
+    bool allOutside = true;
+    [[unroll]] for (uint tetVertIdx = 0; tetVertIdx < 4; tetVertIdx++) {
+        if (!checkIsPointOutsideClipPlane(tetVertexPositions[tetVertIdx])) {
+            allOutside = false;
+        }
+    }
+    if (allOutside) {
+        return;
+    }
+#endif
 
     // Compute the signs of the faces.
     uint numGeneratedTris = 0;

@@ -38,6 +38,9 @@ layout(local_size_x = BLOCK_SIZE) in;
 #include "TetFaceTable.glsl"
 #include "ForwardCommon.glsl"
 #include "RayCommon.glsl"
+#ifdef USE_CLIP_PLANE
+#include "ClipPlane.glsl"
+#endif
 
 layout(binding = 0) uniform UniformDataBuffer {
     mat4 viewProjMat;
@@ -147,6 +150,18 @@ void main() {
         vertexPosNdc.w = 1.0;
         tetVertexPositionNdc[tetVertIdx] = vertexPosNdc;
     }
+
+#ifdef USE_CLIP_PLANE
+    bool allOutside = true;
+    [[unroll]] for (uint tetVertIdx = 0; tetVertIdx < 4; tetVertIdx++) {
+        if (!checkIsPointOutsideClipPlane(tetVertexPosition[tetVertIdx])) {
+            allOutside = false;
+        }
+    }
+    if (allOutside) {
+        return;
+    }
+#endif
 
     // Compute the signs of the faces.
     int tetFaceSigns[4];

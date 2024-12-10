@@ -30,7 +30,7 @@ import torch
 import difftetvr as d
 
 from datasets.sample_view import make_view_matrix
-from datasets.imgutils import save_array_png
+from datasets.imgutils import save_array_png, blend_image_premul
 from datasets.images_dataset import ImagesDataset
 
 
