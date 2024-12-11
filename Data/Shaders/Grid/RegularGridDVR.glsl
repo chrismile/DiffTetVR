@@ -51,7 +51,7 @@ float closestDepth;
 #include "DepthHelper.glsl"
 #endif
 
-#include "RayIntersectionTests.glsl"
+#include "RayIntersectionTestsGrid.glsl"
 #include "Blending.glsl"
 #ifndef PRESHADED_VOLUME
 #include "TransferFunction.glsl"

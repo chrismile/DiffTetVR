@@ -1,6 +1,7 @@
 import math
 import os
 import pathlib
+import getpass
 import json
 import matplotlib
 import matplotlib.pyplot as plt
@@ -158,16 +159,18 @@ if __name__ == '__main__':
     matplotlib.rcParams.update({'font.family': 'Linux Biolinum O'})
     matplotlib.rcParams.update({'font.size': 17.5})
 
-    preshaded_dir = os.path.join(pathlib.Path.home(), 'Programming/C++/Correrender/Data/VolumeDataSets/preshaded')
+    preshaded_path = os.path.join(pathlib.Path.home(), 'Programming/C++/Correrender/Data/VolumeDataSets/preshaded')
+    regular_grids_path = '/mnt/data/Flow/Scalar'
+    if not os.path.isdir(regular_grids_path):
+        regular_grids_path = os.path.join(pathlib.Path.home(), 'datasets/Scalar')
+    if not os.path.isdir(regular_grids_path):
+        regular_grids_path = os.path.join(pathlib.Path.home(), 'datasets/Flow/Scalar')
+    if not os.path.isdir(regular_grids_path):
+        regular_grids_path = f'/media/{getpass.getuser()}/Elements/Datasets/Scalar'
+
     dataset_dir = os.path.join(pathlib.Path.home(), 'datasets/Tet/Test')
     dataset_path_list = os.listdir(dataset_dir)
     metric_name = 'PSNR'
-
-    renderer = d.Renderer()
-    renderer.set_attenuation(10.0)
-    renderer.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))
-    renderer.set_camera_fovy(math.atan(1.0 / 2.0) * 2.0)
-    renderer.set_viewport_size(512, 512)
 
     view_matrix_array = make_view_matrix(
         camera_position=[0.6, 0.0, 0.0],
@@ -175,12 +178,30 @@ if __name__ == '__main__':
         camera_up=[0.0, 1.0, 0.0],
         camera_forward=[1.0, 0.0, 0.0],
     )
+
+    renderer = d.Renderer()
+    renderer.set_attenuation(100.0)
+    renderer.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))
+    renderer.set_camera_fovy(math.atan(1.0 / 2.0) * 2.0)
+    renderer.set_viewport_size(512, 512)
     renderer.set_view_matrix(view_matrix_array)
 
-    tet_mesh_gt = d.TetMesh()
-    tet_mesh_gt.load_from_file(os.path.join(preshaded_dir, 'tooth.bintet'))
-    renderer.set_tet_mesh(tet_mesh_gt)
-    rendered_image_gt = renderer.render()
+    # renderer_gt = renderer
+    renderer_gt = d.RegularGridRenderer()
+    renderer_gt.set_attenuation(100.0)
+    renderer_gt.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))
+    renderer_gt.set_camera_fovy(math.atan(1.0 / 2.0) * 2.0)
+    renderer_gt.set_viewport_size(512, 512)
+    renderer_gt.set_view_matrix(view_matrix_array)
+    renderer_gt.load_transfer_function_from_file('Tooth3Gauss.xml')
+
+    # tet_mesh_gt = d.TetMesh()
+    # tet_mesh_gt.load_from_file(os.path.join(preshaded_dir, 'tooth.bintet'))
+    # renderer.set_tet_mesh(tet_mesh_gt)
+    regular_grid_gt = d.RegularGrid()
+    regular_grid_gt.load_from_file(os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'))
+    renderer_gt.set_regular_grid(regular_grid_gt)
+    rendered_image_gt = renderer_gt.render()
     rendered_image_gt = rendered_image_gt.detach().cpu().numpy()
     rendered_image_gt = rendered_image_gt[110:400, :, :]
     blend_image_premul(rendered_image_gt, [0.0, 0.0, 0.0, 1.0])
