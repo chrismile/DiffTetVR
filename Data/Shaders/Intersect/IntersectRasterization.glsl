@@ -153,6 +153,8 @@ void main() {
     uint f0, f1; //< Face index hit 0, 1.
     float t0, t1; //< Ray distance hit 0, 1.
     if (!intersectRayTet(cameraPosition, rayDirection, tetVertexPositions, f0, f1, t0, t1)) {
+        //outputColor = vec4(1.0, 0.0, 0.0, 1.0);
+        //return;
         discard; // Should never happen...
     }
 
@@ -229,7 +231,6 @@ void main() {
         rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
     }
 #else
-    vec4 rayColor;
     vec4 currentColor = accumulateLinear(
             t, fragment0Color.rgb, fragment1Color.rgb,
             fragment0Color.a * attenuationCoefficient, fragment1Color.a * attenuationCoefficient);

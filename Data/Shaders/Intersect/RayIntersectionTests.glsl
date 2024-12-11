@@ -27,7 +27,7 @@
  */
 
 // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution.html
-const float RAY_INTERSECTION_EPSILON = 1e-6;
+const float RAY_INTERSECTION_EPSILON = 1e-9;
 bool rayTriangleIntersect(vec3 ro, vec3 rd, vec3 p0, vec3 p1, vec3 p2, out float t, inout bool isInside) {
     // Compute plane normal.
     vec3 p0p1 = p1 - p0;

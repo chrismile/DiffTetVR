@@ -151,6 +151,7 @@ protected:
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("BLOCK_SIZE", std::to_string(BLOCK_SIZE)));
+        preprocessorDefines.insert(std::make_pair("INTERSECTION_RENDERER", ""));
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
                 { "ComputeTriangleDepths.Compute" }, preprocessorDefines);
@@ -160,6 +161,10 @@ protected:
         computeData->setStaticBuffer(volumeRenderer->getTriangleCounterBuffer(), "TriangleCounterBuffer");
         computeData->setStaticBuffer(volumeRenderer->getTriangleVertexPositionBuffer(), "TriangleVertexPositionBuffer");
         computeData->setStaticBuffer(volumeRenderer->getTriangleKeyValueBuffer(), "TriangleKeyValueBuffer");
+        computeData->setStaticBufferOptional(volumeRenderer->getTriangleTetIndexBuffer(), "TriangleTetIndexBuffer");
+        computeData->setStaticBufferOptional(volumeRenderer->getUniformDataBuffer(), "UniformDataBuffer");
+        computeData->setStaticBufferOptional(volumeRenderer->getTetMesh()->getCellIndicesBuffer(), "TetIndexBuffer");
+        computeData->setStaticBufferOptional(volumeRenderer->getTetMesh()->getVertexPositionBuffer(), "TetVertexPositionBuffer");
         volumeRenderer->setRenderDataBindings(computeData);
     }
     void setComputePipelineInfo(sgl::vk::ComputePipelineInfo& pipelineInfo) override {
@@ -576,6 +581,7 @@ void printBuffer(const sgl::vk::BufferPtr& bufferGpu) {
 
 void TetMeshRendererIntersection::render() {
     uniformData.viewProjMat = (*camera)->getViewProjMatrix();
+    uniformData.viewMat = (*camera)->getViewMatrix();
     uniformData.invProjMat = glm::inverse((*camera)->getProjectionMatrix());
     uniformData.invViewMat = glm::inverse((*camera)->getViewMatrix());
     uniformData.cameraPosition = (*camera)->getPosition();

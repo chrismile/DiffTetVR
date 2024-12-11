@@ -28,6 +28,7 @@
 
 layout(binding = 0) uniform UniformDataBuffer {
     mat4 viewProjMat;
+    mat4 viewMat;
     mat4 invProjMat;
     mat4 invViewMat;
     vec3 cameraPosition;

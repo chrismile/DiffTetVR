@@ -99,6 +99,7 @@ private:
     // Uniform data buffer shared by all shaders.
     struct UniformData {
         glm::mat4 viewProjMat;
+        glm::mat4 viewMat;
         glm::mat4 invProjMat;
         glm::mat4 invViewMat;
         glm::vec3 cameraPosition;
