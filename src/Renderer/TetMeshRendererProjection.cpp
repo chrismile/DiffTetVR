@@ -57,7 +57,7 @@ protected:
         preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
         volumeRenderer->getVulkanShaderPreprocessorDefines(preprocessorDefines);
         shaderStages = sgl::vk::ShaderManager->getShaderStages(
-                { "GenerateTriangles.Compute" }, preprocessorDefines);
+                { "GenerateTrianglesVTK.Compute" }, preprocessorDefines);
     }
     void createComputeData(sgl::vk::Renderer* renderer, sgl::vk::ComputePipelinePtr& computePipeline) override {
         computeData = std::make_shared<sgl::vk::ComputeData>(renderer, computePipeline);
@@ -476,6 +476,16 @@ void printBuffer(const sgl::vk::BufferPtr& bufferGpu) {
     std::cout << std::endl;
     bufferCpu->unmapMemory();
 }*/
+
+void TetMeshRendererProjection::computeLinearDepthCorrection() {
+    /*
+     * TODO: We could adapt the code from
+     * https://github.com/Kitware/VTK/blob/master/Rendering/VolumeOpenGL2/vtkOpenGLProjectedTetrahedraMapper.cxx
+     * to support linear depth correction.
+     */
+    uniformData.useLinearDepthCorrection = false;
+    uniformData.linearDepthCorrection = 1.0f;
+}
 
 void TetMeshRendererProjection::render() {
     uniformData.viewProjMat = (*camera)->getViewProjMatrix();

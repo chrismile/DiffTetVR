@@ -90,6 +90,7 @@ private:
     void setShadersDirty(VolumeRendererPassType passType) override;
     void createTriangleCounterBuffer();
     void recreateSortingBuffers();
+    void computeLinearDepthCorrection();
 
     // For sorting.
 #ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
@@ -112,7 +113,9 @@ private:
         glm::vec3 cameraPosition;
         float attenuationCoefficient;
         uint32_t numTets;
-        uint32_t pad0, pad1, pad2;
+        uint32_t useLinearDepthCorrection;
+        float linearDepthCorrection;
+        float pad0;
     };
     UniformData uniformData = {};
     sgl::vk::BufferPtr uniformDataBuffer;

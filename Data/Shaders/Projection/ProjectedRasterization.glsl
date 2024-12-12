@@ -62,7 +62,6 @@ void main() {
 #else
     uint triangleIdx = triangleKeyValues[gl_VertexIndex / 3u].index;
 #endif
-    triangleIdx = triangleKeyValues[gl_VertexIndex / 3u].index;
     uint vertexIdx = triangleIdx * 3u + (gl_VertexIndex % 3u);
     fragmentColor = vertexColors[vertexIdx];
     fragmentDepth = vertexDepths[vertexIdx];

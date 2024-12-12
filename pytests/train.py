@@ -240,6 +240,7 @@ def main():
         video = cv2.VideoWriter(video_out_path, fourcc, 5.0, (img_width, img_height))
 
     def training_step(view_matrix_array, optimizer_step=True):
+        nonlocal vertex_colors
         if optimizer_step:
             optimizer.zero_grad(set_to_none=False)
         renderer.set_view_matrix(view_matrix_array.numpy())
@@ -248,6 +249,8 @@ def main():
         loss.backward()
         if args.fix_boundary and optimizer_step:
             vertex_positions.grad = torch.where(vertex_boundary_bit_tensor > 0, 0.0, vertex_positions.grad)
+        with torch.no_grad():
+            vertex_colors -= torch.min(vertex_colors, torch.zeros_like(vertex_colors))
         if optimizer_step:
             optimizer.step()
         if args.record_video:
