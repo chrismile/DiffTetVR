@@ -267,8 +267,11 @@ void TetMeshVolumeRenderer::setRenderDataBindings(const sgl::vk::RenderDataPtr& 
     }
 
     // For resolve pass.
-    renderData->setStaticBufferOptional(tetMesh->getVertexPositionGradientBuffer(), "VertexPositionGradientBuffer");
-    renderData->setStaticBufferOptional(tetMesh->getVertexColorGradientBuffer(), "VertexColorGradientBuffer");
+    if (!renderData->getShaderStages()->hasDescriptorBinding(0, "VertexDepthGradientBuffer")) {
+        // For the adjoint projected rasterization pass, we instead want to bind triangle gradient buffers.
+        renderData->setStaticBufferOptional(tetMesh->getVertexPositionGradientBuffer(), "VertexPositionGradientBuffer");
+        renderData->setStaticBufferOptional(tetMesh->getVertexColorGradientBuffer(), "VertexColorGradientBuffer");
+    }
     renderData->setStaticImageViewOptional(outputImageView, "colorImageOpt");
     renderData->setStaticImageViewOptional(colorAdjointImage, "adjointColors");
 

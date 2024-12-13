@@ -37,6 +37,9 @@ class InitializeIndirectCommandBufferProjPass;
 class ComputeTrianglesDepthProjPass;
 class ProjectedRasterPass;
 class AdjointProjectedRasterPass;
+class CompactTriangleTetListPass;
+class InitializeIndirectCommandBufferAdjointPass;
+class AdjointGenerateTrianglesPass;
 
 /**
  * The tetrahedral elements are projected to triangles in a preprocess pass.
@@ -69,10 +72,19 @@ public:
     [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexPositionBuffer() { return triangleVertexPositionBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexColorBuffer() { return triangleVertexColorBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexDepthBuffer() { return triangleVertexDepthBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getTriangleTetIndexBuffer() { return triangleTetIndexBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getDrawIndirectBuffer() { return drawIndirectBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getDispatchIndirectBuffer() { return dispatchIndirectBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getTriangleKeyValueBuffer() { return triangleKeyValueBuffer; }
     [[nodiscard]] const sgl::vk::BufferPtr& getSortedTriangleKeyValueBuffer() { return sortedTriangleKeyValueBuffer; }
+
+    // Adjoint pass buffers.
+    [[nodiscard]] const sgl::vk::BufferPtr& getTetCounterBuffer() { return tetCounterBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getTetTriangleOffsetBuffer() { return tetTriangleOffsetBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getDispatchIndirectAdjointBuffer() { return dispatchIndirectAdjointBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexPositionGradientBuffer() { return triangleVertexPositionGradientBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexColorGradientBuffer() { return triangleVertexColorGradientBuffer; }
+    [[nodiscard]] const sgl::vk::BufferPtr& getTriangleVertexDepthGradientBuffer() { return triangleVertexDepthGradientBuffer; }
 
     void getVulkanShaderPreprocessorDefines(std::map<std::string, std::string>& preprocessorDefines) override;
     void setRenderDataBindings(const sgl::vk::RenderDataPtr& renderData) override;
@@ -103,8 +115,11 @@ private:
     std::shared_ptr<InitializeIndirectCommandBufferProjPass> initializeIndirectCommandBufferPass;
     std::shared_ptr<ComputeTrianglesDepthProjPass> computeTrianglesDepthPass;
     std::shared_ptr<ProjectedRasterPass> projectedRasterPass;
-    // TODO, use fragment shader interlock for adjoint pass.
-    std::shared_ptr<AdjointProjectedRasterPass> adjointProjectedRasterPass; // only for optimization
+    // only for optimization
+    std::shared_ptr<AdjointProjectedRasterPass> adjointProjectedRasterPass;
+    std::shared_ptr<CompactTriangleTetListPass> compactTriangleTetListPass;
+    std::shared_ptr<InitializeIndirectCommandBufferAdjointPass> initializeIndirectCommandBufferAdjointPass;
+    std::shared_ptr<AdjointGenerateTrianglesPass> adjointGenerateTrianglesPass;
 
     // Uniform data buffer shared by all shaders.
     struct UniformData {
@@ -120,13 +135,23 @@ private:
     UniformData uniformData = {};
     sgl::vk::BufferPtr uniformDataBuffer;
 
+    bool useGradientsCached = false;
     sgl::vk::BufferPtr triangleCounterBuffer; // 1x uint
     sgl::vk::BufferPtr triangleVertexPositionBuffer; // ?x vec4
     sgl::vk::BufferPtr triangleVertexColorBuffer; // ?x vec4
     sgl::vk::BufferPtr triangleVertexDepthBuffer; // ?x float
+    sgl::vk::BufferPtr triangleTetIndexBuffer; // ?x uint; only if adjoint support is used
     sgl::vk::BufferPtr drawIndirectBuffer; // 1x VkDrawIndirectCommand (4x uint32_t)
     sgl::vk::BufferPtr dispatchIndirectBuffer; // 1x VkDispatchIndirectCommand (3x uint32_t)
     sgl::vk::BufferPtr triangleKeyValueBuffer; // ?x uint64_t
+
+    // Adjoint pass buffers.
+    sgl::vk::BufferPtr tetCounterBuffer; // 1x uint
+    sgl::vk::BufferPtr tetTriangleOffsetBuffer; // ?x uint
+    sgl::vk::BufferPtr dispatchIndirectAdjointBuffer; // 1x VkDispatchIndirectCommand (3x uint32_t)
+    sgl::vk::BufferPtr triangleVertexPositionGradientBuffer; // ?x vec3
+    sgl::vk::BufferPtr triangleVertexColorGradientBuffer; // ?x vec4
+    sgl::vk::BufferPtr triangleVertexDepthGradientBuffer; // ?x float
 
     SortingAlgorithm sortingAlgorithm = SortingAlgorithm::FUCHSIA_RADIX_SORT;
 

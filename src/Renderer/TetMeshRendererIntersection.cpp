@@ -406,7 +406,7 @@ void TetMeshRendererIntersection::setTetMeshData(const TetMeshPtr& _tetMesh) {
             device, maxNumVertices * sizeof(glm::vec4),
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
     triangleTetIndexBuffer = std::make_shared<sgl::vk::Buffer>(
-            device, maxNumTriangles * sizeof(glm::uint32_t),
+            device, maxNumTriangles * sizeof(uint32_t),
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
     recreateSortingBuffers();

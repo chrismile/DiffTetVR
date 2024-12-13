@@ -76,6 +76,11 @@ layout(binding = 6, std430) writeonly buffer TriangleVertexColorBuffer {
 layout(binding = 7, std430) writeonly buffer TriangleVertexDepthBuffer {
     float vertexDepths[];
 };
+#ifdef SUPPORT_ADJOINT
+layout(binding = 8, std430) writeonly buffer TriangleTetIndexBuffer {
+    uint triangleTetIndices[];
+};
+#endif
 
 float GetCorrectedDepth(float x, float y, float z1, float z2) {
     if (useLinearDepthCorrection != 0u) {
@@ -320,10 +325,10 @@ void main() {
 
         // Find the depth under the thick point.  Use the alpha and beta from intersection to determine location of face
         // under thick point.
-        float edgez = P3[2] + beta * B[2];
-        float pointz = P1[2];
+        float edgez = P3.z + beta * B.z;
+        float pointz = P1.z;
         float facez = (edgez + (alpha - 1.0) * pointz) / alpha;
-        float depth = GetCorrectedDepth(P2[0], P2[1], P2[2], facez);
+        float depth = GetCorrectedDepth(P2.x, P2.y, P2.z, facez);
 
         // Fix color and opacity at thick point. Average color/opacity with color/opacity of opposite face.
         vec4 edgec = C3 + beta * (C4 - C3);
@@ -359,6 +364,9 @@ void main() {
         vertexDepths[vertexOffset] = tetDepths[i0];
         vertexDepths[vertexOffset + 1] = tetDepths[i1];
         vertexDepths[vertexOffset + 2] = tetDepths[i2];
+#ifdef SUPPORT_ADJOINT
+        triangleTetIndices[triOffset] = tetIdx;
+#endif
         triOffset++;
 
         //indexArray.push_back(indices[0] + numPts);

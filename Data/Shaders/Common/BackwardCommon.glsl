@@ -157,10 +157,22 @@ void segmentLengthAdjoint(
 }
 
 void baryAdjoint(
-        vec3 p, vec3 p0, vec3 p1, vec3 p2, vec4 c0, vec4 c1, vec4 c2, float u, float v,
-        vec4 dOut_dc, float dOut_du, float dOut_dv, // forwarded from segmentLengthAdjoint
+        vec3 p, vec3 p0, vec3 p1, vec3 p2, vec4 c0, vec4 c1, vec4 c2,
+#ifdef PROJECTED_RASTER
+        float d0, float d1, float d2,
+#endif
+        float u, float v,
+        vec4 dOut_dc,
+#ifdef PROJECTED_RASTER
+        float dOut_dd,
+#endif
+        float dOut_du, float dOut_dv, // forwarded from segmentLengthAdjoint
         inout vec3 dOut_dp0, inout vec3 dOut_dp1, inout vec3 dOut_dp2,
-        out vec4 dOut_dc0, out vec4 dOut_dc1, out vec4 dOut_dc2) {
+        out vec4 dOut_dc0, out vec4 dOut_dc1, out vec4 dOut_dc2
+#ifdef PROJECTED_RASTER
+        , float dOut_dd0, float dOut_dd1, float dOut_dd2
+#endif
+) {
     float f0 = pow2((p0.x - p2.x)*(p1.y - p2.y) - (p0.y - p2.y)*(p1.x - p2.x)) + pow2((p0.x - p2.x)*(p1.z - p2.z) - (p0.z - p2.z)*(p1.x - p2.x)) + pow2((p0.y - p2.y)*(p1.z - p2.z) - (p0.z - p2.z)*(p1.y - p2.y));
     float f1 = pow2((p.x - p1.x)*(p1.y - p2.y) - (p.y - p1.y)*(p1.x - p2.x)) + pow2((p.x - p1.x)*(p1.z - p2.z) - (p.z - p1.z)*(p1.x - p2.x)) + pow2((p.y - p1.y)*(p1.z - p2.z) - (p.z - p1.z)*(p1.y - p2.y));
     float f2 = pow2((p.x - p0.x)*(p0.y - p2.y) - (p.y - p0.y)*(p0.x - p2.x)) + pow2((p.x - p0.x)*(p0.z - p2.z) - (p.z - p0.z)*(p0.x - p2.x)) + pow2((p.y - p0.y)*(p0.z - p2.z) - (p.z - p0.z)*(p0.y - p2.y));
@@ -193,6 +205,13 @@ void baryAdjoint(
     dOut_dc0 = dOut_dc * u /* dc_c0 */;
     dOut_dc1 = dOut_dc * v /* dc_c1 */;
     dOut_dc2 = dOut_dc * (1.0 - u - v) /* dc_c2 */;
+#ifdef PROJECTED_RASTER
+    dOut_du += dot(dOut_dd, d0 - d2 /* dd_du */);
+    dOut_dv += dot(dOut_dd, d1 - d2 /* dd_dv */);
+    dOut_dd0 = dOut_dd * u /* dc_c0 */;
+    dOut_dd1 = dOut_dd * v /* dc_c1 */;
+    dOut_dd2 = dOut_dd * (1.0 - u - v) /* dc_c2 */;
+#endif
     dOut_dp0 += dOut_du * vec3(du_dp0x, du_dp0y, du_dp0z) + dOut_dv * vec3(dv_dp0x, dv_dp0y, dv_dp0z);
     dOut_dp1 += dOut_du * vec3(du_dp1x, du_dp1y, du_dp1z) + dOut_dv * vec3(dv_dp1x, dv_dp1y, dv_dp1z);
     dOut_dp2 += dOut_du * vec3(du_dp2x, du_dp2y, du_dp2z) + dOut_dv * vec3(dv_dp2x, dv_dp2y, dv_dp2z);
