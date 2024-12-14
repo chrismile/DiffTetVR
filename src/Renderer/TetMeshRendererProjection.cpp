@@ -446,9 +446,6 @@ protected:
         computeData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "TetVertexPositionBuffer");
         computeData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
 
-        computeData->setStaticBuffer(volumeRenderer->getTriangleVertexPositionBuffer(), "TriangleVertexPositionBuffer");
-        computeData->setStaticBuffer(volumeRenderer->getTriangleVertexColorBuffer(), "TriangleVertexColorBuffer");
-        computeData->setStaticBuffer(volumeRenderer->getTriangleVertexDepthBuffer(), "TriangleVertexDepthBuffer");
         computeData->setStaticBuffer(volumeRenderer->getTriangleTetIndexBuffer(), "TriangleTetIndexBuffer");
 
         computeData->setStaticBuffer(

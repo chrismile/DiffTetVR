@@ -58,7 +58,7 @@ layout(push_constant) uniform PushConstants {
 layout(binding = 1) uniform TetCounterBuffer {
     uint globalTetCounter;
 };
-layout(binding = 2, std430) writeonly buffer TetTriangleOffsetBuffer {
+layout(binding = 2, std430) readonly buffer TetTriangleOffsetBuffer {
     uint tetOffsets[];
 };
 
@@ -74,27 +74,18 @@ layout(binding = 5, std430) readonly buffer TetVertexColorBuffer {
 };
 
 // Output triangle data.
-layout(binding = 6, scalar) writeonly buffer TriangleVertexPositionBuffer {
-    vec4 vertexPositions[];
-};
-layout(binding = 7, std430) writeonly buffer TriangleVertexColorBuffer {
-    vec4 vertexColors[];
-};
-layout(binding = 10, std430) writeonly buffer TriangleVertexDepthBuffer {
-    float vertexDepths[];
-};
-layout(binding = 11, std430) writeonly buffer TriangleTetIndexBuffer {
+layout(binding = 6, std430) readonly buffer TriangleTetIndexBuffer {
     uint triangleTetIndices[];
 };
 
 // Output triangle data gradients.
-layout(binding = 12, scalar) writeonly buffer TriangleVertexPositionGradientBuffer {
+layout(binding = 10, scalar) readonly buffer TriangleVertexPositionGradientBuffer {
     vec4 triangleVertexPositionGradients[];
 };
-layout(binding = 13, std430) writeonly buffer TriangleVertexColorGradientBuffer {
+layout(binding = 11, std430) readonly buffer TriangleVertexColorGradientBuffer {
     vec4 triangleVertexColorGradients[];
 };
-layout(binding = 14, std430) writeonly buffer TriangleVertexDepthGradientBuffer {
+layout(binding = 12, std430) readonly buffer TriangleVertexDepthGradientBuffer {
     float triangleVertexDepthGradients[];
 };
 
@@ -135,6 +126,28 @@ void GetCorrectedDepthAdjoint(
     dOut_dx += dOut_dDepth * dot(dDepth_dq, dq_dx);
     dOut_dy += dOut_dDepth * dot(dDepth_dq, dq_dy);
     dOut_dz2 += dOut_dDepth * dot(dDepth_dq, dq_dz2);
+}
+
+void addTetTetVertGrads(uint tetIdx, uint tetVertIdx, vec3 dOut_dPi, vec4 dOut_dCi) {
+    uint tetGlobalVertIdx = tetsIndices[tetIdx * 4 + tetVertIdx];
+    vec4 phom = viewProjMat * vec4(tetsVertexPositions[tetGlobalVertIdx], 1.0);
+    float pwsqinv = 1.0 / (phom.w * phom.w);
+    vec3 dp_dx = pwsqinv * (viewProjMat[0] * phom.w - phom * viewProjMat[0][3]);
+    vec3 dp_dy = pwsqinv * (viewProjMat[1] * phom.w - phom * viewProjMat[1][3]);
+    vec3 dp_dz = pwsqinv * (viewProjMat[2] * phom.w - phom * viewProjMat[2][3]);
+    vec3 dOut_dTetP = vec3(dot(dOut_dPi, dp_dx), dot(dOut_dPi, dp_dy), dot(dOut_dPi, dp_dz));
+
+    /*
+     * For testing an idea similar to the one from the following 3DGS paper:
+     * "AbsGS: Recovering Fine Details for 3D Gaussian Splatting". 2024.
+     * Zongxin Ye, Wenyu Li, Sidun Liu, Peng Qiao, Yong Dou.
+     */
+    if (useAbsGrad != 0u) {
+        dOut_dCi = abs(dOut_dCi);
+        dOut_dTetP = abs(dOut_dTetP);
+    }
+    atomicAddGradCol(tetVertIdx, dOut_dCi);
+    atomicAddGradPos(tetVertIdx, dOut_dTetP);
 }
 
 void main() {
@@ -350,6 +363,7 @@ void main() {
     vec3 dOut_dTriP[5];
     vec4 dOut_dTriC[5];
     float dOut_dTriD[5];
+    uint i0 = indices[0];
     for (int cellIdx = 0; cellIdx < numGeneratedTris; cellIdx++)
     {
         uint i1 = indices[cellIdx + 1];
@@ -422,7 +436,7 @@ void main() {
         GetCorrectedDepthAdjoint(
                 tetVertexPositionNdc[4].x, tetVertexPositionNdc[4].y, tetVertexPositionNdc[4].z, P3.z + beta * B.z,
                 dOut_dDepth, dOut_dP2.x, dOut_dP2.y, dOut_dP2.z, dOut_z2);
-        dOut_beta += dOut_z2 * B.z;
+        dOut_dbeta += dOut_z2 * B.z;
         dOut_dP3.z += dOut_z2;
         dOut_dB.z += dOut_z2 * beta;
 
@@ -448,7 +462,8 @@ void main() {
         //vec4 facec = (edgec + (alpha - 1.0) * pointc) / alpha;
         // tmp: vec4 dfacec_dalpha = (-edgec - pointc) / (alpha * alpha);
         // tmp: float dfacec_dC1 = 1.0 - 1.0 / alpha; // pointc == C1
-        dOut_dalpha += dot(dOut_dfacec, (-edgec - pointc) / (alpha * alpha));
+        vec4 edgec = C3 + beta * (C4 - C3);
+        dOut_dalpha += dot(dOut_dfacec, (-edgec - C1) / (alpha * alpha));
         dOut_dC1 += dOut_dfacec * (1.0 - 1.0 / alpha); // pointc == C1
         float dfacec_dedgec = 1.0 / alpha;
 
@@ -470,14 +485,14 @@ void main() {
         // under thick point.
         //float pointz = P1.z;
         //float facez = (edgez + (alpha - 1.0) * pointz) / alpha;
-        float dfacez_dalpha = (-edgez - pointz) / (alpha * alpha);
+        float dfacez_dalpha = (-edgez - P1.z) / (alpha * alpha);
         dOut_dalpha += dOut_dfacez * dfacez_dalpha;
         dOut_dP1.z += dOut_dfacez * (1.0 - 1.0 / alpha); // pointz == P1.z
         float dfacez_dedgez = 1.0 / alpha;
         float dOut_dedgez = dOut_dfacez * dfacez_dedgez;
         //float edgez = P3.z + beta * B.z;
-        dedgez_dP3.z += dOut_dedgez;
-        dedgez_dB.z += dOut_dedgez * beta;
+        dOut_dP3.z += dOut_dedgez;
+        dOut_dB.z += dOut_dedgez * beta;
         dOut_dbeta += dOut_dedgez * B.z;
 
         // The two segments do not intersect.  This corresponds to class 1
@@ -511,9 +526,9 @@ void main() {
             tmpVec3 = P1;
             P1 = P2;
             P2 = tmpVec3;
-            tmpVec3 = dOut_P1;
-            dOut_P1 = dOut_P2;
-            dOut_P2 = tmpVec3;
+            tmpVec3 = dOut_dP1;
+            dOut_dP1 = dOut_dP2;
+            dOut_dP2 = tmpVec3;
             vec4 tmpVec4;
             tmpVec4 = C1;
             C1 = C2;
@@ -531,7 +546,7 @@ void main() {
     float T0invsq = 1.0 / (T0 * T0);
     float T1 = B.x*C.y - B.y*C.x;
     float T2 = A.x*C.y - A.y*C.x;
-    vec2 dalpha_dA, dalpha_dB, dalpha_dC;
+    vec2 dalpha_dA, dalpha_dB, dalpha_dC, dbeta_dA, dbeta_dB, dbeta_dC;
     dalpha_dA.x = B.y * T0 / T0invsq;
     dalpha_dA.y = -B.x * T0 / T0invsq;
     dalpha_dB.x = (-A.y * T0 - C.y * T0) / T0invsq;
@@ -579,6 +594,7 @@ void main() {
     //    tetVertexPositionNdc[tetVertIdx] = vertexPosNdc;
     //    tetDepths[tetVertIdx] = 0.0;
     //}
+    uint tetVertexIdx;
     tetVertexIdx = segment1[0];
     addTetTetVertGrads(tetIdx, tetVertexIdx, dOut_dP1, dOut_dC1);
     tetVertexIdx = segment1[1];
@@ -587,26 +603,4 @@ void main() {
     addTetTetVertGrads(tetIdx, tetVertexIdx, dOut_dP3, dOut_dC3);
     tetVertexIdx = segment2[1];
     addTetTetVertGrads(tetIdx, tetVertexIdx, dOut_dP4, dOut_dC4);
-}
-
-void addTetTetVertGrads(uint tetIdx, uint tetVertexIdx, vec3 dOut_dPi, vec4 dOut_dCi) {
-    uint tetGlobalVertIdx = tetsIndices[tetIdx * 4 + tetVertIdx];
-    vec4 phom = viewProjMat * vec4(tetsVertexPositions[tetGlobalVertIdx], 1.0);
-    float pwsqinv = 1.0 / (phom.w * phom.w);
-    vec3 dp_dx = pwsqinv * (viewProjMat[0] * phom.w - phom * viewProjMat[0][3]);
-    vec3 dp_dy = pwsqinv * (viewProjMat[1] * phom.w - phom * viewProjMat[1][3]);
-    vec3 dp_dz = pwsqinv * (viewProjMat[2] * phom.w - phom * viewProjMat[2][3]);
-    vec3 dOut_dTetP = vec3(dot(dOut_dPi, dp_dx), dot(dOut_dPi, dp_dy), dot(dOut_dPi, dp_dz));
-
-    /*
-     * For testing an idea similar to the one from the following 3DGS paper:
-     * "AbsGS: Recovering Fine Details for 3D Gaussian Splatting". 2024.
-     * Zongxin Ye, Wenyu Li, Sidun Liu, Peng Qiao, Yong Dou.
-     */
-    if (useAbsGrad != 0u) {
-        dOut_dCi = abs(dOut_dCi);
-        dOut_dTetP = abs(dOut_dTetP);
-    }
-    atomicAddGradCol(tetVertIdx, dOut_dCi);
-    atomicAddGradPos(tetVertIdx, dOut_dTetP);
 }
