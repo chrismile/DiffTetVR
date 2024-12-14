@@ -111,14 +111,14 @@ void GetCorrectedDepthAdjoint(
     vec3 dDepth_dq = -dDepth_dp; // dDepth_dq == -dDepth_dp
 
     float pwsqinv = 1.0 / (phom.w * phom.w);
-    vec3 dp_dx = pwsqinv * (invProjMat[0] * phom.w - phom * invProjMat[0][3]);
-    vec3 dp_dy = pwsqinv * (invProjMat[1] * phom.w - phom * invProjMat[1][3]);
-    vec3 dp_dz1 = pwsqinv * (invProjMat[2] * phom.w - phom * invProjMat[2][3]);
+    vec3 dp_dx = pwsqinv * (invProjMat[0].xyz * phom.w - phom.x * invProjMat[0][3]);
+    vec3 dp_dy = pwsqinv * (invProjMat[1].xyz * phom.w - phom.y * invProjMat[1][3]);
+    vec3 dp_dz1 = pwsqinv * (invProjMat[2].xyz * phom.w - phom.z * invProjMat[2][3]);
 
     float qwsqinv = 1.0 / (qhom.w * qhom.w);
-    vec3 dq_dx = qwsqinv * (invProjMat[0] * qhom.w - qhom * invProjMat[0][3]);
-    vec3 dq_dy = qwsqinv * (invProjMat[1] * qhom.w - qhom * invProjMat[1][3]);
-    vec3 dq_dz2 = qwsqinv * (invProjMat[2] * qhom.w - qhom * invProjMat[2][3]);
+    vec3 dq_dx = qwsqinv * (invProjMat[0].xyz * qhom.w - qhom.x * invProjMat[0][3]);
+    vec3 dq_dy = qwsqinv * (invProjMat[1].xyz * qhom.w - qhom.y * invProjMat[1][3]);
+    vec3 dq_dz2 = qwsqinv * (invProjMat[2].xyz * qhom.w - qhom.z * invProjMat[2][3]);
 
     dOut_dx += dOut_dDepth * dot(dDepth_dp, dp_dx);
     dOut_dy += dOut_dDepth * dot(dDepth_dp, dp_dy);
@@ -132,9 +132,9 @@ void addTetTetVertGrads(uint tetIdx, uint tetVertIdx, vec3 dOut_dPi, vec4 dOut_d
     uint tetGlobalVertIdx = tetsIndices[tetIdx * 4 + tetVertIdx];
     vec4 phom = viewProjMat * vec4(tetsVertexPositions[tetGlobalVertIdx], 1.0);
     float pwsqinv = 1.0 / (phom.w * phom.w);
-    vec3 dp_dx = pwsqinv * (viewProjMat[0] * phom.w - phom * viewProjMat[0][3]);
-    vec3 dp_dy = pwsqinv * (viewProjMat[1] * phom.w - phom * viewProjMat[1][3]);
-    vec3 dp_dz = pwsqinv * (viewProjMat[2] * phom.w - phom * viewProjMat[2][3]);
+    vec3 dp_dx = pwsqinv * (viewProjMat[0].xyz * phom.w - phom.x * viewProjMat[0][3]);
+    vec3 dp_dy = pwsqinv * (viewProjMat[1].xyz * phom.w - phom.y * viewProjMat[1][3]);
+    vec3 dp_dz = pwsqinv * (viewProjMat[2].xyz * phom.w - phom.z * viewProjMat[2][3]);
     vec3 dOut_dTetP = vec3(dot(dOut_dPi, dp_dx), dot(dOut_dPi, dp_dy), dot(dOut_dPi, dp_dz));
 
     /*
