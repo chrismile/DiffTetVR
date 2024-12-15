@@ -39,6 +39,7 @@
 
 #extension GL_EXT_control_flow_attributes : require
 #extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_debug_printf : enable
 
 layout(local_size_x = BLOCK_SIZE) in;
 
@@ -363,6 +364,11 @@ void main() {
     vec3 dOut_dTriP[5];
     vec4 dOut_dTriC[5];
     float dOut_dTriD[5];
+    [[unroll]] for (uint i = 0; i < 5; i++) {
+        dOut_dTriP[i] = vec3(0.0);
+        dOut_dTriC[i] = vec4(0.0);
+        dOut_dTriD[i] = 0.0;
+    }
     uint i0 = indices[0];
     for (int cellIdx = 0; cellIdx < numGeneratedTris; cellIdx++)
     {
@@ -575,6 +581,12 @@ void main() {
     dOut_dP3 -= dOut_dB;
     dOut_dP3 += dOut_dC;
     dOut_dP1 -= dOut_dC;
+
+    debugPrintfEXT("t %f %f %f", dOut_dTriP[0].x, dOut_dTriC[0].x, dOut_dTriD[0].x);
+    debugPrintfEXT("p %f %f %f %f", dOut_dP1.x, dOut_dP2.x, dOut_dP3.x, dOut_dP4.x);
+    debugPrintfEXT("c %f %f %f %f", dOut_dC1.x, dOut_dC2.x, dOut_dC3.x, dOut_dC4.x);
+    debugPrintfEXT("ABC %f %f %f", dOut_dA.x, dOut_dB.x, dOut_dC.x);
+    debugPrintfEXT("ab %f %f", dOut_dalpha, dOut_dbeta);
 
     //vec3 P1 = tetVertexPositionNdc[segment1[0]].xyz;
     //vec3 P2 = tetVertexPositionNdc[segment1[1]].xyz;

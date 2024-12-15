@@ -177,9 +177,9 @@ void main() {
     float dOut_dd = dOut_dAlphaAcc * fragmentColor.a * A;
 
     float dOut_du = 0.0, dOut_dv = 0.0;
-    vec3 dOut_dp0, dOut_dp1, dOut_dp2;
-    vec4 dOut_dc0, dOut_dc1, dOut_dc2;
-    float dOut_dd0, dOut_dd1, dOut_dd2;
+    vec3 dOut_dp0 = vec3(0.0), dOut_dp1 = vec3(0.0), dOut_dp2 = vec3(0.0);
+    vec4 dOut_dc0 = vec4(0.0), dOut_dc1 = vec4(0.0), dOut_dc2 = vec4(0.0);
+    float dOut_dd0 = 0.0, dOut_dd1 = 0.0, dOut_dd2 = 0.0;
     baryAdjoint(
             p.xyz, p0, p1, p2, c0, c1, c2, d0, d1, d2, baryCoords.x, baryCoords.y,
             dOut_dc, dOut_dd, dOut_du, dOut_dv,
