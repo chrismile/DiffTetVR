@@ -26,6 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <iostream>
+
 #include <Utils/File/Logfile.hpp>
 #include <Graphics/Vulkan/Utils/Device.hpp>
 #include <Graphics/Vulkan/Buffers/Framebuffer.hpp>
@@ -314,6 +316,7 @@ protected:
         rasterData->setIndirectDrawBuffer(volumeRenderer->getDrawIndirectBuffer(), sizeof(VkDrawIndirectCommand));
         rasterData->setIndirectDrawCount(1);
         volumeRenderer->setRenderDataBindings(rasterData);
+
     }
     void setGraphicsPipelineInfo(sgl::vk::GraphicsPipelineInfo& pipelineInfo) override {
         pipelineInfo.setCullMode(sgl::vk::CullMode::CULL_NONE);
@@ -558,6 +561,7 @@ void TetMeshRendererProjection::setTetMeshData(const TetMeshPtr& _tetMesh) {
         tetTriangleOffsetBuffer = std::make_shared<sgl::vk::Buffer>(
                 device, tetMesh->getNumCells() * sizeof(uint32_t),
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+        // Add VK_BUFFER_USAGE_TRANSFER_SRC_BIT for debugging.
         triangleVertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(
                 device, maxNumProjectedVertices * sizeof(glm::vec3),
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
@@ -885,6 +889,38 @@ void TetMeshRendererProjection::renderAdjoint() {
             VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
     adjointProjectedRasterPass->render();
+
+    // TODO: Debug code.
+    /*auto* device = renderer->getDevice();
+    renderer->insertMemoryBarrier(
+            VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+    auto triangleVertexPositionGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+            device, triangleVertexPositionGradientBuffer->getSizeInBytes(),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+    auto triangleVertexColorGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+            device, triangleVertexColorGradientBuffer->getSizeInBytes(),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+    auto triangleVertexDepthGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+            device, triangleVertexDepthGradientBuffer->getSizeInBytes(),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+    triangleVertexPositionGradientBuffer->copyDataTo(triangleVertexPositionGradientStagingBuffer, renderer->getVkCommandBuffer());
+    triangleVertexColorGradientBuffer->copyDataTo(triangleVertexColorGradientStagingBuffer, renderer->getVkCommandBuffer());
+    triangleVertexDepthGradientBuffer->copyDataTo(triangleVertexDepthGradientStagingBuffer, renderer->getVkCommandBuffer());
+    renderer->syncWithCpu();
+    auto* vertexPositionGrads = reinterpret_cast<glm::vec3*>(triangleVertexPositionGradientStagingBuffer->mapMemory());
+    auto* vertexColorGrads = reinterpret_cast<glm::vec4*>(triangleVertexColorGradientStagingBuffer->mapMemory());
+    auto* vertexDepthGrads = reinterpret_cast<float*>(triangleVertexDepthGradientStagingBuffer->mapMemory());
+    auto numVerts = int(triangleVertexDepthGradientStagingBuffer->getSizeInBytes() / sizeof(float));
+    for (int i = 0; i < numVerts; i++) {
+        std::cout << "v_idx: " << vertexPositionGrads[i].x << std::endl;
+        std::cout << "p: " << vertexPositionGrads[i].x << " " << vertexPositionGrads[i].y << " " << vertexPositionGrads[i].z << std::endl;
+        std::cout << "c: " << vertexColorGrads[i].x << " " << vertexColorGrads[i].y << " " << vertexColorGrads[i].z << " " << vertexColorGrads[i].w << std::endl;
+        std::cout << "d: " << vertexDepthGrads[i] << std::endl;
+    }
+    triangleVertexPositionGradientStagingBuffer->unmapMemory();
+    triangleVertexColorGradientStagingBuffer->unmapMemory();
+    triangleVertexDepthGradientStagingBuffer->unmapMemory();*/
 
     compactTriangleTetListPass->render();
 

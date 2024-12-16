@@ -36,48 +36,12 @@ import torch
 from torch.utils.data import DataLoader
 import difftetvr as d
 from pyutils import DifferentiableRenderer
+from datasets.actions import enum_action, SplitGradientTypeAction, RendererTypeAction
 from datasets.camera_sample_method import CameraSampleMethod
 from datasets.tet_mesh_dataset import TetMeshDataset
 from datasets.regular_grid_dataset import RegularGridDataset
 from datasets.images_dataset import ImagesDataset
 from datasets.imgutils import save_array_png, blend_image_premul
-
-
-# https://stackoverflow.com/questions/78750965/how-to-make-argparse-work-nicely-with-enums-and-default-values
-def enum_action(enum_class):
-    class EnumAction(argparse.Action):
-        def __init__(self, *args, **kwargs):
-            # table = {member.name.casefold(): member for member in enum_class}
-            table = {}
-            for member in enum_class:
-                table[member.name] = member
-                table[member.name.casefold()] = member
-            super().__init__(*args, choices=table, **kwargs)
-            self.table = table
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            setattr(namespace, self.dest, self.table[values])
-
-    return EnumAction
-
-
-class SplitGradientTypeAction(argparse.Action):
-    def __init__(self, *args, **kwargs):
-        table = {
-            "POSITION": d.SplitGradientType.POSITION,
-            "COLOR": d.SplitGradientType.COLOR,
-            "ABS_POSITION": d.SplitGradientType.ABS_POSITION,
-            "ABS_COLOR": d.SplitGradientType.ABS_COLOR,
-            "POSITION".casefold(): d.SplitGradientType.POSITION,
-            "COLOR".casefold(): d.SplitGradientType.COLOR,
-            "ABS_POSITION".casefold(): d.SplitGradientType.ABS_POSITION,
-            "ABS_COLOR".casefold(): d.SplitGradientType.ABS_COLOR,
-        }
-        super().__init__(*args, choices=table, **kwargs)
-        self.table = table
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, self.dest, self.table[values])
 
 
 def replace_tensor_in_optimizer(optimizer, tensor, name):
@@ -104,6 +68,7 @@ def main():
     parser.add_argument('-o', '--out_dir', type=str)
 
     # Rendering settings.
+    parser.add_argument('--renderer_type', action=RendererTypeAction, default=d.RendererType.PPLL)
     parser.add_argument('--attenuation', type=float, default=100.0)
 
     # Main optimization parameters.
@@ -156,7 +121,7 @@ def main():
     if not os.path.isdir(args.out_dir):
         pathlib.Path(args.out_dir).mkdir(parents=False, exist_ok=True)
 
-    renderer = d.Renderer()
+    renderer = d.Renderer(renderer_type=args.renderer_type)
     renderer.set_attenuation(args.attenuation)
     renderer.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))
 

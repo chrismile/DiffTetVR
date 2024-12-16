@@ -29,6 +29,7 @@ import numpy as np
 import torch
 import difftetvr as d
 
+from datasets.actions import RendererTypeAction
 from datasets.sample_view import make_view_matrix
 from datasets.imgutils import save_array_png, blend_image_premul
 from datasets.images_dataset import ImagesDataset
@@ -43,6 +44,7 @@ def main():
     parser.add_argument('--image_output_file', type=str)
 
     # Rendering settings.
+    parser.add_argument('--renderer_type', action=RendererTypeAction, default=d.RendererType.PPLL)
     parser.add_argument('--attenuation', type=float, default=100.0)
     parser.add_argument('--img_width', type=int, default=512)
     parser.add_argument('--img_height', type=int, default=512)
@@ -65,7 +67,7 @@ def main():
         raise RuntimeError(
             '\'--gt_images_path\' needs to be passed to the script to specify the used ground truth data.')
 
-    renderer = d.Renderer()
+    renderer = d.Renderer(renderer_type=args.renderer_type)
     renderer.set_tet_mesh(tet_mesh)
     renderer.set_attenuation(args.attenuation)
     renderer.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))

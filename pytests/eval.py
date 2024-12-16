@@ -1,7 +1,33 @@
+# BSD 2-Clause License
+#
+# Copyright (c) 2024, Christoph Neuhauser
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 import math
 import os
+import argparse
 import pathlib
-import getpass
 import json
 import matplotlib
 import matplotlib.pyplot as plt
@@ -12,6 +38,8 @@ import skimage.metrics
 import torch
 import torchvision
 import difftetvr as d
+from datasets.actions import RendererTypeAction
+from datasets.paths import get_preshaded_path, get_regular_grids_path
 from datasets.imgutils import blend_image_premul
 from datasets.sample_view import make_view_matrix
 
@@ -159,14 +187,19 @@ if __name__ == '__main__':
     matplotlib.rcParams.update({'font.family': 'Linux Biolinum O'})
     matplotlib.rcParams.update({'font.size': 17.5})
 
-    preshaded_path = os.path.join(pathlib.Path.home(), 'Programming/C++/Correrender/Data/VolumeDataSets/preshaded')
-    regular_grids_path = '/mnt/data/Flow/Scalar'
-    if not os.path.isdir(regular_grids_path):
-        regular_grids_path = os.path.join(pathlib.Path.home(), 'datasets/Scalar')
-    if not os.path.isdir(regular_grids_path):
-        regular_grids_path = os.path.join(pathlib.Path.home(), 'datasets/Flow/Scalar')
-    if not os.path.isdir(regular_grids_path):
-        regular_grids_path = f'/media/{getpass.getuser()}/Elements/Datasets/Scalar'
+    parser = argparse.ArgumentParser(
+        prog='difftetvr/render.py', description='Renders a tetrahedral mesh using direct volume rendering.')
+
+    # Rendering settings.
+    parser.add_argument('--renderer_type', action=RendererTypeAction, default=d.RendererType.PPLL)
+    parser.add_argument('--attenuation', type=float, default=100.0)
+    parser.add_argument('--img_width', type=int, default=512)
+    parser.add_argument('--img_height', type=int, default=512)
+
+    args = parser.parse_args()
+
+    preshaded_path = get_preshaded_path()
+    regular_grids_path = get_regular_grids_path()
 
     dataset_dir = os.path.join(pathlib.Path.home(), 'datasets/Tet/Test')
     dataset_path_list = os.listdir(dataset_dir)
@@ -179,11 +212,11 @@ if __name__ == '__main__':
         camera_forward=[1.0, 0.0, 0.0],
     )
 
-    renderer = d.Renderer()
-    renderer.set_attenuation(100.0)
+    renderer = d.Renderer(renderer_type=args.renderer_type)
+    renderer.set_attenuation(args.attenuation)
     renderer.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))
     renderer.set_camera_fovy(math.atan(1.0 / 2.0) * 2.0)
-    renderer.set_viewport_size(512, 512)
+    renderer.set_viewport_size(args.img_width, args.img_height)
     renderer.set_view_matrix(view_matrix_array)
 
     # renderer_gt = renderer

@@ -1,0 +1,44 @@
+name: Build Python module using pip
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-22.04, ubuntu-24.04, windows-2022 ]
+
+    runs-on: ${{ matrix.os }}
+    name: "Build Python module on ${{ matrix.os }} using pip"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: Jimver/cuda-toolkit@v0.2.19
+        id: cuda-toolkit
+        with:
+          cuda: '12.4.0'
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniconda-version: "latest"
+          activate-environment: diffdvr
+          python-version: 3.12
+
+      - name: Build
+        shell: bash
+        run: |
+          export CONDA_ALWAYS_YES="true"
+          conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
+          conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
+          pip install .
