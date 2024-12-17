@@ -93,7 +93,7 @@ else:
 commands = []
 
 shared_params_all = [
-    '--renderer_type', 'PPLL'
+    '--renderer_type', 'projection'
 ]
 shared_params = [
     '--record_video', '--save_statistics',

@@ -98,8 +98,6 @@ if %debug% == true (
 
 if not exist .\third_party\fuchsia_radix_sort\include goto init_submodules
 if not exist .\third_party\glm\glm goto init_submodules
-if not exist .\third_party\glslang\glslang goto init_submodules
-if not exist .\third_party\jsoncpp\src goto init_submodules
 if not exist .\third_party\OpenVolumeMesh\src goto init_submodules
 if not exist .\third_party\sgl\src goto init_submodules
 goto after_init_submodules
@@ -119,6 +117,7 @@ pushd third_party
 IF "%VULKAN_SDK%"=="" (
   for /D %%F in (C:\VulkanSDK\*) do (
     set VULKAN_SDK=%%F
+    set "PATH=%%F\Bin;%PATH%"
     goto vulkan_finished
   )
 )

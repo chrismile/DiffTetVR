@@ -142,7 +142,7 @@ void TetMeshOptimizer::renderGuiDialog() {
                 TetMeshLoader* tetMeshLoader = tetMeshTest->createTetMeshLoaderByExtension(fileExtension);
                 size_t numCells = 0, numVertices = 0;
                 if (tetMeshLoader && tetMeshLoader->peekSizes(settings.dataSetFileNameGT, numCells, numVertices)) {
-                    numCellsGT = numCells;
+                    numCellsGT = uint32_t(numCells);
                 }
                 delete tetMeshLoader;
             }
@@ -171,7 +171,7 @@ void TetMeshOptimizer::renderGuiDialog() {
                 TetMeshLoader* tetMeshLoader = tetMeshTest->createTetMeshLoaderByExtension(fileExtension);
                 size_t numCells = 0, numVertices = 0;
                 if (tetMeshLoader && tetMeshLoader->peekSizes(settings.dataSetFileNameOpt, numCells, numVertices)) {
-                    numCellsOpt = numCells;
+                    numCellsOpt = uint32_t(numCells);
                 }
                 delete tetMeshLoader;
             }
@@ -280,7 +280,7 @@ void TetMeshOptimizer::renderGuiDialog() {
         if (ImGui::BeginPopupModal(
                 "Optimization Progress", &isOptimizationProgressDialogOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
             //const int coarseToFineEpochIndex = coarseToFineEpoch % 3;
-            const float progressBarWidth = settings.useCoarseToFine ? 400 : 300;
+            const float progressBarWidth = settings.useCoarseToFine ? 400.0f : 300.0f;
             if (settings.useCoarseToFine) {
                 auto progress = float(double(tetMeshOpt->getNumCells()) / double(settings.maxNumTets));
                 progress = std::min(progress, 1.0f);

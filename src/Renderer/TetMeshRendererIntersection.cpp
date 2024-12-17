@@ -262,6 +262,9 @@ protected:
         pipelineInfo.setDepthTestEnabled(false);
         pipelineInfo.setBlendMode(blendMode);
     }
+    void _render() override {
+        renderer->render(rasterData, framebuffer);
+    }
 
 private:
     TetMeshRendererIntersection* volumeRenderer;

@@ -248,6 +248,9 @@ protected:
         pipelineInfo.setBlendMode(sgl::vk::BlendMode::BACK_TO_FRONT_PREMUL_ALPHA);
         //pipelineInfo.setBlendMode(sgl::vk::BlendMode::BACK_TO_FRONT_STRAIGHT_ALPHA);
     }
+    void _render() override {
+        renderer->render(rasterData, framebuffer);
+    }
 
 private:
     TetMeshRendererProjection* volumeRenderer;

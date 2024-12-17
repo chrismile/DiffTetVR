@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-22.04, windows-2019, windows-2022, macos-latest ]
+        os: [ ubuntu-22.04, windows-2019, windows-2022 ]
         linking: [ dynamic, static ]
         exclude:
           # dynamic linking fails for SDL2_image and python3 compilation on macOS as of 2022-08-30.
@@ -154,6 +154,7 @@ jobs:
         run: |
           for /D %%F in (C:\VulkanSDK\*) do (
             set VULKAN_SDK=%%F
+            set "PATH=%%F\Bin;%PATH%"
             goto vulkan_finished
           )
           :vulkan_finished

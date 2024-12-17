@@ -523,7 +523,6 @@ if [ $use_macos = false ] && ! command -v pkg-config &> /dev/null; then
 fi
 
 if [ ! -d "third_party/fuchsia_radix_sort/include" ] || [ ! -d "third_party/glm/glm" ] \
-        [ ! -d "third_party/glslang\glslang" ] || [ ! -d "third_party/jsoncpp\src" ] \
         [ ! -d "third_party/OpenVolumeMesh/src" ] || [ ! -d "third_party/sgl/src" ]; then
     echo "------------------------"
     echo "initializing submodules "

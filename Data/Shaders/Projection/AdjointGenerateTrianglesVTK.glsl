@@ -147,8 +147,8 @@ void addTetTetVertGrads(uint tetIdx, uint tetVertIdx, vec3 dOut_dPi, vec4 dOut_d
         dOut_dCi = abs(dOut_dCi);
         dOut_dTetP = abs(dOut_dTetP);
     }
-    atomicAddGradCol(tetVertIdx, dOut_dCi);
-    atomicAddGradPos(tetVertIdx, dOut_dTetP);
+    atomicAddGradCol(tetGlobalVertIdx, dOut_dCi);
+    atomicAddGradPos(tetGlobalVertIdx, dOut_dTetP);
 }
 
 void main() {
