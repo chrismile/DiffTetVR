@@ -88,6 +88,10 @@ else()
     find_package(SDL2 REQUIRED)
 endif()
 
+if (VCPKG_TOOLCHAIN)
+    find_package(Boost COMPONENTS system filesystem locale QUIET)
+endif()
+
 find_package(sgl QUIET)
 if(NOT sgl_FOUND)
     set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH};third_party/sgl/install/lib/cmake/sgl)
