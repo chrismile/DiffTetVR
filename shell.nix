@@ -24,6 +24,7 @@ pkgs.mkShell {
     vulkan-validation-layers
     shaderc
     jsoncpp
+    gmp
   ];
 
   BUILD_USE_NIX = "ON";

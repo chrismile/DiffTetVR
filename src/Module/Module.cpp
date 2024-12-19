@@ -116,7 +116,7 @@ void vulkanErrorCallbackHeadless() {
 
 static const char* argv[] = { "." }; //< Just pass something as argv.
 
-static std::string getLibraryPath() {
+std::string getLibraryPath() {
 #if defined(_WIN32)
     // See: https://stackoverflow.com/questions/6924195/get-dll-path-at-runtime
     WCHAR modulePath[MAX_PATH];

@@ -45,6 +45,7 @@ Supported formats currently are:
 - .ovm and .ovmb files, which are native to the library
   [OpenVolumeMesh](https://www.graphics.rwth-aachen.de/software/openvolumemesh/).
 - .vtk files, which are also supported via OpenVolumeMesh.
+- Gmsh .msh files (for more details see https://victorsndvg.github.io/FEconv/formats/gmshmsh.xhtml).
 
 ### Python module
 

@@ -57,6 +57,7 @@ conda_env_name="difftetvr"
 link_dynamic=false
 use_custom_vcpkg_triplet=false
 custom_glslang=false
+build_with_ftetwild_support=true
 
 # Check if a conda environment is already active.
 if $use_conda; then
@@ -100,7 +101,12 @@ if [ $clean = true ]; then
     echo "------------------------"
     echo " cleaning up old files  "
     echo "------------------------"
-    rm -rf third_party/sgl/ third_party/vcpkg/ .build_release/ .build_debug/ Shipping/
+    rm -rf third_party/vcpkg/ .build_release/ .build_debug/ Shipping/
+    if grep -wq "sgl" .gitmodules; then
+        rm -rf third_party/sgl/install/ third_party/sgl/.build_release/ third_party/sgl/.build_debug/
+    else
+        rm -rf third_party/sgl/
+    fi
     git submodule update --init --recursive
 fi
 
@@ -234,8 +240,8 @@ if $use_msys && command -v pacman &> /dev/null && [ ! -d $build_dir_debug ] && [
             || ! is_installed_pacman "mingw-w64-x86_64-glew" || ! is_installed_pacman "mingw-w64-x86_64-vulkan-headers" \
             || ! is_installed_pacman "mingw-w64-x86_64-vulkan-loader" \
             || ! is_installed_pacman "mingw-w64-x86_64-vulkan-validation-layers" \
-            || ! is_installed_pacman "mingw-w64-x86_64-shaderc" \
-            || ! is_installed_pacman "mingw-w64-x86_64-jsoncpp"; then
+            || ! is_installed_pacman "mingw-w64-x86_64-shaderc" || ! is_installed_pacman "mingw-w64-x86_64-jsoncpp" \
+            || ! is_installed_pacman "mingw-w64-x86_64-gmp"; then
         echo "------------------------"
         echo "installing dependencies "
         echo "------------------------"
@@ -244,7 +250,7 @@ if $use_msys && command -v pacman &> /dev/null && [ ! -d $build_dir_debug ] && [
         mingw64/mingw-w64-x86_64-libpng mingw64/mingw-w64-x86_64-SDL2 mingw64/mingw-w64-x86_64-SDL2_image \
         mingw64/mingw-w64-x86_64-glew mingw64/mingw-w64-x86_64-vulkan-headers mingw64/mingw-w64-x86_64-vulkan-loader \
         mingw64/mingw-w64-x86_64-vulkan-validation-layers mingw64/mingw-w64-x86_64-shaderc \
-        mingw64/mingw-w64-x86_64-jsoncpp
+        mingw64/mingw-w64-x86_64-jsoncpp mingw64/mingw-w64-x86_64-gmp
     fi
 elif $use_msys && command -v pacman &> /dev/null; then
     :
@@ -321,6 +327,9 @@ elif $use_macos && command -v brew &> /dev/null && [ ! -d $build_dir_debug ] && 
         if ! is_installed_brew "jsoncpp"; then
             brew install jsoncpp
         fi
+        if ! is_installed_brew "gmp"; then
+            brew install gmp
+        fi
     fi
 elif $use_macos && command -v brew &> /dev/null; then
     :
@@ -354,12 +363,13 @@ elif command -v apt &> /dev/null && ! $use_conda; then
                 || ! is_installed_apt "libglm-dev" || ! is_installed_apt "libarchive-dev" \
                 || ! is_installed_apt "libtinyxml2-dev" || ! is_installed_apt "libpng-dev" \
                 || ! is_installed_apt "libsdl2-dev" || ! is_installed_apt "libsdl2-image-dev" \
-                || ! is_installed_apt "libglew-dev" || ! is_installed_apt "libjsoncpp-dev"; then
+                || ! is_installed_apt "libglew-dev" || ! is_installed_apt "libjsoncpp-dev" \
+                || ! is_installed_apt "libgmp-dev"; then
             echo "------------------------"
             echo "installing dependencies "
             echo "------------------------"
             sudo apt install -y libboost-filesystem-dev libicu-dev libglm-dev libarchive-dev libtinyxml2-dev libpng-dev \
-            libsdl2-dev libsdl2-image-dev libglew-dev libjsoncpp-dev
+            libsdl2-dev libsdl2-image-dev libglew-dev libjsoncpp-dev libgmp-dev
         fi
     fi
 elif command -v pacman &> /dev/null && ! $use_conda; then
@@ -387,11 +397,13 @@ elif command -v pacman &> /dev/null && ! $use_conda; then
                 || ! is_installed_pacman "libarchive" || ! is_installed_pacman "tinyxml2" \
                 || ! is_installed_pacman "libpng" || ! is_installed_pacman "sdl2" || ! is_installed_pacman "sdl2_image" \
                 || ! is_installed_pacman "glew" || ! is_installed_pacman "vulkan-devel" \
-                || ! is_installed_pacman "shaderc" || ! is_installed_pacman "jsoncpp"; then
+                || ! is_installed_pacman "shaderc" || ! is_installed_pacman "jsoncpp" \
+                || ! is_installed_pacman "gmp"; then
             echo "------------------------"
             echo "installing dependencies "
             echo "------------------------"
-            sudo pacman -S boost icu glm libarchive tinyxml2 libpng sdl2 sdl2_image glew vulkan-devel shaderc jsoncpp
+            sudo pacman -S boost icu glm libarchive tinyxml2 libpng sdl2 sdl2_image glew vulkan-devel shaderc jsoncpp \
+            gmp
         fi
     fi
 elif command -v yum &> /dev/null && ! $use_conda; then
@@ -424,12 +436,12 @@ elif command -v yum &> /dev/null && ! $use_conda; then
                 || ! is_installed_rpm "libpng-devel" || ! is_installed_rpm "SDL2-devel" \
                 || ! is_installed_rpm "SDL2_image-devel" || ! is_installed_rpm "glew-devel" \
                 || ! is_installed_rpm "vulkan-headers" || ! is_installed_rpm "libshaderc-devel" \
-                || ! is_installed_rpm "jsoncpp-devel"; then
+                || ! is_installed_rpm "jsoncpp-devel" || ! is_installed_rpm "gmp-devel"; then
             echo "------------------------"
             echo "installing dependencies "
             echo "------------------------"
             sudo yum install -y boost-devel libicu-devel glm-devel libarchive-devel tinyxml2-devel libpng-devel \
-            SDL2-devel SDL2_image-devel glew-devel vulkan-headers libshaderc-devel jsoncpp-devel
+            SDL2-devel SDL2_image-devel glew-devel vulkan-headers libshaderc-devel jsoncpp-devel gmp-devel
         fi
     fi
 elif $use_conda && ! $use_macos; then
@@ -491,7 +503,7 @@ elif $use_conda && ! $use_macos; then
             || ! list_contains "$conda_pkg_list" "xorg-libxfixes" || ! list_contains "$conda_pkg_list" "xorg-libxau" \
             || ! list_contains "$conda_pkg_list" "xorg-libxrandr" || ! list_contains "$conda_pkg_list" "patchelf" \
             || ! list_contains "$conda_pkg_list" "libvulkan-headers" || ! list_contains "$conda_pkg_list" "shaderc" \
-            || ! list_contains "$conda_pkg_list" "jsoncpp"; then
+            || ! list_contains "$conda_pkg_list" "jsoncpp" || ! list_contains "$conda_pkg_list" "conda-forge::gmp"; then
         echo "------------------------"
         echo "installing dependencies "
         echo "------------------------"
@@ -499,7 +511,7 @@ elif $use_conda && ! $use_macos; then
         cxx-compiler make cmake pkg-config gdb git mesa-libgl-devel-cos7-x86_64 libglvnd-glx-cos7-x86_64 \
         mesa-dri-drivers-cos7-aarch64 libxau-devel-cos7-aarch64 libselinux-devel-cos7-aarch64 \
         libxdamage-devel-cos7-aarch64 libxxf86vm-devel-cos7-aarch64 libxext-devel-cos7-aarch64 xorg-libxfixes \
-        xorg-libxau xorg-libxrandr patchelf libvulkan-headers shaderc jsoncpp
+        xorg-libxau xorg-libxrandr patchelf libvulkan-headers shaderc jsoncpp conda-forge::gmp
     fi
 else
     echo "Warning: Unsupported system package manager detected." >&2
@@ -523,6 +535,7 @@ if [ $use_macos = false ] && ! command -v pkg-config &> /dev/null; then
 fi
 
 if [ ! -d "third_party/fuchsia_radix_sort/include" ] || [ ! -d "third_party/glm/glm" ] \
+        [ ! -d "third_party/glslang/glslang" ] || [ ! -d "third_party/jsoncpp/src" ] \
         [ ! -d "third_party/OpenVolumeMesh/src" ] || [ ! -d "third_party/sgl/src" ]; then
     echo "------------------------"
     echo "initializing submodules "
@@ -830,6 +843,29 @@ if [ ! -d "./sgl/install" ]; then
     popd >/dev/null
 fi
 
+if $build_with_ftetwild_support; then
+    if [ ! -d "./fTetWild" ]; then
+        echo "------------------------"
+        echo "  downloading fTetWild  "
+        echo "------------------------"
+        if [ -d "./fTetWild-src" ]; then
+            rm -rf "./fTetWild-src"
+        fi
+        git clone https://github.com/wildmeshing/fTetWild.git fTetWild-src
+        mkdir -p fTetWild-src/build
+        pushd fTetWild-src/build >/dev/null
+        cmake .. ${params_gen[@]+"${params_gen[@]}"} -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${projectpath}/third_party/fTetWild"
+        make -j $(nproc)
+        popd >/dev/null
+        mkdir -p fTetWild
+        if $use_msys; then
+            cp fTetWild-src/build/FloatTetwild_bin.exe fTetWild/FloatTetwild_bin.exe
+        else
+            cp fTetWild-src/build/FloatTetwild_bin fTetWild/FloatTetwild_bin
+        fi
+    fi
+    params+=(-DUSE_FTET_WILD=ON)
+fi
 
 popd >/dev/null # back to project root
 
@@ -954,6 +990,12 @@ if $use_msys; then
 
     # Copy all dependencies of the application to the destination directory.
     ldd_output="$(ntldd -R $build_dir/DiffTetVR.exe)"
+    if $build_with_ftetwild_support; then
+        ftetwild_bin="${projectpath}/third_party/fTetWild-src/build/FloatTetwild_bin.exe"
+        cp "$ftetwild_bin" "$destination_dir/bin"
+        #ldd_output="$ldd_output $ftetwild_bin"
+        ldd_output="$ldd_output $(ntldd -R $ftetwild_bin)"
+    fi
     for library_abs in $ldd_output
     do
         if [[ $library_abs == "not found"* ]] || [[ $library_abs == "ext-ms-win"* ]] || [[ $library_abs == "=>" ]] \
@@ -1073,6 +1115,12 @@ else
     # Copy all dependencies of the application to the destination directory.
     ldd_output="$(ldd $build_dir/DiffTetVR)"
 
+    if $build_with_ftetwild_support; then
+        ftetwild_bin="${projectpath}/third_party/fTetWild-src/build/FloatTetwild_bin"
+        rsync -a "$ftetwild_bin" "$destination_dir/bin"
+        #ldd_output="$ldd_output $ftetwild_bin"
+        ldd_output="$ldd_output $(ldd $ftetwild_bin)"
+    fi
     library_blacklist=(
         "libOpenGL" "libGLdispatch" "libGL.so" "libGLX.so"
         "libwayland" "libffi." "libX" "libxcb" "libxkbcommon"

@@ -59,17 +59,28 @@ IF NOT "%1"=="" (
     GOTO :loop
 )
 
-:: Build other configuration and copy sgl DLLs to the build directory.
+:: Clean the build artifacts if requested by the user.
 if %clean% == true (
     echo ------------------------
     echo  cleaning up old files
     echo ------------------------
-    rd /s /q "third_party\sgl"
     rd /s /q "third_party\vcpkg"
     for /d %%G in (".build*") do rd /s /q "%%~G"
     rd /s /q "Shipping"
+
     git submodule update --init --recursive
+
+:: https://stackoverflow.com/questions/5626879/how-to-find-if-a-file-contains-a-given-string-using-windows-command-line
+    find /c "sgl" .gitmodules >NUL
+    if %errorlevel% equ 1 goto sglnotfound
+    rd /s /q "third_party\sgl\install"
+    for /d %%G in ("third_party\sgl\.build*") do rd /s /q "%%~G"
 )
+goto cleandone
+:sglnotfound
+rd /s /q "third_party\sgl"
+goto cleandone
+:cleandone
 
 where cmake >NUL 2>&1 || echo cmake was not found but is required to build the program && exit /b 1
 
@@ -98,6 +109,8 @@ if %debug% == true (
 
 if not exist .\third_party\fuchsia_radix_sort\include goto init_submodules
 if not exist .\third_party\glm\glm goto init_submodules
+if not exist .\third_party\glslang\glslang goto init_submodules
+if not exist .\third_party\jsoncpp\src goto init_submodules
 if not exist .\third_party\OpenVolumeMesh\src goto init_submodules
 if not exist .\third_party\sgl\src goto init_submodules
 goto after_init_submodules

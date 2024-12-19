@@ -57,6 +57,7 @@ namespace sgl { namespace vk {
 class Device;
 class Buffer;
 typedef std::shared_ptr<Buffer> BufferPtr;
+class Renderer;
 }}
 
 class TetMeshLoader;

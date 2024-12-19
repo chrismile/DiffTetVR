@@ -52,6 +52,7 @@
 
 #include "Loaders/BinTetLoader.hpp"
 #include "Loaders/TxtTetLoader.hpp"
+#include "Loaders/MshLoader.hpp"
 #include "Loaders/LoadersUtil.hpp"
 #include "CSP/CSPSolver.hpp"
 #include "CSP/FlipSolver.hpp"
@@ -108,6 +109,7 @@ TetMesh::TetMesh(sgl::vk::Device* device, sgl::TransferFunctionWindow* transferF
     std::map<std::vector<std::string>, std::function<TetMeshLoader*()>> factoriesLoaderMap = {
             registerTetMeshLoader<BinTetLoader>(),
             registerTetMeshLoader<TxtTetLoader>(),
+            registerTetMeshLoader<MshLoader>(),
 #ifdef USE_OPEN_VOLUME_MESH
             registerTetMeshLoader<OvmLoader>(),
 #endif

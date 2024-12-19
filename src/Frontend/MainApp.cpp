@@ -49,6 +49,7 @@
 
 #include "Tet/TetMesh.hpp"
 #include "Tet/Loaders/DataSetList.hpp"
+#include "Tet/Meshing/fTetWildWrapper.hpp"
 #include "Renderer/Optimizer.hpp"
 #include "Renderer/TetMeshRendererPPLL.hpp"
 #include "Renderer/TetMeshRendererProjection.hpp"
@@ -94,6 +95,10 @@ MainApp::MainApp()
             clearColorSelection = ImColor(clearColor.getR(), clearColor.getG(), clearColor.getB(), 255);
         }
     }
+
+    // TODO: Test function.
+    auto tetMeshTest = std::make_shared<TetMesh>(device, &transferFunctionWindow);
+    generateTetMeshFromGrid(sgl::AABB3(glm::vec3(-0.25f), glm::vec3(0.25f)), 4, 4, 4, glm::vec4(0.1f), tetMeshTest);
 
     //viewManager = new ViewManager(&clearColor, rendererVk);
 
@@ -702,9 +707,9 @@ void MainApp::openFileDialog() {
             fileDialogInstance,
             "ChooseDataSetFile", "Choose a File",
 #ifdef USE_OPEN_VOLUME_MESH
-            ".*,.bintet,.txt,.ovm,.ovmb,.vtk",
+            ".*,.bintet,.txt,.ovm,.ovmb,.vtk,.msh",
 #else
-           ".*,.bintet,.txt",
+           ".*,.bintet,.txt,.msh",
 #endif
             fileDialogDirectory.c_str(),
             "", 1, nullptr,
@@ -945,7 +950,8 @@ bool MainApp::checkHasValidExtension(const std::string& filenameLower) {
             || sgl::endsWith(filenameLower, ".ovmb")
             || sgl::endsWith(filenameLower, ".vtk")
 #endif
-            || sgl::endsWith(filenameLower, ".txt")) {
+            || sgl::endsWith(filenameLower, ".txt")
+            || sgl::endsWith(filenameLower, ".msh")) {
         return true;
     }
     return false;

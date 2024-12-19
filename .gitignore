@@ -66,6 +66,7 @@ cmake-build-*/
 Data/Screenshots/*
 Data/Checkpoints/*
 Data/DataSets/*
+Data/tmp/*
 
 imgui.ini
 
@@ -76,6 +77,8 @@ Shipping/*
 dependencies/*
 vcpkg_installed/*
 third_party/vcpkg
+third_party/fTetWild*
+third_party/TetGen*
 
 # macOS
 .DS_Store
