@@ -380,11 +380,11 @@ def get_gmp_lib_found():
         # LD_LIBRARY_PATH is NOT used by ldconfig by default. Thus, we only search for globally installed libraries.
         ldconfig_proc = subprocess.Popen(['ldconfig', '-N', '-v'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (ldconfig_output, ldconfig_err) = ldconfig_proc.communicate()
-        ldconfig_proc_status = ldconfig_proc.wait()
-        if ldconfig_proc_status != 0:
-            ldconfig_stdout_string = ldconfig_output.decode('utf-8')
-            if gmp_lib_name in ldconfig_stdout_string:
-                return True, gmp_lib_name, None
+        # ldconfig_proc_status = ldconfig_proc.wait()  # Can be 1 for some reason...
+        ldconfig_proc.wait()
+        ldconfig_stdout_string = ldconfig_output.decode('utf-8')
+        if gmp_lib_name in ldconfig_stdout_string:
+            return True, gmp_lib_name, None
 
     # On Windows, we will assume mpir.dll has been installed using conda via MPIR.
     for search_path in sys.path:
@@ -413,7 +413,7 @@ if support_ftetwild:
     if not os.path.isdir('third_party/fTetWild'):
         if os.path.isdir('third_party/fTetWild-src'):
             shutil.rmtree('third_party/fTetWild-src')
-        subprocess.run(['git', 'clone', 'https://github.com/wildmeshing/fTetWild.git', 'third_party/fTetWild-src'])
+        subprocess.run(['git', 'clone', 'https://github.com/chrismile/fTetWild.git', 'third_party/fTetWild-src'])
         Path('third_party/fTetWild-src/build').mkdir(exist_ok=True)
         ftetwild_build_options = []
         if not IS_WINDOWS:

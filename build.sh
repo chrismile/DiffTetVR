@@ -857,7 +857,7 @@ if $build_with_ftetwild_support; then
         if [ -d "./fTetWild-src" ]; then
             rm -rf "./fTetWild-src"
         fi
-        git clone https://github.com/wildmeshing/fTetWild.git fTetWild-src
+        git clone https://github.com/chrismile/fTetWild.git fTetWild-src
         mkdir -p fTetWild-src/build
         pushd fTetWild-src/build >/dev/null
         cmake .. ${params_gen[@]+"${params_gen[@]}"} -DCMAKE_BUILD_TYPE=Release
