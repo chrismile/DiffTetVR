@@ -59,8 +59,18 @@ use_custom_vcpkg_triplet=false
 custom_glslang=false
 build_with_ftetwild_support=true
 build_with_tetgen_support=true
-if [ $use_macos = true ]; then
+if [ $use_macos = true ] || [ $use_msys = true ]; then
     build_with_ftetwild_support=false
+fi
+if [ $use_macos = false ] && [ $use_msys = false ]; then
+    gcc_version=$(gcc --version 2>&1 | head -n 1 | awk '{print $NF}')
+    gcc_version_major=$(echo $gcc_version | cut -d '.' -f 1)
+    # https://github.com/wildmeshing/fTetWild/issues/79
+    if [ $gcc_version_major -ge 12 ]; then
+        build_with_ftetwild_support=false
+    fi
+fi
+if [ $use_macos = true ]; then
     build_with_tetgen_support=false
 fi
 

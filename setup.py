@@ -399,6 +399,15 @@ def get_gmp_lib_found():
 
 
 support_ftetwild, gmp_lib_name, gmp_path = get_gmp_lib_found()
+if not IS_WINDOWS:
+    gcc_version_proc = subprocess.Popen(['gcc', '--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (gcc_version_output, gcc_version_err) = gcc_version_proc.communicate()
+    gcc_version_proc.wait()
+    gcc_version_stdout_string = gcc_version_output.decode('utf-8')
+    gcc_version_major = int(gcc_version_stdout_string.splitlines()[0].split()[-1].split('.')[0])
+    # https://github.com/wildmeshing/fTetWild/issues/79
+    if gcc_version_major >= 12:
+        support_ftetwild = False
 if support_ftetwild:
     if os.path.isdir('third_party/fTetWild'):
         # We delete the directory if gmp_lib_name could not be found in it.
