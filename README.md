@@ -46,6 +46,7 @@ Supported formats currently are:
   [OpenVolumeMesh](https://www.graphics.rwth-aachen.de/software/openvolumemesh/).
 - .vtk files, which are also supported via OpenVolumeMesh.
 - Gmsh .msh files (for more details see https://victorsndvg.github.io/FEconv/formats/gmshmsh.xhtml).
+- MEDIT .mesh files (for more details see https://victorsndvg.github.io/FEconv/formats/gmshmsh.xhtml).
 
 ### Python module
 

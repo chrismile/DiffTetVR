@@ -47,6 +47,7 @@
 #endif
 
 #include "../Renderer/OptimizerDefines.hpp"
+#include "Meshing/TetMeshing.hpp"
 #include "TetQuality.hpp"
 
 namespace sgl {
@@ -106,8 +107,12 @@ public:
     void subdivideVertices(const std::vector<float>& gradientMagnitudes, uint32_t numSplits);
     void splitByLargestGradientMagnitudes(
             sgl::vk::Renderer* renderer, SplitGradientType splitGradientType, float splitsRatio);
-    /// Initialize with tetrahedralized tet mesh with constant color.
+    /// Initialize with tetrahedralized hex mesh with constant color.
     void setHexMeshConst(const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor);
+    /// Initialize with tetrahedralized boundary mesh with constant color using an external application.
+    bool setTetrahedralizedGridConst(
+            const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
+            TetMeshingApp tetMeshingApp);
 
     [[nodiscard]] const std::vector<uint32_t>& getCellIndices() const { return cellIndices; }
     [[nodiscard]] const std::vector<glm::vec3>& getVertexPositions() const { return vertexPositions; }
@@ -143,6 +148,8 @@ public:
     // File loaders.
     TetMeshLoader* createTetMeshLoaderByExtension(const std::string& fileExtension);
     std::map<std::string, std::function<TetMeshLoader*()>> factoriesLoader;
+    // Interface such that the next loader uses a constant vertex color instead of info from the file.
+    void setNextLoaderUseConstColor(const glm::vec4& constColor);
 
     // File writers.
     TetMeshWriter* createTetMeshWriterByExtension(const std::string& fileExtension);
@@ -176,6 +183,9 @@ private:
     std::vector<float> tetQualityArray;
     TetQualityMetric tetQualityMetric = DEFAULT_QUALITY_METRIC;
     bool isTetQualityDataDirty = true;
+
+    bool nextLoaderUseConstColor = false;
+    glm::vec4 constColorNext{};
 
     void rebuildInternalRepresentationIfNecessary_Slim();
     std::vector<FaceSlim> facesSlim;

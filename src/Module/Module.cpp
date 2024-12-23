@@ -449,6 +449,9 @@ PYBIND11_MODULE(difftetvr, m) {
             .value("COLOR", SplitGradientType::COLOR)
             .value("ABS_POSITION", SplitGradientType::ABS_POSITION)
             .value("ABS_COLOR", SplitGradientType::ABS_COLOR);
+    py::enum_<TetMeshingApp>(m, "TetMeshingApp")
+            .value("FTETWILD", TetMeshingApp::FTETWILD)
+            .value("TETGEN", TetMeshingApp::TETGEN);
     py::class_<TetMesh, TetMeshPtr>(m, "TetMesh")
             .def(py::init([]() {
                 ensureStateExists();
@@ -463,6 +466,10 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("set_force_use_ovm_representation", &TetMesh::setForceUseOvmRepresentation, "Coarse to fine strategy.")
             .def("set_hex_mesh_const", &TetMesh::setHexMeshConst,
                  py::arg("aabb"), py::arg("xs"), py::arg("ys"), py::arg("zs"), py::arg("const_color"),
+                 "Initialize with tetrahedralized tet mesh with constant color.")
+            .def("set_tetrahedralized_grid_const", &TetMesh::setTetrahedralizedGridConst,
+                 py::arg("aabb"), py::arg("xs"), py::arg("ys"), py::arg("zs"), py::arg("const_color"),
+                 py::arg("tet_meshing_app") = TetMeshingApp::FTETWILD,
                  "Initialize with tetrahedralized tet mesh with constant color.")
             .def("get_num_cells", &TetMesh::getNumCells)
             .def("get_num_vertices", &TetMesh::getNumVertices)

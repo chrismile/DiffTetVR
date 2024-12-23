@@ -122,10 +122,19 @@ bool MshLoader::parseElements(
             }
 
             // No tags supported so far, so the node number list directly follows.
-            for (int i = 0; i < 4; i++) {
+            /*for (int i = 0; i < 4; i++) {
                 auto nodeNumber = lineReader.readBinaryValue<int32_t>();
                 cellIndices.push_back(uint32_t(nodeNumber) - 1);
-            }
+            }*/
+            auto nodeNumber1 = lineReader.readBinaryValue<int32_t>();
+            auto nodeNumber2 = lineReader.readBinaryValue<int32_t>();
+            auto nodeNumber3 = lineReader.readBinaryValue<int32_t>();
+            auto nodeNumber4 = lineReader.readBinaryValue<int32_t>();
+            // The default ordering in .msh files is in different winding than what DiffTetVR expects.
+            cellIndices.push_back(uint32_t(nodeNumber2) - 1);
+            cellIndices.push_back(uint32_t(nodeNumber1) - 1);
+            cellIndices.push_back(uint32_t(nodeNumber3) - 1);
+            cellIndices.push_back(uint32_t(nodeNumber4) - 1);
         }
     } else {
         std::vector<std::string> lineVec;
@@ -163,8 +172,9 @@ bool MshLoader::parseElements(
             auto nodeNumber2 = sgl::fromString<int32_t>(lineVec.at(4));
             auto nodeNumber3 = sgl::fromString<int32_t>(lineVec.at(5));
             auto nodeNumber4 = sgl::fromString<int32_t>(lineVec.at(6));
-            cellIndices.push_back(uint32_t(nodeNumber1) - 1);
+            // The default ordering in .msh files is in different winding than what DiffTetVR expects.
             cellIndices.push_back(uint32_t(nodeNumber2) - 1);
+            cellIndices.push_back(uint32_t(nodeNumber1) - 1);
             cellIndices.push_back(uint32_t(nodeNumber3) - 1);
             cellIndices.push_back(uint32_t(nodeNumber4) - 1);
         }

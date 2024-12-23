@@ -67,6 +67,10 @@ class SplitGradientType(enum.Enum):
     ABS_POSITION = enum.auto() # (= 2)
     ABS_COLOR = enum.auto()    # (= 3)
 
+class TetMeshingApp(enum.Enum):
+    FTETWILD = enum.auto() # (= 0)
+    TETGEN = enum.auto()   # (= 1)
+
 class TetMesh:
     def __init__(self) -> None:
         pass
@@ -95,6 +99,17 @@ class TetMesh:
             const_color: vec4
     ) -> None:
         """ Initialize with tetrahedralized tet mesh with constant color. """
+        pass
+    def set_tetrahedralized_grid_const(
+            self,
+            aabb: AABB3,
+            xs: int,
+            ys: int,
+            zs: int,
+            const_color: vec4,
+            tet_meshing_app: TetMeshingApp = TetMeshingApp.FTETWILD
+    ) -> bool:
+        """ Initialize with tetrahedralized boundary mesh with constant color using an external application. """
         pass
 
     # Get mesh information.

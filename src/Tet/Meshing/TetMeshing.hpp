@@ -26,13 +26,36 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DIFFTETVR_FTETWILDWRAPPER_HPP
-#define DIFFTETVR_FTETWILDWRAPPER_HPP
+#ifndef DIFFTETVR_TETMESHING_HPP
+#define DIFFTETVR_TETMESHING_HPP
 
-#include "../TetMesh.hpp"
+#include <Math/Geometry/AABB3.hpp>
 
-bool generateTetMeshFromGrid(
-        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-        const TetMeshPtr& tetMesh);
+class TetMesh;
 
-#endif //DIFFTETVR_FTETWILDWRAPPER_HPP
+/**
+ * TetMeshingApp specifies the external application to use for tetrahedralization.
+ * - fTetWild: https://github.com/wildmeshing/fTetWild
+ * - TetGen: https://wias-berlin.de/software/index.jsp?id=TetGen&lang=1
+ */
+/// The external application to use for tetrahedralization.
+enum class TetMeshingApp {
+    FTETWILD, TETGEN
+};
+
+/**
+ * Tetrahedralizes a grid using an external application and stores it in a passed tet mesh object.
+ * @param tetMesh The tet mesh to store the tetrahedralized data in.
+ * @param tetMeshingApp The external application that should be used for tetrahedralization.
+ * @param gridAabb The AABB of the grid in world space.
+ * @param xs The number of vertices in x direction.
+ * @param ys The number of vertices in x direction.
+ * @param zs The number of vertices in x direction.
+ * @param constColor The constant color at all vertices.
+ * @return Whether generating the mesh was successful.
+ */
+bool tetrahedralizeGrid(
+        TetMesh* tetMesh, TetMeshingApp tetMeshingApp,
+        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor);
+
+#endif //DIFFTETVR_TETMESHING_HPP

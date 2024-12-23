@@ -1,6 +1,7 @@
 This license applies to all project files not explicitly covered by a
 separate license (like Data/Fonts/DroidSans.ttf).
-This license does explicitly NOT cover used libraries.
+This license does explicitly NOT cover used libraries and external executables.
+For license terms of used libraries and external executables, please refer to the content of 'docs/'.
 
 NOTE: DiffTetVR is open source software published under the BSD 2-Clause license.
 By default it links statically with OpenVolumeMesh, which is published under the LGPL v3 license (see below).

@@ -36,6 +36,7 @@ set clean=false
 set build_dir=.build
 set destination_dir=Shipping
 set vcpkg_triplet="x64-windows"
+set build_with_tetgen_support=true
 
 :loop
 IF NOT "%1"=="" (
@@ -113,6 +114,7 @@ if not exist .\third_party\glslang\glslang goto init_submodules
 if not exist .\third_party\jsoncpp\src goto init_submodules
 if not exist .\third_party\OpenVolumeMesh\src goto init_submodules
 if not exist .\third_party\sgl\src goto init_submodules
+if not exist .\third_party\tinyxml2\cmake goto init_submodules
 goto after_init_submodules
 :init_submodules
 echo ------------------------
@@ -194,6 +196,16 @@ if not exist .\sgl\install (
     popd
 )
 
+set tetgen_version=v1.6.0
+if not exist ".\tetgen-%tetgen_version%-x86_64-windows-gnu" (
+    echo ------------------------
+    echo    downloading tetgen
+    echo ------------------------
+    curl.exe -L "https://github.com/chrismile/tetgen/releases/download/v1.6.0/tetgen-%tetgen_version%-x86_64-windows-gnu.zip" --output tetgen-%tetgen_version%-x86_64-windows-gnu.zip
+    mkdir "tetgen-%tetgen_version%-x86_64-windows-gnu"
+    tar -xvzf "tetgen-%tetgen_version%-x86_64-windows-gnu.zip" -C "tetgen-%tetgen_version%-x86_64-windows-gnu"
+    del "tetgen-%tetgen_version%-x86_64-windows-gnu.zip"
+)
 
 popd
 
@@ -226,6 +238,7 @@ if %use_vcpkg% == true (
 echo ------------------------
 echo    copying new files
 echo ------------------------
+robocopy third_party\tetgen-%tetgen_version%-x86_64-windows-gnu\bin %destination_dir% *.exe >NUL
 if %debug% == true (
     if not exist %destination_dir%\*.pdb (
         del %destination_dir%\*.dll

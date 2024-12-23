@@ -53,6 +53,7 @@
 #include "Loaders/BinTetLoader.hpp"
 #include "Loaders/TxtTetLoader.hpp"
 #include "Loaders/MshLoader.hpp"
+#include "Loaders/MeshLoader.hpp"
 #include "Loaders/LoadersUtil.hpp"
 #include "CSP/CSPSolver.hpp"
 #include "CSP/FlipSolver.hpp"
@@ -110,6 +111,7 @@ TetMesh::TetMesh(sgl::vk::Device* device, sgl::TransferFunctionWindow* transferF
             registerTetMeshLoader<BinTetLoader>(),
             registerTetMeshLoader<TxtTetLoader>(),
             registerTetMeshLoader<MshLoader>(),
+            registerTetMeshLoader<MeshLoader>(),
 #ifdef USE_OPEN_VOLUME_MESH
             registerTetMeshLoader<OvmLoader>(),
 #endif
@@ -521,6 +523,11 @@ void TetMesh::loadTestData(TestCase testCase) {
     }
 }
 
+void TetMesh::setNextLoaderUseConstColor(const glm::vec4& constColor) {
+    nextLoaderUseConstColor = true;
+    constColorNext = constColor;
+}
+
 bool TetMesh::loadFromFile(const std::string& filePath) {
     std::string fileExtension = sgl::FileUtils::get()->getFileExtensionLower(filePath);
     TetMeshLoader* tetMeshLoader = createTetMeshLoaderByExtension(fileExtension);
@@ -552,6 +559,10 @@ bool TetMesh::loadFromFile(const std::string& filePath) {
 #endif
         retVal = tetMeshLoader->loadFromFile(filePath, _cellIndices, _vertexPositions, _vertexColors);
         if (retVal) {
+            if (nextLoaderUseConstColor) {
+                _vertexColors.clear();
+                _vertexColors.resize(_vertexPositions.size(), constColorNext);
+            }
             if (!forceUseOvmRepresentation) {
                 useOvmRepresentation = false;
             }
@@ -560,6 +571,7 @@ bool TetMesh::loadFromFile(const std::string& filePath) {
 #ifdef USE_OPEN_VOLUME_MESH
     }
 #endif
+    nextLoaderUseConstColor = false;
     delete tetMeshLoader;
     return retVal;
 }
@@ -1252,6 +1264,12 @@ void TetMesh::setHexMeshConst(
 
     convertHexToTetIndices(hexIndices, cellIndices);
     setTetMeshDataInternal();
+}
+
+bool TetMesh::setTetrahedralizedGridConst(
+        const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
+        TetMeshingApp tetMeshingApp) {
+    return tetrahedralizeGrid(this, tetMeshingApp, aabb, xs, ys, zs, constColor);
 }
 
 void TetMesh::unlinkTets() {

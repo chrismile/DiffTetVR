@@ -316,7 +316,7 @@ void saveQuadMeshObj(
         return;
     }
 
-    // Output vertices and normals
+    // Output vertices
     for (size_t i = 0; i < vertexPositions.size(); i++) {
         const glm::vec3& vertex = vertexPositions[i];
         fileContent +=
@@ -336,5 +336,36 @@ void saveQuadMeshObj(
     }
 
     outfile << fileContent;
+    outfile.close();
+}
+
+void saveQuadMeshOff(
+        const std::string& filename, std::vector<uint32_t> quadIndices,
+        const std::vector<glm::vec3>& vertexPositions) {
+    std::ofstream outfile(filename);
+    if (!outfile.is_open()) {
+        sgl::Logfile::get()->writeError(
+                "Error in saveQuadMeshObj: File \"" + filename + "\" could not be opened for writing.");
+        return;
+    }
+
+    outfile << "OFF\n";
+    outfile << vertexPositions.size() << " " << (quadIndices.size() / 4) << " " << 0 << "\n";
+
+    // Output vertices
+    for (size_t i = 0; i < vertexPositions.size(); i++) {
+        const glm::vec3& vertex = vertexPositions[i];
+        outfile << vertex.x << " " << vertex.y << " " << vertex.z << "\n";
+    }
+
+    // Output triangle faces
+    for (size_t i = 0; i < quadIndices.size(); i += 4) {
+        uint32_t i1 = quadIndices[i] + 1;
+        uint32_t i2 = quadIndices[i+1] + 1;
+        uint32_t i3 = quadIndices[i+2] + 1;
+        uint32_t i4 = quadIndices[i+3] + 1;
+        outfile << 4 << " " << i1 << " " << i2 << " " << i3 << " " << i4 << "\n";
+    }
+
     outfile.close();
 }

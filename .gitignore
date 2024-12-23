@@ -78,7 +78,7 @@ dependencies/*
 vcpkg_installed/*
 third_party/vcpkg
 third_party/fTetWild*
-third_party/TetGen*
+third_party/tetgen*
 
 # macOS
 .DS_Store

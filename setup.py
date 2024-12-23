@@ -26,9 +26,12 @@
 
 import sys
 import os
+import platform
 import glob
 import shutil
 import subprocess
+import urllib
+import zipfile
 from pathlib import Path
 from urllib.request import urlopen
 import setuptools
@@ -92,6 +95,18 @@ def find_all_sources_in_dir(root_dir):
             if filename.endswith('.cpp') or filename.endswith('.cc') or filename.endswith('.c'):
                 source_files.append(root + "/" + filename)
     return source_files
+
+
+def get_cmake_exec():
+    cmake_exec = 'cmake'
+    if IS_WINDOWS:
+        # CMake on Windows is usually not in the PATH. If it is not found, try to use the default location.
+        cmake_exec = shutil.which('cmake')
+        cmake_default_path = 'C:\\Program Files\\CMake\\bin\\cmake.exe'
+        if cmake_exec is None and os.path.isfile(cmake_default_path):
+            cmake_exec = cmake_default_path
+    return cmake_exec
+
 
 
 #sgl_sources = [ 'third_party/sgl/src/Graphics/Vulkan/Utils/Device.cpp' ]
@@ -334,14 +349,9 @@ extra_objects.append(radix_sort_lib_path)
 if not os.path.isfile(radix_sort_lib_path):
     volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk'
     volk_header_path = os.path.abspath(volk_header_path)
-    cmake_exec = 'cmake'
     if IS_WINDOWS:
         volk_header_path = volk_header_path.replace('\\', '/')
-        # CMake on Windows is usually not in the PATH. If it is not found, try to use the default location.
-        cmake_exec = shutil.which('cmake')
-        cmake_default_path = 'C:\\Program Files\\CMake\\bin\\cmake.exe'
-        if cmake_exec is None and os.path.isfile(cmake_default_path):
-            cmake_exec = cmake_default_path
+    cmake_exec = get_cmake_exec()
     subprocess.run([
         cmake_exec, '-S', 'third_party/fuchsia_radix_sort', '-B', f'{tmp_path}/build',
         # '-DCMAKE_BUILD_TYPE=DEBUG',  # For debugging purposes.
@@ -350,6 +360,116 @@ if not os.path.isfile(radix_sort_lib_path):
         f'-DVOLK_INCLUDE_DIR={volk_header_path}',
         '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'], check=True)
     subprocess.run([cmake_exec, '--build', f'{tmp_path}/build', '--config', 'Release'], check=True)
+
+
+# fTetWild, according to https://github.com/wildmeshing/fTetWild, relies on GMP or MPIR.
+# MPIR is a fork of GMP with better Windows support. They recommend installation via:
+# - homebrew on macOS: brew install gmp
+# - Package manager on Linux: sudo apt-get install gmp
+# - Conda on Windows: conda install -c conda-forge mpir
+# As we currently have no way to check whether CMake will be able to find gmp, we will try to find it manually.
+# Example location on Ubuntu 22.04: /lib/x86_64-linux-gnu/libgmp.so.10
+def get_gmp_lib_found():
+    if IS_WINDOWS:
+        gmp_lib_name = 'mpir.dll'
+    else:
+        gmp_lib_name = 'libgmp.so'
+    if not IS_WINDOWS:
+        # We will use ldconfig to check if libgmp.so is available globally.
+        # Attention: According to https://unix.stackexchange.com/questions/282199/find-out-if-library-is-in-path,
+        # LD_LIBRARY_PATH is NOT used by ldconfig by default. Thus, we only search for globally installed libraries.
+        ldconfig_proc = subprocess.Popen(['ldconfig', '-N', '-v'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (ldconfig_output, ldconfig_err) = ldconfig_proc.communicate()
+        ldconfig_proc_status = ldconfig_proc.wait()
+        if ldconfig_proc_status != 0:
+            ldconfig_stdout_string = ldconfig_output.decode('utf-8')
+            if gmp_lib_name in ldconfig_stdout_string:
+                return True, gmp_lib_name, None
+
+    # On Windows, we will assume mpir.dll has been installed using conda via MPIR.
+    for search_path in sys.path:
+        if not os.path.isdir(search_path):
+            continue
+        for walked_root, _, walked_files in os.walk(search_path):
+            for walked_file in walked_files:
+                if gmp_lib_name in walked_file:
+                    return True, gmp_lib_name, os.path.join(walked_root, walked_file)
+
+    return False, gmp_lib_name, None
+
+
+support_ftetwild, gmp_lib_name, gmp_path = get_gmp_lib_found()
+if support_ftetwild:
+    if os.path.isdir('third_party/fTetWild'):
+        # We delete the directory if gmp_lib_name could not be found in it.
+        ftetwild_files = os.listdir('third_party/fTetWild')
+        found_gmp_lib = False
+        for ftetwild_file in ftetwild_files:
+            if gmp_lib_name in ftetwild_file:
+                found_gmp_lib = True
+                break
+        if not found_gmp_lib:
+            shutil.rmtree('third_party/fTetWild')
+    if not os.path.isdir('third_party/fTetWild'):
+        if os.path.isdir('third_party/fTetWild-src'):
+            shutil.rmtree('third_party/fTetWild-src')
+        subprocess.run(['git', 'clone', 'https://github.com/wildmeshing/fTetWild.git', 'third_party/fTetWild-src'])
+        Path('third_party/fTetWild-src/build').mkdir(exist_ok=True)
+        ftetwild_build_options = []
+        if not IS_WINDOWS:
+            ftetwild_build_options.append('-DCMAKE_BUILD_TYPE=Release')
+        cmake_exec = get_cmake_exec()
+        subprocess.run(
+            [cmake_exec, '-S', 'third_party/fTetWild-src', '-B', 'third_party/fTetWild-src/build']
+            + ftetwild_build_options, check=True)
+        subprocess.run([cmake_exec, '--build', f'third_party/fTetWild-src/build', '--config', 'Release'], check=True)
+        Path('third_party/fTetWild').mkdir(exist_ok=True)
+        if IS_WINDOWS:
+            shutil.copy(
+                'third_party/fTetWild-src/build/FloatTetwild_bin.exe',
+                'third_party/fTetWild/FloatTetwild_bin.exe')
+        else:
+            shutil.copy(
+                'third_party/fTetWild-src/build/FloatTetwild_bin',
+                'third_party/fTetWild/FloatTetwild_bin')
+        if gmp_path is not None:
+            shutil.copy(gmp_path, 'third_party/fTetWild/')
+        elif not IS_WINDOWS:
+            ldd_proc = subprocess.Popen(
+                ['ldd', 'third_party/fTetWild-src/build/FloatTetwild_bin'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (ldd_output, ldd_err) = ldd_proc.communicate()
+            ldd_proc_status = ldd_proc.wait()
+            if ldd_proc_status != 0:
+                ldd_stdout_string = ldd_output.decode('utf-8')
+                for ldd_line in ldd_stdout_string.splitlines():
+                    if gmp_lib_name in ldd_line:
+                        ldd_line_split = ldd_line.split()
+                        gmp_path_local = ldd_line_split[2]
+                        gmp_lib_name_local = ldd_line_split[0]
+                        shutil.copy(gmp_path_local, f'third_party/fTetWild/{gmp_lib_name_local}')
+                        break
+
+
+support_tetgen = True
+if support_tetgen:
+    tetgen_version = '1.6.0'
+    if IS_WINDOWS:
+        target = 'x86_64-windows-gnu'
+    else:
+        if platform.machine() == 'x86_64' or platform.machine() == 'AMD64':
+            os_arch = 'x86_64'
+        else:
+            os_arch = 'aarch64'
+        target = f'{os_arch}-linux'
+    tetgen_dir = f'tetgen-v{tetgen_version}-{target}'
+    tetgen_url = f'https://github.com/chrismile/tetgen/releases/download/v{tetgen_version}/{tetgen_dir}.zip'
+    if not os.path.isdir(f'third_party/{tetgen_dir}'):
+        urllib.request.urlretrieve(tetgen_url, f'third_party/{tetgen_dir}.zip')
+        with zipfile.ZipFile(f'third_party/{tetgen_dir}.zip', 'r') as zip_ref:
+            zip_ref.extractall(f'third_party/{tetgen_dir}')
+        if not IS_WINDOWS:
+            subprocess.run(['chmod', '+x', f'third_party/{tetgen_dir}/bin/tetgen'], check=True)
 
 
 data_files_all.append(('.', data_files))
@@ -395,6 +515,35 @@ if uses_pip:
     shutil.copytree('docs', 'difftetvr/docs')
     shutil.copytree('Data/Shaders', 'difftetvr/Data/Shaders')
     shutil.copytree('Data/TransferFunctions', 'difftetvr/Data/TransferFunctions')
+    pkg_data = []
+    if IS_WINDOWS:
+        if support_ftetwild or support_tetgen:
+            pkg_data.append('**/*.exe')
+        if support_ftetwild:
+            shutil.copy('third_party/fTetWild/FloatTetwild_bin.exe', 'difftetvr/FloatTetwild_bin.exe')
+        if support_tetgen:
+            shutil.copy(f'third_party/{tetgen_dir}/bin/tetgen.exe', 'difftetvr/tetgen.exe')
+    else:
+        if support_ftetwild:
+            pkg_data.append('**/FloatTetwild_bin')
+            shutil.copy('third_party/fTetWild/FloatTetwild_bin', 'difftetvr/FloatTetwild_bin')
+            patchelf_exec = shutil.which('patchelf')
+            if patchelf_exec is not None:
+                subprocess.run([patchelf_exec, '--set-rpath', '\'$ORIGIN\'', 'difftetvr/FloatTetwild_bin'], check=True)
+        if support_tetgen:
+            pkg_data.append('**/tetgen')
+            shutil.copy(f'third_party/{tetgen_dir}/bin/tetgen', 'difftetvr/tetgen')
+    if support_ftetwild:
+        files_in_ftetwild_dir = os.listdir('third_party/fTetWild')
+        for file_in_ftetwild_dir in files_in_ftetwild_dir:
+            if gmp_lib_name in file_in_ftetwild_dir:
+                if IS_WINDOWS:
+                    pkg_data.append('**/*.dll')
+                else:
+                    pkg_data.append('**/*.so')
+                gmp_lib_name_local = file_in_ftetwild_dir
+                shutil.copy(f'third_party/fTetWild/{gmp_lib_name_local}', f'difftetvr/{gmp_lib_name_local}')
+                break
     ext_modules = [
         TorchExtension(
             'difftetvr.difftetvr',
@@ -428,7 +577,7 @@ if uses_pip:
         author='Christoph Neuhauser',
         ext_modules=ext_modules,
         packages=find_packages(include=['difftetvr', 'difftetvr.*']),
-        package_data={'difftetvr': ['**/*.py', '**/*.pyi', '**/*.md', '**/*.txt', '**/*.xml', '**/*.glsl']},
+        package_data={'difftetvr': ['**/*.py', '**/*.pyi', '**/*.md', '**/*.txt', '**/*.xml', '**/*.glsl'] + pkg_data},
         #include_package_data=True,
         cmdclass={
             'build_ext': BuildExtension,

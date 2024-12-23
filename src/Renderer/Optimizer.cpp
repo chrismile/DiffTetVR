@@ -248,7 +248,12 @@ void TetMeshOptimizer::renderGuiDialog() {
             ImGui::SliderFloat("#Splits Ratio", &settings.numSplitsRatio, 0.0f, 1.0f);
             ImGui::Checkbox("Use Init. Grid", &settings.useConstantInitGrid);
             if (settings.useConstantInitGrid) {
-                ImGui::SliderInt3("Start Grid X", (int*)&settings.initGridResolution.x, 1, 128);
+                ImGui::Combo(
+                        "Init Grid Type", (int*)&settings.initGridType,
+                        INIT_GRID_TYPE_NAMES, IM_ARRAYSIZE(INIT_GRID_TYPE_NAMES));
+                if (settings.initGridType == InitGridType::DECOMPOSED_HEX_MESH) {
+                    ImGui::SliderInt3("Start Grid X", (int*)&settings.initGridResolution.x, 1, 128);
+                }
             }
         }
 
@@ -462,10 +467,22 @@ void TetMeshOptimizer::startRequest() {
     bool dataLoadedOpt;
     if (settings.useConstantInitGrid) {
         dataLoadedOpt = true;
-        tetMeshOpt->setHexMeshConst(
-                tetMeshGT->getBoundingBox(), settings.initGridResolution.x,
-                settings.initGridResolution.y, settings.initGridResolution.z,
-                glm::vec4(0.5f, 0.5f, 0.5f, 0.1f));
+        if (settings.initGridType == InitGridType::DECOMPOSED_HEX_MESH) {
+            tetMeshOpt->setHexMeshConst(
+                    tetMeshGT->getBoundingBox(), settings.initGridResolution.x,
+                    settings.initGridResolution.y, settings.initGridResolution.z,
+                    glm::vec4(0.5f, 0.5f, 0.5f, 0.1f));
+        } else if (settings.initGridType == InitGridType::MESHING_FTETWILD) {
+            dataLoadedOpt = tetMeshOpt->setTetrahedralizedGridConst(
+                    tetMeshGT->getBoundingBox(), settings.initGridResolution.x,
+                    settings.initGridResolution.y, settings.initGridResolution.z,
+                    glm::vec4(0.5f, 0.5f, 0.5f, 0.1f), TetMeshingApp::FTETWILD);
+        } else { // settings.initGridType == InitGridType::TETGEN
+            dataLoadedOpt = tetMeshOpt->setTetrahedralizedGridConst(
+                    tetMeshGT->getBoundingBox(), settings.initGridResolution.x,
+                    settings.initGridResolution.y, settings.initGridResolution.z,
+                    glm::vec4(0.5f, 0.5f, 0.5f, 0.1f), TetMeshingApp::TETGEN);
+        }
     } else {
         dataLoadedOpt = tetMeshOpt->loadFromFile(settings.dataSetFileNameOpt);
     }

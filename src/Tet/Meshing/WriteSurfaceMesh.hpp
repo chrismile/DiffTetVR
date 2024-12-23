@@ -64,12 +64,20 @@ void saveMeshObj(
         const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec3>& vertexNormals);
 
 /*
- * Saves the triangle mesh in the .obj format.
+ * Saves the quad mesh in the .obj format.
  */
 void saveQuadMeshObj(
         const std::string& filename, std::vector<uint32_t> quadIndices,
         const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec3>& vertexNormals);
 void saveQuadMeshObj(
+        const std::string& filename, std::vector<uint32_t> quadIndices,
+        const std::vector<glm::vec3>& vertexPositions);
+
+/*
+ * Saves the quad mesh in the .off format.
+ * https://segeval.cs.princeton.edu/public/off_format.html
+ */
+void saveQuadMeshOff(
         const std::string& filename, std::vector<uint32_t> quadIndices,
         const std::vector<glm::vec3>& vertexPositions);
 

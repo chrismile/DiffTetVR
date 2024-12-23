@@ -69,6 +69,13 @@ struct TetRegularizerSettings {
     float beta = 100.0f;
 };
 
+enum class InitGridType {
+    DECOMPOSED_HEX_MESH, MESHING_FTETWILD, MESHING_TETGEN
+};
+const char* const INIT_GRID_TYPE_NAMES[] = {
+        "Decomposed Hex Mesh", "Meshing (fTetWild)", "Meshing (TetGen)"
+};
+
 struct OptimizationSettings {
     OptimizerType optimizerType = OptimizerType::ADAM;
     LossType lossType = LossType::L2;
@@ -89,6 +96,7 @@ struct OptimizationSettings {
     // Coarse to fine.
     bool useCoarseToFine = false;
     bool useConstantInitGrid = false;
+    InitGridType initGridType = InitGridType::DECOMPOSED_HEX_MESH;
     glm::uvec3 initGridResolution{16,16,16};
     uint32_t maxNumTets = 1320000;
     float numSplitsRatio = 0.1f;

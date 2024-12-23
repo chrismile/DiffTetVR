@@ -58,6 +58,11 @@ link_dynamic=false
 use_custom_vcpkg_triplet=false
 custom_glslang=false
 build_with_ftetwild_support=true
+build_with_tetgen_support=true
+if [ $use_macos = true ]; then
+    build_with_ftetwild_support=false
+    build_with_tetgen_support=false
+fi
 
 # Check if a conda environment is already active.
 if $use_conda; then
@@ -535,8 +540,9 @@ if [ $use_macos = false ] && ! command -v pkg-config &> /dev/null; then
 fi
 
 if [ ! -d "third_party/fuchsia_radix_sort/include" ] || [ ! -d "third_party/glm/glm" ] \
-        [ ! -d "third_party/glslang/glslang" ] || [ ! -d "third_party/jsoncpp/src" ] \
-        [ ! -d "third_party/OpenVolumeMesh/src" ] || [ ! -d "third_party/sgl/src" ]; then
+        || [ ! -d "third_party/glslang/glslang" ] || [ ! -d "third_party/jsoncpp/src" ] \
+        || [ ! -d "third_party/OpenVolumeMesh/src" ] || [ ! -d "third_party/sgl/src" ] \
+        || [ ! -d "third_party/tinyxml2/cmake" ]; then
     echo "------------------------"
     echo "initializing submodules "
     echo "------------------------"
@@ -854,7 +860,7 @@ if $build_with_ftetwild_support; then
         git clone https://github.com/wildmeshing/fTetWild.git fTetWild-src
         mkdir -p fTetWild-src/build
         pushd fTetWild-src/build >/dev/null
-        cmake .. ${params_gen[@]+"${params_gen[@]}"} -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${projectpath}/third_party/fTetWild"
+        cmake .. ${params_gen[@]+"${params_gen[@]}"} -DCMAKE_BUILD_TYPE=Release
         make -j $(nproc)
         popd >/dev/null
         mkdir -p fTetWild
@@ -864,7 +870,34 @@ if $build_with_ftetwild_support; then
             cp fTetWild-src/build/FloatTetwild_bin fTetWild/FloatTetwild_bin
         fi
     fi
-    params+=(-DUSE_FTET_WILD=ON)
+    #params+=(-DUSE_FTETWILD=ON)
+fi
+
+if [ $use_macos = true ]; then
+    os_name="macos"
+elif [ $use_msys = true ]; then
+    os_name="windows-gnu"
+else
+    os_name="linux"
+fi
+os_arch_pkg=${os_arch}
+if [ "$os_arch" = "arm64" ]; then
+    os_arch_pkg="aarch64"
+fi
+tetgen_version="1.6.0"
+tetgen_dir_name="tetgen-v${tetgen_version}-${os_arch_pkg}-${os_name}"
+if $build_with_tetgen_support; then
+    if [ ! -d "./${tetgen_dir_name}" ]; then
+        echo "------------------------"
+        echo "   downloading tetgen   "
+        echo "------------------------"
+        rm -rf ./tetgen*
+        wget "https://github.com/chrismile/tetgen/releases/download/v${tetgen_version}/${tetgen_dir_name}.zip"
+        unzip "${tetgen_dir_name}.zip" -d "${tetgen_dir_name}"
+        chmod +x "${tetgen_dir_name}/bin/tetgen"
+        rm "${tetgen_dir_name}.zip"
+    fi
+    #params+=(-DUSE_TETGEN=ON)
 fi
 
 popd >/dev/null # back to project root
@@ -996,6 +1029,10 @@ if $use_msys; then
         #ldd_output="$ldd_output $ftetwild_bin"
         ldd_output="$ldd_output $(ntldd -R $ftetwild_bin)"
     fi
+    if $build_with_tetgen_support; then
+        tetgen_bin="${projectpath}/third_party/${tetgen_dir_name}/bin/tetgen.exe"
+        cp "$tetgen_bin" "$destination_dir/bin"
+    fi
     for library_abs in $ldd_output
     do
         if [[ $library_abs == "not found"* ]] || [[ $library_abs == "ext-ms-win"* ]] || [[ $library_abs == "=>" ]] \
@@ -1121,6 +1158,10 @@ else
         #ldd_output="$ldd_output $ftetwild_bin"
         ldd_output="$ldd_output $(ldd $ftetwild_bin)"
     fi
+    if $build_with_tetgen_support; then
+        tetgen_bin="${projectpath}/third_party/${tetgen_dir_name}/bin/tetgen"
+        rsync -a "$tetgen_bin" "$destination_dir/bin"
+    fi
     library_blacklist=(
         "libOpenGL" "libGLdispatch" "libGL.so" "libGLX.so"
         "libwayland" "libffi." "libX" "libxcb" "libxkbcommon"
@@ -1168,6 +1209,7 @@ if [ ! -d "$destination_dir/LICENSE" ]; then
     mkdir -p "$destination_dir/LICENSE"
     cp -r "docs/license-libraries/." "$destination_dir/LICENSE/"
     cp -r "LICENSE" "$destination_dir/LICENSE/LICENSE-difftetvr.txt"
+    cp -r "docs/license-executables/." "$destination_dir/LICENSE/"
 fi
 if [ ! -d "$destination_dir/docs" ]; then
     cp -r "docs" "$destination_dir"
