@@ -58,6 +58,32 @@ def replace_tensor_in_optimizer(optimizer, tensor, name):
             optimizer.state[group['params'][0]] = stored_state
 
 
+def copy_and_freeze_optimizer_var_state(optimizer, name):
+    for group in optimizer.param_groups:
+        if group['name'] == name:
+            lr_copy = group['lr']
+            group['lr'] = 0.0
+            stored_state = optimizer.state.get(group['params'][0], None)
+            state = stored_state.copy()
+            if 'exp_avg' in stored_state:
+                state['exp_avg'] = stored_state['exp_avg'].detach().clone()
+            if 'exp_avg_sq' in stored_state:
+                state['exp_avg_sq'] = stored_state['exp_avg_sq'].detach().clone()
+            return lr_copy, state
+    return None, None
+
+
+def restore_optimizer_var_state(optimizer, name, lr, state):
+    for group in optimizer.param_groups:
+        if group['name'] == name:
+            group['lr'] = lr
+            stored_state = optimizer.state.get(group['params'][0], None)
+            if 'exp_avg' in stored_state:
+                stored_state['exp_avg'] = state['exp_avg']
+            if 'exp_avg_sq' in stored_state:
+                stored_state['exp_avg_sq'] = state['exp_avg_sq']
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog='difftetvr/train.py',
@@ -233,15 +259,15 @@ def main():
             args.split_grad_type == d.SplitGradientType.ABS_POSITION or \
             args.split_grad_type == d.SplitGradientType.ABS_COLOR
         while True:
-            # Train colors.
+            # Train colors (freeze position state and set learning rate to zero).
             print('Optimizing colors...')
-            # TODO: Remove position
+            position_lr, position_state = copy_and_freeze_optimizer_var_state(optimizer, 'vertex_positions')
             for image_gt, view_matrix_array in data_loader:
                 training_step(view_matrix_array)
 
-            # Train positions + colors.
-            # TODO: Add position
+            # Train positions + colors (set old position state).
             print('Optimizing positions + colors...')
+            restore_optimizer_var_state(optimizer, 'vertex_positions', position_lr, position_state)
             for image_gt, view_matrix_array in data_loader:
                 training_step(view_matrix_array)
 

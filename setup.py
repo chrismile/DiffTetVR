@@ -164,6 +164,7 @@ source_files += [
     'third_party/sgl/src/Utils/Regex/TransformString.cpp',
     'third_party/sgl/src/Utils/Parallel/Histogram.cpp',
     'third_party/sgl/src/Utils/Parallel/Reduction.cpp',
+    'third_party/sgl/src/Utils/Mesh/IndexMesh.cpp',
     'third_party/sgl/src/Graphics/Color.cpp',
     'third_party/sgl/src/Graphics/Scene/Camera.cpp',
     'third_party/sgl/src/Graphics/Scene/CameraHelper.cpp',
