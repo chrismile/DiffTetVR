@@ -37,7 +37,7 @@ jobs:
           python-version: 3.12
 
       - name: Build
-        shell: bash
+        shell: bash -el {0}
         run: |
           export CONDA_ALWAYS_YES="true"
           conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia

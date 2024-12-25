@@ -43,7 +43,7 @@ std::string getLibraryPath(); // Defined in Module.cpp.
 bool runTetrahedralizerApp(
         const std::string& appName, const std::string& exeName, const std::vector<std::string>& args) {
 #ifdef BUILD_PYTHON_MODULE
-    const std::string appPath = getAppPath() + "/" + exeName;
+    const std::string appPath = getLibraryPath() + "/" + exeName;
 #else
     std::string appPath = sgl::FileUtils::get()->getExecutableDirectory() + exeName;
     if (!sgl::FileUtils::get()->exists(appPath)) {
@@ -81,95 +81,10 @@ bool runTetrahedralizerApp(
     return true;
 }
 
-bool tetrahedralizeGridFTetWild(
-        TetMesh* tetMesh,
-        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-        const std::string& tmpDirectory,
-        const std::vector<uint32_t>& quadIndices, const std::vector<glm::vec3>& vertexPositions) {
-    std::string surfaceMeshFile = sgl::FileUtils::get()->joinPath(tmpDirectory, "tmp.obj");
-    std::string tetMeshFile = sgl::FileUtils::get()->joinPath(tmpDirectory, "tmp.msh");
-
-    // Write the surface mesh to a temporary file.
-    saveQuadMeshObj(surfaceMeshFile, quadIndices, vertexPositions);
-    surfaceMeshFile = sgl::FileUtils::get()->getPathAbsolute(surfaceMeshFile);
-    tetMeshFile = sgl::FileUtils::get()->getPathAbsolute(tetMeshFile);
-
-    // Now, run the fTetWild executable.
-#if defined(_WIN32)
-    const std::string exeName = "FloatTetwild_bin.exe";
-#else
-    const std::string exeName = "FloatTetwild_bin";
-#endif
-    std::vector<std::string> args = {
-            exeName, "-i", surfaceMeshFile, "-o", tetMeshFile
-    };
-    if (!runTetrahedralizerApp("fTetWild", exeName, args)) {
-        return false;
-    }
-
-    // Load the generated tet mesh from disk.
-    tetMesh->setNextLoaderUseConstColor(constColor);
-    bool loadingSucceeded = tetMesh->loadFromFile(tetMeshFile);
-
-    return loadingSucceeded;
-}
-
-bool tetrahedralizeGridTetGen(
-        TetMesh* tetMesh,
-        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-        const std::string& tmpDirectory,
-        const std::vector<uint32_t>& quadIndices, const std::vector<glm::vec3>& vertexPositions) {
-    std::string surfaceMeshFile = sgl::FileUtils::get()->joinPath(tmpDirectory, "tmp.off");
-    std::string tetMeshFile = sgl::FileUtils::get()->joinPath(tmpDirectory, "tmp.1.mesh");
-
-    // Write the surface mesh to a temporary file.
-    saveQuadMeshOff(surfaceMeshFile, quadIndices, vertexPositions);
-    surfaceMeshFile = sgl::FileUtils::get()->getPathAbsolute(surfaceMeshFile);
-    tetMeshFile = sgl::FileUtils::get()->getPathAbsolute(tetMeshFile);
-
-    // Settings.
-    bool useSteinerPoints = true; // to remove badly-shaped tetrahedra
-    bool useRadiusEdgeRatio = false;
-    float radiusEdgeRatio = 1.2f;
-
-    // Now, run the fTetWild executable.
-#if defined(_WIN32)
-    const std::string exeName = "tetgen.exe";
-#else
-    const std::string exeName = "tetgen";
-#endif
-    std::string commandLineSwitch = "-pg"; // g is used for outputting .mesh file.
-    if (useSteinerPoints) {
-        commandLineSwitch += "q";
-        if (useRadiusEdgeRatio) {
-            commandLineSwitch += std::to_string(radiusEdgeRatio);
-        }
-    }
-    std::vector<std::string> args = {
-            // TODO
-            exeName, commandLineSwitch, surfaceMeshFile
-    };
-    if (!runTetrahedralizerApp("TetGen", exeName, args)) {
-        return false;
-    }
-
-    // Load the generated tet mesh from disk.
-    tetMesh->setNextLoaderUseConstColor(constColor);
-    bool loadingSucceeded = tetMesh->loadFromFile(tetMeshFile);
-
-    return loadingSucceeded;
-}
-
-bool tetrahedralizeGrid(
-        TetMesh* tetMesh, TetMeshingApp tetMeshingApp,
-        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor) {
-    if (xs < 1 || ys < 1 || zs < 1) {
-        return false;
-    }
-
+void createGridSurfaceMesh(
+        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs,
+        std::vector<uint32_t>& quadIndices, std::vector<glm::vec3>& vertexPositions) {
     // Create the surface mesh.
-    std::vector<uint32_t> quadIndices;
-    std::vector<glm::vec3> vertexPositions;
     std::vector<std::vector<uint32_t>> faceVertexIndices(6); // 0,1: xy planes, 2,3: xz planes, 4,5: yz planes
     faceVertexIndices.at(0).reserve(xs * ys);
     faceVertexIndices.at(1).reserve(xs * ys);
@@ -254,17 +169,63 @@ bool tetrahedralizeGrid(
             }
         }
     }
+}
+
+bool tetrahedralizeGridFTetWild(
+        TetMesh* tetMesh,
+        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
+        const FTetWildParams& params) {
+    if (xs < 1 || ys < 1 || zs < 1) {
+        return false;
+    }
+    std::vector<uint32_t> quadIndices;
+    std::vector<glm::vec3> vertexPositions;
+    createGridSurfaceMesh(gridAabb, xs, ys, zs, quadIndices, vertexPositions);
 
     // Create a temporary directory.
     std::string tmpDirectory = sgl::FileUtils::get()->joinPath(sgl::AppSettings::get()->getDataDirectory(), "tmp");
     sgl::FileUtils::get()->ensureDirectoryExists(tmpDirectory);
 
-    if (tetMeshingApp == TetMeshingApp::FTETWILD) {
-        tetrahedralizeGridFTetWild(
-                tetMesh, gridAabb, xs, ys, zs, constColor, tmpDirectory, quadIndices, vertexPositions);
-    } else {
-        tetrahedralizeGridTetGen(
-                tetMesh, gridAabb, xs, ys, zs, constColor, tmpDirectory, quadIndices, vertexPositions);
+    std::string surfaceMeshFile = sgl::FileUtils::get()->joinPath(tmpDirectory, "tmp.obj");
+    std::string tetMeshFile = sgl::FileUtils::get()->joinPath(tmpDirectory, "tmp.msh");
+
+    // Write the surface mesh to a temporary file.
+    saveQuadMeshObj(surfaceMeshFile, quadIndices, vertexPositions);
+    surfaceMeshFile = sgl::FileUtils::get()->getPathAbsolute(surfaceMeshFile);
+    tetMeshFile = sgl::FileUtils::get()->getPathAbsolute(tetMeshFile);
+
+    // Now, run the fTetWild executable.
+#if defined(_WIN32)
+    const std::string exeName = "FloatTetwild_bin.exe";
+#else
+    const std::string exeName = "FloatTetwild_bin";
+#endif
+    std::vector<std::string> args = {
+            exeName, "-i", surfaceMeshFile, "-o", tetMeshFile
+    };
+    if (params.relativeIdealEdgeLength != 0.05) {
+        args.emplace_back("-l");
+        args.emplace_back(std::to_string(params.relativeIdealEdgeLength));
+    }
+    if (params.epsilon != 1e-3) {
+        args.emplace_back("-e");
+        args.emplace_back(std::to_string(params.epsilon));
+    }
+    if (params.skipSimplify) {
+        args.emplace_back("--skip-simlify");
+    }
+    if (params.coarsen) {
+        args.emplace_back("--coarsen");
+    }
+    if (!runTetrahedralizerApp("fTetWild", exeName, args)) {
+        return false;
+    }
+
+    // Load the generated tet mesh from disk.
+    tetMesh->setNextLoaderUseConstColor(constColor);
+    bool loadingSucceeded = tetMesh->loadFromFile(tetMeshFile);
+    if (!loadingSucceeded) {
+        return false;
     }
 
     // Remove the temporary files.
@@ -274,8 +235,94 @@ bool tetrahedralizeGrid(
             sgl::FileUtils::get()->removeFile(filePath);
         }
     }
-    //sgl::FileUtils::get()->removeFile(surfaceMeshFile);
-    //sgl::FileUtils::get()->removeFile(tetMeshFile);
+
+    return true;
+}
+
+bool tetrahedralizeGridTetGen(
+        TetMesh* tetMesh,
+        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
+        const TetGenParams& params) {
+    if (xs < 1 || ys < 1 || zs < 1) {
+        return false;
+    }
+    std::vector<uint32_t> quadIndices;
+    std::vector<glm::vec3> vertexPositions;
+    createGridSurfaceMesh(gridAabb, xs, ys, zs, quadIndices, vertexPositions);
+
+    // Create a temporary directory.
+    std::string tmpDirectory = sgl::FileUtils::get()->joinPath(sgl::AppSettings::get()->getDataDirectory(), "tmp");
+    sgl::FileUtils::get()->ensureDirectoryExists(tmpDirectory);
+
+    std::string surfaceMeshFile = sgl::FileUtils::get()->joinPath(tmpDirectory, "tmp.off");
+    std::string tetMeshFile = sgl::FileUtils::get()->joinPath(tmpDirectory, "tmp.1.mesh");
+
+    // Write the surface mesh to a temporary file.
+    saveQuadMeshOff(surfaceMeshFile, quadIndices, vertexPositions);
+    surfaceMeshFile = sgl::FileUtils::get()->getPathAbsolute(surfaceMeshFile);
+    tetMeshFile = sgl::FileUtils::get()->getPathAbsolute(tetMeshFile);
+
+    // Now, run the fTetWild executable.
+#if defined(_WIN32)
+    const std::string exeName = "tetgen.exe";
+#else
+    const std::string exeName = "tetgen";
+#endif
+    std::string commandLineSwitch = "-pg"; // g is used for outputting .mesh file.
+    if (params.useSteinerPoints) {
+        commandLineSwitch += "q";
+        if (params.useRadiusEdgeRatioBound) {
+            commandLineSwitch += std::to_string(params.radiusEdgeRatioBound);
+        }
+        if (params.useMaximumVolumeConstraint) {
+            commandLineSwitch += "a";
+            commandLineSwitch += std::to_string(params.maximumTetrahedronVolume);
+        }
+    }
+    if (params.coarsen) {
+        commandLineSwitch += "R";
+    }
+    if (params.maximumDihedralAngle != 0.0f) {
+        commandLineSwitch += "-o/" + std::to_string(params.maximumDihedralAngle);
+    }
+    if (params.meshOptimizationLevel != 2
+            || !params.useEdgeAndFaceFlips
+            || !params.useVertexSmoothing
+            || !params.useVertexInsertionAndDeletion) {
+        int bitFlags = 0;
+        if (params.useEdgeAndFaceFlips) {
+            bitFlags |= 1;
+        }
+        if (params.useVertexSmoothing) {
+            bitFlags |= 2;
+        }
+        if (params.useVertexInsertionAndDeletion) {
+            bitFlags |= 4;
+        }
+        commandLineSwitch += "-O" + std::to_string(params.meshOptimizationLevel) + "/" + std::to_string(bitFlags);
+    }
+
+    std::vector<std::string> args = {
+            exeName, commandLineSwitch, surfaceMeshFile
+    };
+    if (!runTetrahedralizerApp("TetGen", exeName, args)) {
+        return false;
+    }
+
+    // Load the generated tet mesh from disk.
+    tetMesh->setNextLoaderUseConstColor(constColor);
+    bool loadingSucceeded = tetMesh->loadFromFile(tetMeshFile);
+    if (!loadingSucceeded) {
+        return false;
+    }
+
+    // Remove the temporary files.
+    auto tmpFilePaths = sgl::FileUtils::get()->getFilesInDirectoryVector(tmpDirectory);
+    for (const auto& filePath : tmpFilePaths) {
+        if (!sgl::FileUtils::get()->isDirectory(filePath)) {
+            sgl::FileUtils::get()->removeFile(filePath);
+        }
+    }
 
     return true;
 }

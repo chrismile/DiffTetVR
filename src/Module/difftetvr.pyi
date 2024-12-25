@@ -58,6 +58,33 @@ class AABB3:
         pass
 
 
+class FTetWildParams:
+    """ https://github.com/wildmeshing/fTetWild?tab=readme-ov-file#command-line-switches"""
+    relative_ideal_edge_length: float = 0.05  # -l
+    epsilon: float = 1e-3                     # -e
+    skip_simplify: bool = False               # --skip-simlify
+    coarsen: bool = False                     # --coarsen
+    def __init__(self) -> None:
+        pass
+
+class TetGenParams:
+    """ https://wias-berlin.de/software/tetgen/1.5/doc/manual/manual005.html """
+    use_steiner_points: bool = True              # -q; to remove badly-shaped tetrahedra
+    use_radius_edge_ratio_bound: bool = False
+    radius_edge_ratio_bound: float = 1.2         # radius-edge ratio bound
+    use_maximum_volume_constraint: bool = False  # -a
+    maximum_tetrahedron_volume: float = 1.0
+    coarsen: bool = False                        # -R
+    maximum_dihedral_angle: float = 165.0        # -o/
+    # -O; mesh optimization settings
+    mesh_optimization_level: int = 2             # Between 0 and 10.
+    use_edge_and_face_flips: bool = True
+    use_vertex_smoothing: bool = True
+    use_vertex_insertion_and_deletion: bool = True
+    def __init__(self) -> None:
+        pass
+
+
 class TestCase(enum.Enum):
     SINGLE_TETRAHEDRON = enum.auto() # (= 0)
 
@@ -66,10 +93,6 @@ class SplitGradientType(enum.Enum):
     COLOR = enum.auto()        # (= 1)
     ABS_POSITION = enum.auto() # (= 2)
     ABS_COLOR = enum.auto()    # (= 3)
-
-class TetMeshingApp(enum.Enum):
-    FTETWILD = enum.auto() # (= 0)
-    TETGEN = enum.auto()   # (= 1)
 
 class TetMesh:
     def __init__(self) -> None:
@@ -98,18 +121,29 @@ class TetMesh:
             zs: int,
             const_color: vec4
     ) -> None:
-        """ Initialize with tetrahedralized tet mesh with constant color. """
+        """ Initialize with tetrahedralized hex mesh with constant color. """
         pass
-    def set_tetrahedralized_grid_const(
+    def set_tetrahedralized_grid_ftetwild(
             self,
             aabb: AABB3,
             xs: int,
             ys: int,
             zs: int,
             const_color: vec4,
-            tet_meshing_app: TetMeshingApp = TetMeshingApp.FTETWILD
+            params: FTetWildParams
     ) -> bool:
-        """ Initialize with tetrahedralized boundary mesh with constant color using an external application. """
+        """ Initialize with constant color tet mesh tetrahedralized from a grid using fTetWild. """
+        pass
+    def set_tetrahedralized_grid_tetgen(
+            self,
+            aabb: AABB3,
+            xs: int,
+            ys: int,
+            zs: int,
+            const_color: vec4,
+            params: TetGenParams
+    ) -> bool:
+        """ Initialize with constant color tet mesh tetrahedralized from a grid using TetGen. """
         pass
 
     # Get mesh information.
@@ -244,15 +278,7 @@ class OptimizerSettings:
     beta1: float = 0.9
     beta2: float = 0.999
     epsilon: float = 1e-8
-    def __init__(
-            self,
-            learning_rate: float = 0.4,
-            lr_decay_rate: float = 0.999,
-            beta1: float = 0.9,
-            beta2: float = 0.999,
-            epsilon: float = 1e-8
-    ) -> None:
-        """Auto-generated default constructor with named params"""
+    def __init__(self) -> None:
         pass
 
 class TetRegularizerSettings:
@@ -260,9 +286,13 @@ class TetRegularizerSettings:
     lambda_: float = 0.1
     # Softplus parameter.
     beta: float = 100.0
-    def __init__(self, lambda_: float = 0.1, beta: float = 100.0) -> None:
-        """Auto-generated default constructor with named params"""
+    def __init__(self) -> None:
         pass
+
+class InitGridType(enum.Enum):
+    DECOMPOSED_HEX_MESH = enum.auto() # (= 0)
+    MESHING_FTETWILD = enum.auto()    # (= 1)
+    MESHING_TETGEN = enum.auto()      # (= 2)
 
 class OptimizationSettings:
     optimizer_type: OptimizerType = OptimizerType.ADAM
@@ -286,7 +316,10 @@ class OptimizationSettings:
     # Coarse to fine.
     use_coarse_to_fine: bool = False
     use_constant_init_grid: bool = False
+    init_grid_type: InitGridType = InitGridType.DECOMPOSED_HEX_MESH
     init_grid_resolution: uvec3 = uvec3(16, 16, 16)
+    ftetwild_params: FTetWildParams = FTetWildParams()
+    tetgen_params: TetGenParams = TetGenParams()
     max_num_tets: int = 1320000
     num_splits_ratio: float = 0.1
     split_gradient_type: SplitGradientType = SplitGradientType.ABS_COLOR
@@ -294,34 +327,7 @@ class OptimizationSettings:
     export_position_gradients: bool = False
     export_file_name_gradient_field: str
     is_binary_vtk: bool = True
-    def __init__(
-            self,
-            optimizer_type: OptimizerType = OptimizerType.ADAM,
-            loss_type: LossType = LossType.L2,
-            optimize_positions: bool = True,
-            optimize_colors: bool = True,
-            optimizer_settings_positions: OptimizerSettings = OptimizerSettings(),
-            optimizer_settings_colors: OptimizerSettings = OptimizerSettings(),
-            tet_regularizer_settings: TetRegularizerSettings = TetRegularizerSettings(),
-            max_num_epochs: int = 200,
-            fix_boundary: bool = False,
-            image_width: int = 512,
-            image_height: int = 512,
-            attenuation_coefficient: float = 100.0,
-            sample_random_view: bool = True,
-            data_set_file_name_gt: str = "",
-            data_set_file_name_opt: str = "",
-            use_coarse_to_fine: bool = False,
-            use_constant_init_grid: bool = False,
-            init_grid_resolution: uvec3 = uvec3(16, 16, 16),
-            max_num_tets: int = 1320000,
-            num_splits_ratio: float = 0.1,
-            split_gradient_type: SplitGradientType = SplitGradientType.ABS_COLOR,
-            export_position_gradients: bool = False,
-            export_file_name_gradient_field: str = "",
-            is_binary_vtk: bool = True
-    ) -> None:
-        """Auto-generated default constructor with named params"""
+    def __init__(self) -> None:
         pass
 
 

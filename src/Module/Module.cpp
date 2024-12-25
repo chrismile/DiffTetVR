@@ -442,6 +442,31 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("get_minimum", &sgl::AABB3::getMinimum)
             .def("get_maximum", &sgl::AABB3::getMaximum);
 
+    py::class_<FTetWildParams>(m, "FTetWildParams", "https://github.com/wildmeshing/fTetWild?tab=readme-ov-file#command-line-switches")
+            .def(py::init<>([]() {
+                return FTetWildParams{};
+            }))
+            .def_readwrite("relative_ideal_edge_length", &FTetWildParams::relativeIdealEdgeLength, "-l")
+            .def_readwrite("epsilon", &FTetWildParams::epsilon, "-e")
+            .def_readwrite("skip_simplify", &FTetWildParams::skipSimplify, "--skip-simlify")
+            .def_readwrite("coarsen", &FTetWildParams::coarsen, "--coarsen");
+
+    py::class_<TetGenParams>(m, "TetGenParams", "https://wias-berlin.de/software/tetgen/1.5/doc/manual/manual005.html")
+            .def(py::init<>([]() {
+                return TetGenParams{};
+            }))
+            .def_readwrite("use_steiner_points", &TetGenParams::useSteinerPoints, "-q; to remove badly-shaped tetrahedra")
+            .def_readwrite("use_radius_edge_ratio_bound", &TetGenParams::useRadiusEdgeRatioBound, "")
+            .def_readwrite("radius_edge_ratio_bound", &TetGenParams::radiusEdgeRatioBound, "radius-edge ratio bound")
+            .def_readwrite("use_maximum_volume_constraint", &TetGenParams::useMaximumVolumeConstraint, "-a")
+            .def_readwrite("maximum_tetrahedron_volume", &TetGenParams::maximumTetrahedronVolume, "")
+            .def_readwrite("coarsen", &TetGenParams::coarsen, "-R")
+            .def_readwrite("maximum_dihedral_angle", &TetGenParams::maximumDihedralAngle, "-o/")
+            .def_readwrite("mesh_optimization_level", &TetGenParams::meshOptimizationLevel, "Between 0 and 10.")
+            .def_readwrite("use_edge_and_face_flips", &TetGenParams::useEdgeAndFaceFlips, "")
+            .def_readwrite("use_vertex_smoothing", &TetGenParams::useVertexSmoothing, "")
+            .def_readwrite("use_vertex_insertion_and_deletion", &TetGenParams::useVertexInsertionAndDeletion, "");
+
     py::enum_<TestCase>(m, "TestCase", py::arithmetic(), "")
             .value("SINGLE_TETRAHEDRON", TestCase::SINGLE_TETRAHEDRON, "");
     py::enum_<SplitGradientType>(m, "SplitGradientType")
@@ -466,11 +491,15 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("set_force_use_ovm_representation", &TetMesh::setForceUseOvmRepresentation, "Coarse to fine strategy.")
             .def("set_hex_mesh_const", &TetMesh::setHexMeshConst,
                  py::arg("aabb"), py::arg("xs"), py::arg("ys"), py::arg("zs"), py::arg("const_color"),
-                 "Initialize with tetrahedralized tet mesh with constant color.")
-            .def("set_tetrahedralized_grid_const", &TetMesh::setTetrahedralizedGridConst,
+                 "Initialize with tetrahedralized hex mesh with constant color.")
+            .def("set_tetrahedralized_grid_ftetwild", &TetMesh::setTetrahedralizedGridFTetWild,
                  py::arg("aabb"), py::arg("xs"), py::arg("ys"), py::arg("zs"), py::arg("const_color"),
-                 py::arg("tet_meshing_app") = TetMeshingApp::FTETWILD,
-                 "Initialize with tetrahedralized tet mesh with constant color.")
+                 py::arg("params"),
+                 "Initialize with constant color tet mesh tetrahedralized from a grid using fTetWild.")
+            .def("set_tetrahedralized_grid_tetgen", &TetMesh::setTetrahedralizedGridTetGen,
+                 py::arg("aabb"), py::arg("xs"), py::arg("ys"), py::arg("zs"), py::arg("const_color"),
+                 py::arg("params"),
+                 "Initialize with constant color tet mesh tetrahedralized from a grid using TetGen.")
             .def("get_num_cells", &TetMesh::getNumCells)
             .def("get_num_vertices", &TetMesh::getNumVertices)
             .def("get_vertex_positions", &TetMesh::getVertexPositionTensor)
@@ -700,6 +729,10 @@ PYBIND11_MODULE(difftetvr, m) {
             .def(py::init<>())
             .def_readwrite("lambda", &TetRegularizerSettings::lambda)
             .def_readwrite("beta", &TetRegularizerSettings::beta);
+    py::enum_<InitGridType>(m, "InitGridType")
+            .value("DECOMPOSED_HEX_MESH", InitGridType::DECOMPOSED_HEX_MESH)
+            .value("MESHING_FTETWILD", InitGridType::MESHING_FTETWILD)
+            .value("MESHING_TETGEN", InitGridType::MESHING_TETGEN);
     py::class_<OptimizationSettings>(m, "OptimizationSettings")
             .def(py::init<>())
             .def_readwrite("optimizer_type", &OptimizationSettings::optimizerType)
@@ -719,7 +752,10 @@ PYBIND11_MODULE(difftetvr, m) {
             .def_readwrite("data_set_file_name_opt", &OptimizationSettings::dataSetFileNameOpt, "Selected file name.")
             .def_readwrite("use_coarse_to_fine", &OptimizationSettings::useCoarseToFine)
             .def_readwrite("use_constant_init_grid", &OptimizationSettings::useConstantInitGrid)
+            .def_readwrite("init_grid_type", &OptimizationSettings::initGridType)
             .def_readwrite("init_grid_resolution", &OptimizationSettings::initGridResolution)
+            .def_readwrite("ftetwild_params", &OptimizationSettings::fTetWildParams)
+            .def_readwrite("tetgen_params", &OptimizationSettings::tetGenParams)
             .def_readwrite("max_num_tets", &OptimizationSettings::maxNumTets)
             .def_readwrite("num_splits_ratio", &OptimizationSettings::numSplitsRatio)
             .def_readwrite("split_gradient_type", &OptimizationSettings::splitGradientType)

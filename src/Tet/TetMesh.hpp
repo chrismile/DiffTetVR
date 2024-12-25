@@ -110,9 +110,12 @@ public:
     /// Initialize with tetrahedralized hex mesh with constant color.
     void setHexMeshConst(const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor);
     /// Initialize with tetrahedralized boundary mesh with constant color using an external application.
-    bool setTetrahedralizedGridConst(
+    bool setTetrahedralizedGridFTetWild(
             const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-            TetMeshingApp tetMeshingApp);
+            const FTetWildParams& params);
+    bool setTetrahedralizedGridTetGen(
+            const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
+            const TetGenParams& params);
 
     [[nodiscard]] const std::vector<uint32_t>& getCellIndices() const { return cellIndices; }
     [[nodiscard]] const std::vector<glm::vec3>& getVertexPositions() const { return vertexPositions; }

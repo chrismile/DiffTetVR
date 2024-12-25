@@ -30,6 +30,7 @@
 #define DIFFTETVR_OPTIMIZERDEFINES_HPP
 
 #include <cstdint>
+#include "Tet/Meshing/TetMeshing.hpp"
 
 enum class OptimizerType {
     SGD, ADAM
@@ -98,6 +99,8 @@ struct OptimizationSettings {
     bool useConstantInitGrid = false;
     InitGridType initGridType = InitGridType::DECOMPOSED_HEX_MESH;
     glm::uvec3 initGridResolution{16,16,16};
+    FTetWildParams fTetWildParams{};
+    TetGenParams tetGenParams{};
     uint32_t maxNumTets = 1320000;
     float numSplitsRatio = 0.1f;
     SplitGradientType splitGradientType = SplitGradientType::COLOR;

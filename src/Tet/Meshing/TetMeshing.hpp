@@ -37,25 +37,69 @@ class TetMesh;
  * TetMeshingApp specifies the external application to use for tetrahedralization.
  * - fTetWild: https://github.com/wildmeshing/fTetWild
  * - TetGen: https://wias-berlin.de/software/index.jsp?id=TetGen&lang=1
+ * DiffTetVR only invokes the executables of these applications via the command-line interface.
+ * It is thus not considered a derived work, and its source code is not affected by the licenses of the applications.
  */
-/// The external application to use for tetrahedralization.
 enum class TetMeshingApp {
     FTETWILD, TETGEN
 };
 
+/// https://github.com/wildmeshing/fTetWild?tab=readme-ov-file#command-line-switches
+struct FTetWildParams {
+    double relativeIdealEdgeLength = 0.05; // -l
+    double epsilon = 1e-3; // -e
+    bool skipSimplify = false; // --skip-simlify
+    bool coarsen = false; // --coarsen
+};
+
+/// See:
+/// - https://wias-berlin.de/software/tetgen/1.5/doc/manual/manual005.html
+/// - https://wias-berlin.de/software/tetgen/1.5/doc/manual/manual004.html#sec30
+struct TetGenParams {
+    bool useSteinerPoints = true; // -q; to remove badly-shaped tetrahedra
+    bool useRadiusEdgeRatioBound = false;
+    double radiusEdgeRatioBound = 1.2; // radius-edge ratio bound
+    bool useMaximumVolumeConstraint = false; // -a
+    double maximumTetrahedronVolume = 1.0;
+    bool coarsen = false; // -R
+    double maximumDihedralAngle = 165.0; // -o/
+    // -O; mesh optimization settings
+    int meshOptimizationLevel = 2; // Between 0 and 10.
+    bool useEdgeAndFaceFlips = true;
+    bool useVertexSmoothing = true;
+    bool useVertexInsertionAndDeletion = true;
+};
+
 /**
- * Tetrahedralizes a grid using an external application and stores it in a passed tet mesh object.
+ * Tetrahedralizes a grid using the external application TetGen and stores it in a passed tet mesh object.
  * @param tetMesh The tet mesh to store the tetrahedralized data in.
- * @param tetMeshingApp The external application that should be used for tetrahedralization.
  * @param gridAabb The AABB of the grid in world space.
  * @param xs The number of vertices in x direction.
  * @param ys The number of vertices in x direction.
  * @param zs The number of vertices in x direction.
  * @param constColor The constant color at all vertices.
+ * @param params The meshing parameters.
  * @return Whether generating the mesh was successful.
  */
-bool tetrahedralizeGrid(
-        TetMesh* tetMesh, TetMeshingApp tetMeshingApp,
-        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor);
+bool tetrahedralizeGridFTetWild(
+        TetMesh* tetMesh,
+        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
+        const FTetWildParams& params);
+
+/**
+ * Tetrahedralizes a grid using the external application TetGen and stores it in a passed tet mesh object.
+ * @param tetMesh The tet mesh to store the tetrahedralized data in.
+ * @param gridAabb The AABB of the grid in world space.
+ * @param xs The number of vertices in x direction.
+ * @param ys The number of vertices in x direction.
+ * @param zs The number of vertices in x direction.
+ * @param constColor The constant color at all vertices.
+ * @param params The meshing parameters.
+ * @return Whether generating the mesh was successful.
+ */
+bool tetrahedralizeGridTetGen(
+        TetMesh* tetMesh,
+        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
+        const TetGenParams& params);
 
 #endif //DIFFTETVR_TETMESHING_HPP

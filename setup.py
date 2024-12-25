@@ -449,7 +449,7 @@ if support_ftetwild:
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             (ldd_output, ldd_err) = ldd_proc.communicate()
             ldd_proc_status = ldd_proc.wait()
-            if ldd_proc_status != 0:
+            if ldd_proc_status == 0:
                 ldd_stdout_string = ldd_output.decode('utf-8')
                 for ldd_line in ldd_stdout_string.splitlines():
                     if gmp_lib_name in ldd_line:
@@ -458,6 +458,20 @@ if support_ftetwild:
                         gmp_lib_name_local = ldd_line_split[0]
                         shutil.copy(gmp_path_local, f'third_party/fTetWild/{gmp_lib_name_local}')
                         break
+elif not IS_WINDOWS and (platform.machine() == 'x86_64' or platform.machine() == 'AMD64'):
+    support_ftetwild = True
+    ftetwild_version = '0.0.1-beta0'
+    target = f'x86_64-linux'
+    ftetwild_dir = f'fTetWild-v{ftetwild_version}-{target}'
+    ftetwild_url = f'https://github.com/chrismile/fTetWild/releases/download/v{ftetwild_version}/{ftetwild_dir}.zip'
+    if not os.path.isdir(f'third_party/{ftetwild_dir}'):
+        urllib.request.urlretrieve(ftetwild_url, f'third_party/{ftetwild_dir}.zip')
+        with zipfile.ZipFile(f'third_party/{ftetwild_dir}.zip', 'r') as zip_ref:
+            zip_ref.extractall(f'third_party/{ftetwild_dir}')
+        subprocess.run(['chmod', '+x', f'third_party/{ftetwild_dir}/bin/FloatTetwild_bin'], check=True)
+        Path('third_party/fTetWild').mkdir(exist_ok=True)
+        for ftetwild_file in os.listdir(f'third_party/{ftetwild_dir}/bin'):
+            shutil.copy(os.path.join(f'third_party/{ftetwild_dir}/bin', ftetwild_file), 'third_party/fTetWild/')
 
 
 support_tetgen = True
@@ -483,6 +497,7 @@ if support_tetgen:
 
 data_files_all.append(('.', data_files))
 
+
 def update_data_files_recursive(data_files_all, directory):
     files_in_directory = []
     for filename in os.listdir(directory):
@@ -493,6 +508,7 @@ def update_data_files_recursive(data_files_all, directory):
             files_in_directory.append(abs_file)
     if len(files_in_directory) > 0:
         data_files_all.append((directory, files_in_directory))
+
 
 update_data_files_recursive(data_files_all, 'docs')
 update_data_files_recursive(data_files_all, 'Data/Shaders')
@@ -546,11 +562,11 @@ if uses_pip:
         files_in_ftetwild_dir = os.listdir('third_party/fTetWild')
         for file_in_ftetwild_dir in files_in_ftetwild_dir:
             if gmp_lib_name in file_in_ftetwild_dir:
-                if IS_WINDOWS:
-                    pkg_data.append('**/*.dll')
-                else:
-                    pkg_data.append('**/*.so')
                 gmp_lib_name_local = file_in_ftetwild_dir
+                if IS_WINDOWS:
+                    pkg_data.append(f'**/{gmp_lib_name_local}')
+                else:
+                    pkg_data.append(f'**/{gmp_lib_name_local}')
                 shutil.copy(f'third_party/fTetWild/{gmp_lib_name_local}', f'difftetvr/{gmp_lib_name_local}')
                 break
     ext_modules = [

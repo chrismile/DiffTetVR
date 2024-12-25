@@ -1266,10 +1266,16 @@ void TetMesh::setHexMeshConst(
     setTetMeshDataInternal();
 }
 
-bool TetMesh::setTetrahedralizedGridConst(
+bool TetMesh::setTetrahedralizedGridFTetWild(
         const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-        TetMeshingApp tetMeshingApp) {
-    return tetrahedralizeGrid(this, tetMeshingApp, aabb, xs, ys, zs, constColor);
+        const FTetWildParams& params) {
+    return tetrahedralizeGridFTetWild(this, aabb, xs, ys, zs, constColor, params);
+}
+
+bool TetMesh::setTetrahedralizedGridTetGen(
+        const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
+        const TetGenParams& params) {
+    return tetrahedralizeGridTetGen(this, aabb, xs, ys, zs, constColor, params);
 }
 
 void TetMesh::unlinkTets() {
