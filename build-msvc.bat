@@ -36,6 +36,7 @@ set clean=false
 set build_dir=.build
 set destination_dir=Shipping
 set vcpkg_triplet="x64-windows"
+set build_with_ftetwild_support=true
 set build_with_tetgen_support=true
 
 :loop
@@ -196,6 +197,17 @@ if not exist .\sgl\install (
     popd
 )
 
+set ftetwild_version=v0.1.0
+if not exist ".\fTetWild-%ftetwild_version%-x86_64-windows" (
+    echo ------------------------
+    echo   downloading fTetWild
+    echo ------------------------
+    curl.exe -L "https://github.com/chrismile/fTetWild/releases/download/v1.6.0/fTetWild-%ftetwild_version%-x86_64-windows.zip" --output fTetWild-%ftetwild_version%-x86_64-windows.zip
+    mkdir "fTetWild-%ftetwild_version%-x86_64-windows"
+    tar -xvzf "fTetWild-%ftetwild_version%-x86_64-windows.zip" -C "fTetWild-%ftetwild_version%-x86_64-windows"
+    del "fTetWild-%ftetwild_version%-x86_64-windows.zip"
+)
+
 set tetgen_version=v1.6.0
 if not exist ".\tetgen-%tetgen_version%-x86_64-windows-gnu" (
     echo ------------------------
@@ -238,6 +250,7 @@ if %use_vcpkg% == true (
 echo ------------------------
 echo    copying new files
 echo ------------------------
+robocopy third_party\fTetWild-%ftetwild_version%-x86_64-windows\bin %destination_dir% *.exe *.dll >NUL
 robocopy third_party\tetgen-%tetgen_version%-x86_64-windows-gnu\bin %destination_dir% *.exe >NUL
 if %debug% == true (
     if not exist %destination_dir%\*.pdb (

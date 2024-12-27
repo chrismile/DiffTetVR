@@ -400,15 +400,6 @@ def get_gmp_lib_found():
 
 
 support_ftetwild, gmp_lib_name, gmp_path = get_gmp_lib_found()
-if not IS_WINDOWS:
-    gcc_version_proc = subprocess.Popen(['gcc', '--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (gcc_version_output, gcc_version_err) = gcc_version_proc.communicate()
-    gcc_version_proc.wait()
-    gcc_version_stdout_string = gcc_version_output.decode('utf-8')
-    gcc_version_major = int(gcc_version_stdout_string.splitlines()[0].split()[-1].split('.')[0])
-    # https://github.com/wildmeshing/fTetWild/issues/79
-    if gcc_version_major >= 12:
-        support_ftetwild = False
 if support_ftetwild:
     if os.path.isdir('third_party/fTetWild'):
         # We delete the directory if gmp_lib_name could not be found in it.
@@ -459,10 +450,14 @@ if support_ftetwild:
                         gmp_lib_name_local = ldd_line_split[0]
                         shutil.copy(gmp_path_local, f'third_party/fTetWild/{gmp_lib_name_local}')
                         break
-elif not IS_WINDOWS and (platform.machine() == 'x86_64' or platform.machine() == 'AMD64'):
+elif platform.machine() == 'x86_64' or platform.machine() == 'AMD64':
+    # Download precompiled binaries if fTetWild build is not supported, but we are on x86_64 Windows or Linux.
     support_ftetwild = True
-    ftetwild_version = '0.0.1-beta0'
-    target = f'x86_64-linux'
+    ftetwild_version = '0.1.0'
+    if IS_WINDOWS:
+        target = 'x86_64-windows'
+    else:
+        target = 'x86_64-linux'
     ftetwild_dir = f'fTetWild-v{ftetwild_version}-{target}'
     ftetwild_url = f'https://github.com/chrismile/fTetWild/releases/download/v{ftetwild_version}/{ftetwild_dir}.zip'
     if not os.path.isdir(f'third_party/{ftetwild_dir}'):

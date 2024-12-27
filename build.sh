@@ -59,18 +59,8 @@ use_custom_vcpkg_triplet=false
 custom_glslang=false
 build_with_ftetwild_support=true
 build_with_tetgen_support=true
-if [ $use_macos = true ] || [ $use_msys = true ]; then
-    build_with_ftetwild_support=false
-fi
-if [ $use_macos = false ] && [ $use_msys = false ]; then
-    gcc_version=$(gcc --version 2>&1 | head -n 1 | awk '{print $NF}')
-    gcc_version_major=$(echo $gcc_version | cut -d '.' -f 1)
-    # https://github.com/wildmeshing/fTetWild/issues/79
-    if [ $gcc_version_major -ge 12 ]; then
-        build_with_ftetwild_support=false
-    fi
-fi
 if [ $use_macos = true ]; then
+    build_with_ftetwild_support=false
     build_with_tetgen_support=false
 fi
 
@@ -859,8 +849,34 @@ if [ ! -d "./sgl/install" ]; then
     popd >/dev/null
 fi
 
+os_arch_pkg=${os_arch}
+if [ "$os_arch" = "arm64" ]; then
+    os_arch_pkg="aarch64"
+fi
+
+if [ $use_macos = true ]; then
+    os_name="macos"
+elif [ $use_msys = true ]; then
+    os_name="windows"
+else
+    os_name="linux"
+fi
+ftetwild_version="0.1.0"
+ftetwild_dir_name="fTetWild-v${ftetwild_version}-${os_arch_pkg}-${os_name}"
 if $build_with_ftetwild_support; then
-    if [ ! -d "./fTetWild" ]; then
+    if [ $use_msys = true ]; then
+        if [ ! -d "./${ftetwild_dir_name}" ]; then
+            echo "------------------------"
+            echo "  downloading fTetWild  "
+            echo "------------------------"
+            rm -rf ./fTetWild*
+            wget "https://github.com/chrismile/fTetWild/releases/download/v${ftetwild_version}/${ftetwild_dir_name}.zip"
+            unzip "${ftetwild_dir_name}.zip" -d "${ftetwild_dir_name}"
+            mkdir fTetWild
+            cp ${ftetwild_dir_name}/bin/* fTetWild/
+            rm "${ftetwild_dir_name}.zip"
+        fi
+    elif [ ! -d "./fTetWild" ]; then
         echo "------------------------"
         echo "  downloading fTetWild  "
         echo "------------------------"
@@ -890,10 +906,6 @@ elif [ $use_msys = true ]; then
 else
     os_name="linux"
 fi
-os_arch_pkg=${os_arch}
-if [ "$os_arch" = "arm64" ]; then
-    os_arch_pkg="aarch64"
-fi
 tetgen_version="1.6.0"
 tetgen_dir_name="tetgen-v${tetgen_version}-${os_arch_pkg}-${os_name}"
 if $build_with_tetgen_support; then
@@ -904,7 +916,9 @@ if $build_with_tetgen_support; then
         rm -rf ./tetgen*
         wget "https://github.com/chrismile/tetgen/releases/download/v${tetgen_version}/${tetgen_dir_name}.zip"
         unzip "${tetgen_dir_name}.zip" -d "${tetgen_dir_name}"
-        chmod +x "${tetgen_dir_name}/bin/tetgen"
+        if [ $use_msys = true ]; then
+            chmod +x "${tetgen_dir_name}/bin/tetgen"
+        fi
         rm "${tetgen_dir_name}.zip"
     fi
     #params+=(-DUSE_TETGEN=ON)
@@ -1034,10 +1048,14 @@ if $use_msys; then
     # Copy all dependencies of the application to the destination directory.
     ldd_output="$(ntldd -R $build_dir/DiffTetVR.exe)"
     if $build_with_ftetwild_support; then
-        ftetwild_bin="${projectpath}/third_party/fTetWild-src/build/FloatTetwild_bin.exe"
+        ftetwild_bin="${projectpath}/third_party/${ftetwild_dir_name}/bin/FloatTetwild_bin.exe"
+        ftetwild_gmp="${projectpath}/third_party/${ftetwild_dir_name}/bin/gmp.dll"
+        ftetwild_mpir="${projectpath}/third_party/${ftetwild_dir_name}/bin/mpir.dll"
         cp "$ftetwild_bin" "$destination_dir/bin"
+        cp "$ftetwild_gmp" "$destination_dir/bin"
+        cp "$ftetwild_mpir" "$destination_dir/bin"
         #ldd_output="$ldd_output $ftetwild_bin"
-        ldd_output="$ldd_output $(ntldd -R $ftetwild_bin)"
+        #ldd_output="$ldd_output $(ntldd -R $ftetwild_bin)"
     fi
     if $build_with_tetgen_support; then
         tetgen_bin="${projectpath}/third_party/${tetgen_dir_name}/bin/tetgen.exe"
