@@ -30,6 +30,7 @@ import time
 import json
 import pathlib
 import argparse
+from enum import Enum, auto
 import cv2
 import numpy as np
 import torch
@@ -42,6 +43,12 @@ from datasets.tet_mesh_dataset import TetMeshDataset
 from datasets.regular_grid_dataset import RegularGridDataset
 from datasets.images_dataset import ImagesDataset
 from datasets.imgutils import save_array_png, blend_image_premul
+
+
+class InitGridType(Enum):
+    HEX = auto()
+    TETGEN = auto()
+    FTETWILD = auto()
 
 
 def replace_tensor_in_optimizer(optimizer, tensor, name):
@@ -118,6 +125,8 @@ def main():
     parser.add_argument('--init_grid_y', type=int, default=16)
     parser.add_argument('--init_grid_z', type=int, default=16)
     parser.add_argument('--init_grid_opacity', default=0.1)
+    parser.add_argument(
+        '--init_grid_type', default=InitGridType.HEX, action=enum_action(InitGridType))
 
     # Coarse-to-fine strategy.
     parser.add_argument('--coarse_to_fine', action='store_true', default=False)
@@ -189,7 +198,16 @@ def main():
         print(f'Creating initialization grid of size {args.init_grid_x}x{args.init_grid_y}x{args.init_grid_z}...')
         const_color = d.vec4(0.5, 0.5, 0.5, args.init_grid_opacity)
         aabb = dataset.get_aabb()
-        tet_mesh_opt.set_hex_mesh_const(aabb, args.init_grid_x, args.init_grid_y, args.init_grid_z, const_color)
+        if args.init_grid_type == InitGridType.HEX:
+            tet_mesh_opt.set_hex_mesh_const(aabb, args.init_grid_x, args.init_grid_y, args.init_grid_z, const_color)
+        elif args.init_grid_type == InitGridType.FTETWILD:
+            params = d.FTetWildParams()
+            tet_mesh_opt.set_tetrahedralized_grid_ftetwild(
+                aabb, args.init_grid_x, args.init_grid_y, args.init_grid_z, const_color, params)
+        elif args.init_grid_type == InitGridType.TETGEN:
+            params = d.TetGenParams()
+            tet_mesh_opt.set_tetrahedralized_grid_tetgen(
+                aabb, args.init_grid_x, args.init_grid_y, args.init_grid_z, const_color, params)
     print(f'#Cells (init): {tet_mesh_opt.get_num_cells()}')
     print(f'#Vertices (init): {tet_mesh_opt.get_num_vertices()}')
 

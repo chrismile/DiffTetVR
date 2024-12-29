@@ -93,7 +93,9 @@ else:
 commands = []
 
 shared_params_all = [
-    '--renderer_type', 'projection'
+    # '--renderer_type', 'projection',
+    '--renderer_type', 'PPLL',
+    '--init_grid_type', 'ftetwild',
 ]
 shared_params = [
     '--record_video', '--save_statistics',
