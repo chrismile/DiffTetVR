@@ -136,6 +136,14 @@ MainApp::MainApp()
     fileDialogInstance = IGFD_Create();
     customDataSetFileName = sgl::FileUtils::get()->getUserDirectory();
     loadAvailableDataSetInformation();
+    isProgramStart = false;
+
+    const std::string tetMeshDataSetsDirectory = sgl::AppSettings::get()->getDataDirectory() + "DataSets/";
+    sgl::FileUtils::get()->ensureDirectoryExists(tetMeshDataSetsDirectory);
+#ifdef __linux__
+    datasetsWatch.setPath(tetMeshDataSetsDirectory + "datasets.json", false);
+    datasetsWatch.initialize();
+#endif
 
     useLinearRGB = false;
     onClearColorChanged();
@@ -637,7 +645,7 @@ void MainApp::renderGuiGeneralSettingsPropertyEditor() {
     }
     if (useFixedSizeViewport) {
         if (propertyEditor.addSliderInt2Edit("Viewport Size", &fixedViewportSizeEdit.x, 1, 8192)
-            == ImGui::EditMode::INPUT_FINISHED) {
+                == ImGui::EditMode::INPUT_FINISHED) {
             fixedViewportSize = fixedViewportSizeEdit;
             reRender = true;
         }
@@ -645,34 +653,54 @@ void MainApp::renderGuiGeneralSettingsPropertyEditor() {
 }
 
 void MainApp::loadAvailableDataSetInformation() {
+    const std::string tetMeshDataSetsDirectory = sgl::AppSettings::get()->getDataDirectory() + "DataSets/";
+    bool datasetsJsonExists = sgl::FileUtils::get()->exists(tetMeshDataSetsDirectory + "datasets.json");
+    DataSetInformationPtr dataSetInformationRootNew;
+    if (datasetsJsonExists) {
+        dataSetInformationRootNew = loadDataSetList(tetMeshDataSetsDirectory + "datasets.json", isFileWatchReload);
+        if (!dataSetInformationRootNew && !isProgramStart) {
+            return;
+        }
+    } else if (!isProgramStart) {
+        return;
+    }
+
+    if (!isProgramStart && currentlyLoadedDataSetIndex >= NUM_MANUAL_LOADERS) {
+        customDataSetFileName = dataSetInformationList.at(currentlyLoadedDataSetIndex - NUM_MANUAL_LOADERS)->filenames.front();
+        selectedDataSetIndex = 0;
+        currentlyLoadedDataSetIndex = 0;
+    }
+
+    dataSetInformationRoot = {};
+    dataSetInformationList.clear();
     dataSetNames.clear();
     dataSetNames.emplace_back("Local file...");
     selectedDataSetIndex = 0;
 
-    const std::string tetMeshDataSetsDirectory = sgl::AppSettings::get()->getDataDirectory() + "DataSets/";
-    if (sgl::FileUtils::get()->exists(tetMeshDataSetsDirectory + "datasets.json")) {
-        dataSetInformationRoot = loadDataSetList(tetMeshDataSetsDirectory + "datasets.json");
+    dataSetInformationRoot = dataSetInformationRootNew;
+    if (!datasetsJsonExists || !dataSetInformationRoot) {
+        return;
+    }
 
-        std::stack<std::pair<DataSetInformationPtr, size_t>> dataSetInformationStack;
-        dataSetInformationStack.push(std::make_pair(dataSetInformationRoot, 0));
-        while (!dataSetInformationStack.empty()) {
-            std::pair<DataSetInformationPtr, size_t> dataSetIdxPair = dataSetInformationStack.top();
-            DataSetInformationPtr dataSetInformationParent = dataSetIdxPair.first;
-            size_t idx = dataSetIdxPair.second;
-            dataSetInformationStack.pop();
-            while (idx < dataSetInformationParent->children.size()) {
-                DataSetInformationPtr dataSetInformationChild =
-                        dataSetInformationParent->children.at(idx);
-                idx++;
-                if (dataSetInformationChild->type == DataSetType::NODE) {
-                    dataSetInformationStack.push(std::make_pair(dataSetInformationRoot, idx));
-                    dataSetInformationStack.push(std::make_pair(dataSetInformationChild, 0));
-                    break;
-                } else {
-                    dataSetInformationChild->sequentialIndex = int(dataSetNames.size());
-                    dataSetInformationList.push_back(dataSetInformationChild);
-                    dataSetNames.push_back(dataSetInformationChild->name);
-                }
+    std::stack<std::pair<DataSetInformationPtr, size_t>> dataSetInformationStack;
+    dataSetInformationStack.push(std::make_pair(dataSetInformationRoot, 0));
+    while (!dataSetInformationStack.empty()) {
+        std::pair<DataSetInformationPtr, size_t> dataSetIdxPair = dataSetInformationStack.top();
+        DataSetInformationPtr dataSetInformationParent = dataSetIdxPair.first;
+        size_t idx = dataSetIdxPair.second;
+        dataSetInformationStack.pop();
+        while (idx < dataSetInformationParent->children.size()) {
+            DataSetInformationPtr dataSetInformationChild =
+                    dataSetInformationParent->children.at(idx);
+            idx++;
+            if (dataSetInformationChild->type == DataSetType::NODE) {
+                dataSetInformationStack.push(std::make_pair(dataSetInformationRoot, idx));
+                dataSetInformationStack.push(std::make_pair(dataSetInformationChild, 0));
+                break;
+            } else {
+                dataSetInformationChild->sequentialIndex = int(dataSetNames.size());
+                dataSetInformationList.push_back(dataSetInformationChild);
+                dataSetNames.push_back(dataSetInformationChild->name);
             }
         }
     }
@@ -901,6 +929,14 @@ void MainApp::renderGuiPropertyEditorCustomNodes() {
 
 void MainApp::update(float dt) {
     sgl::SciVisApp::update(dt);
+
+#ifdef __linux__
+    datasetsWatch.update([this] {
+        isFileWatchReload = true;
+        this->loadAvailableDataSetInformation();
+        isFileWatchReload = false;
+    });
+#endif
 
     if (scheduledDockSpaceModeChange) {
         useDockSpaceMode = newDockSpaceMode;

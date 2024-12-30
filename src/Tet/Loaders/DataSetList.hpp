@@ -59,6 +59,6 @@ struct DataSetInformation {
     glm::mat4 transformMatrix = sgl::matrixIdentity();
 };
 
-DataSetInformationPtr loadDataSetList(const std::string& filename);
+DataSetInformationPtr loadDataSetList(const std::string& filename, bool isFileWatchReload);
 
 #endif //CORRERENDER_DATASETLIST_HPP

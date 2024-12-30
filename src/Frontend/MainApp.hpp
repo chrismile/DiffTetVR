@@ -33,6 +33,7 @@
 #include <vector>
 #include <map>
 
+#include <Utils/File/PathWatch.hpp>
 #include <Utils/SciVis/SciVisApp.hpp>
 #include <ImGui/Widgets/TransferFunctionWindow.hpp>
 
@@ -120,6 +121,10 @@ private:
     int selectedDataSetIndex = 0; //< Contains "Local file..." at beginning, thus starts actually at 1.
     int currentlyLoadedDataSetIndex = -1;
     std::string customDataSetFileName;
+    bool isProgramStart = true, isFileWatchReload = false;
+#ifdef __linux__
+    sgl::PathWatch datasetsWatch;
+#endif
     ImGuiFileDialog* fileDialogInstance = nullptr;
     std::string fileDialogDirectory;
     std::vector<sgl::dialog::MsgBoxHandlePtr> nonBlockingMsgBoxHandles;
