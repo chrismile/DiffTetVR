@@ -71,11 +71,14 @@ def copy_and_freeze_optimizer_var_state(optimizer, name):
             lr_copy = group['lr']
             group['lr'] = 0.0
             stored_state = optimizer.state.get(group['params'][0], None)
-            state = stored_state.copy()
-            if 'exp_avg' in stored_state:
-                state['exp_avg'] = stored_state['exp_avg'].detach().clone()
-            if 'exp_avg_sq' in stored_state:
-                state['exp_avg_sq'] = stored_state['exp_avg_sq'].detach().clone()
+            if stored_state is not None:
+                state = stored_state.copy()
+                if 'exp_avg' in stored_state:
+                    state['exp_avg'] = stored_state['exp_avg'].detach().clone()
+                if 'exp_avg_sq' in stored_state:
+                    state['exp_avg_sq'] = stored_state['exp_avg_sq'].detach().clone()
+            else:
+                state = None
             return lr_copy, state
     return None, None
 
@@ -85,10 +88,11 @@ def restore_optimizer_var_state(optimizer, name, lr, state):
         if group['name'] == name:
             group['lr'] = lr
             stored_state = optimizer.state.get(group['params'][0], None)
-            if 'exp_avg' in stored_state:
-                stored_state['exp_avg'] = state['exp_avg']
-            if 'exp_avg_sq' in stored_state:
-                stored_state['exp_avg_sq'] = state['exp_avg_sq']
+            if state is not None:
+                if 'exp_avg' in stored_state:
+                    stored_state['exp_avg'] = state['exp_avg']
+                if 'exp_avg_sq' in stored_state:
+                    stored_state['exp_avg_sq'] = state['exp_avg_sq']
 
 
 def main():
