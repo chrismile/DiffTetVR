@@ -360,7 +360,7 @@ void main() {
 
 
     // Now do adjoint pass.
-    uint vertexOffset = triangleIdxOffset;
+    uint vertexOffset = triangleIdxOffset * 3u;
     vec3 dOut_dTriP[5];
     vec4 dOut_dTriC[5];
     float dOut_dTriD[5];
