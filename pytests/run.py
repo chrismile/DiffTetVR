@@ -176,6 +176,19 @@ for num_tets in [10000, 30000, 100000, 500000, 1000000]:
         '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
     ])
 
+# Test case for isosurfaces.
+if os.path.exists(os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso/images')):
+    commands.append([
+        python_cmd, 'train.py',
+        '--name', 'tooth_iso',
+        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/TestToothIso'),
+        '--attenuation', '25.0',
+        '--lr_col', '0.08',
+        '--lr_pos', '0.0',
+        '--init_grid_path', os.path.join(preshaded_path, 'tooth_uniform.bintet'),
+        '--gt_images_path', os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso'),
+    ])
+
 commands = [command + shared_params for command in commands]
 
 commands.append([python_cmd, 'eval.py'] + shared_params_all)
