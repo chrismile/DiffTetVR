@@ -93,13 +93,13 @@ else:
 commands = []
 
 shared_params_all = [
-    # '--renderer_type', 'projection',
-    '--renderer_type', 'PPLL',
+    '--renderer_type', 'projection',
+    # '--renderer_type', 'PPLL',
 ]
 shared_params = [
     '--record_video', '--save_statistics',
     '--cam_sample_method', 'replicate_cpp',
-    '--init_grid_type', 'ftetwild',
+    # '--init_grid_type', 'ftetwild',
 ] + shared_params_all
 
 # (1) Test case for different color LR.
