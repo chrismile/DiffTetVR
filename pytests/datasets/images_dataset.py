@@ -82,7 +82,12 @@ class ImagesDataset(torch.utils.data.Dataset, Dataset3D):
 
     def __getitem__(self, idx):
         camera_json = self.cameras_json[idx]
-        image_path = os.path.join(self.images_dir, camera_json['img_name'])
+        if 'fg_name' in camera_json:
+            image_path = os.path.join(self.images_dir, camera_json['fg_name'])
+        elif 'img_name' in camera_json:
+            image_path = os.path.join(self.images_dir, camera_json['img_name'])
+        else:
+            raise RuntimeError('Error in ImagesDataset.__getitem__: No image entry found in .json file.')
         image = torch.from_numpy(load_image_array(image_path)).cuda()
         return image, self.get_view_matrix_array(idx)
 
