@@ -55,7 +55,7 @@ def matrix_translation(t):
     ])
 
 
-def sample_view_matrix_circle(aabb, uniform_r=False):
+def sample_view_matrix_circle(aabb, uniform_r=False, r_min=None, r_max=None):
     global_up = np.array([0.0, 1.0, 0.0])
     theta = 2.0 * np.pi * random.random()
     phi = np.arccos(1.0 - 2.0 * random.random())
@@ -66,7 +66,11 @@ def sample_view_matrix_circle(aabb, uniform_r=False):
         #if test_case == 'Cloud' or test_case == 'Cloud Fog':
         #    r = r_total * 1.7
         # main_energy.py: r = random.uniform(r_total * 1.35, r_total * 1.7)
-        r = random.uniform(r_total * 1.35, r_total * 1.8)
+        if r_min is None:
+            r_min = 1.35
+        if r_max is None:
+            r_max = 1.8
+        r = random.uniform(r_total * r_min, r_total * r_max)
     camera_position = np.array([r * np.sin(phi) * np.cos(theta), r * np.sin(phi) * np.sin(theta), r * np.cos(phi)])
     camera_forward = vec_normalize(camera_position)
     camera_right = vec_normalize(vec_cross(global_up, camera_forward))

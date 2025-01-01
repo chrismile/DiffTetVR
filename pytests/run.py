@@ -177,6 +177,15 @@ for num_tets in [10000, 30000, 100000, 500000, 1000000]:
     ])
 
 # Test case for isosurfaces.
+if not os.path.exists(os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso/images')):
+    commands.append([
+        python_cmd, 'render_vpt.py', '--test_case', 'ToothIso', '--img_res', '1024', '--num_frames', '128',
+        '--denoiser', 'OpenImageDenoise',
+        '--envmap', os.path.join(pathlib.Path.home(), 'Programming/C++/CloudRendering/Data/CloudDataSets/env_maps/belfast_sunset_puresky_4k_2.exr'),
+        '--brdf', 'Lambertian',
+        '-o', os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso'), '--exr'
+    ])
+
 if os.path.exists(os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso/images')):
     commands.append([
         python_cmd, 'train.py',
@@ -189,7 +198,14 @@ if os.path.exists(os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso/image
         '--gt_images_path', os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso'),
     ])
 
-commands = [command + shared_params for command in commands]
+commands_old = commands
+commands = []
+for command in commands_old:
+    if command[1] == 'train.py':
+        commands.append(command + shared_params)
+    else:
+        commands.append(command)
+del commands_old
 
 commands.append([python_cmd, 'eval.py'] + shared_params_all)
 

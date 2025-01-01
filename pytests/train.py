@@ -41,6 +41,7 @@ from datasets.actions import enum_action, SplitGradientTypeAction, RendererTypeA
 from datasets.camera_sample_method import CameraSampleMethod
 from datasets.tet_mesh_dataset import TetMeshDataset
 from datasets.regular_grid_dataset import RegularGridDataset
+from datasets.vpt_dataset import VptDataset, is_vpt_initialized
 from datasets.images_dataset import ImagesDataset
 from datasets.imgutils import save_array_png, blend_image_premul
 

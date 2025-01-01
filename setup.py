@@ -48,8 +48,6 @@ if IS_WINDOWS:
 else:
     extra_compile_args.append('-std=c++17')
     extra_compile_args.append('-fopenmp')
-    # '-fpermissive' is necessary for compiling C code with torch.utils.cpp_extension.BuildExtension.
-    #extra_compile_args.append('-fpermissive')
 
 
 class EggInfoInstallLicense(egg_info):
@@ -179,6 +177,7 @@ source_files += [
     'third_party/sgl/src/Graphics/Vulkan/Utils/Device.cpp',
     'third_party/sgl/src/Graphics/Vulkan/Utils/Swapchain.cpp',
     'third_party/sgl/src/Graphics/Vulkan/Utils/SyncObjects.cpp',
+    'third_party/sgl/src/Graphics/Vulkan/Utils/Timer.cpp',
     'third_party/sgl/src/Graphics/Vulkan/Buffers/Buffer.cpp',
     'third_party/sgl/src/Graphics/Vulkan/Buffers/Framebuffer.cpp',
     'third_party/sgl/src/Graphics/Vulkan/Image/Image.cpp',
@@ -316,7 +315,6 @@ defines = [
 if IS_WINDOWS:
     defines.append(('DLL_OBJECT', ''))
     defines.append(('DISABLE_SINGLETON_BOOST_INTERPROCESS',))
-    # TODO: Test on Windows.
     # According to https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-pathremovefilespecw,
     # shlwapi.lib and shlwapi.dll both exist. Maybe this should rather be a extra_objects file?
     libraries.append('shlwapi')
