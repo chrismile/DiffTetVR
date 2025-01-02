@@ -45,8 +45,19 @@ from datasets.imgutils import *
 
 # Bayesian optimization
 # conda install -c conda-forge bayesian-optimization
-from bayes_opt import BayesianOptimization, UtilityFunction
-import pylimbo
+try:
+    from bayes_opt import BayesianOptimization, UtilityFunction
+    can_use_bayes_opt = True
+except ImportError:
+    BayesianOptimization = None
+    UtilityFunction = None
+    can_use_bayes_opt = False
+try:
+    import pylimbo
+    can_use_pylimbo = True
+except ImportError:
+    pylimbo = None
+    can_use_pylimbo = False
 
 
 #def save_nc(file_path, data):
@@ -344,7 +355,11 @@ if __name__ == '__main__':
     if args.exr:
         use_png_format = False
     if args.out_dir is None:
-        out_dir = f'out_{datetime.datetime.now():%Y-%m-%d_%H:%M:%S}'
+        if os.name == 'nt':
+            # Windows does not support ':' in filenames.
+            out_dir = f'out_{datetime.datetime.now():%Y-%m-%d_%H-%M-%S}'
+        else:
+            out_dir = f'out_{datetime.datetime.now():%Y-%m-%d_%H:%M:%S}'
     else:
         out_dir = args.out_dir
         if out_dir[-1] == '/' or out_dir[-1] == '\\':
