@@ -44,6 +44,7 @@ from torch.utils.cpp_extension import include_paths, library_paths, BuildExtensi
 extra_compile_args = []
 if IS_WINDOWS:
     extra_compile_args.append('/std:c++17')
+    extra_compile_args.append('/Zc:__cplusplus')
     extra_compile_args.append('/openmp')
 else:
     extra_compile_args.append('-std=c++17')
@@ -462,7 +463,9 @@ elif platform.machine() == 'x86_64' or platform.machine() == 'AMD64':
         urllib.request.urlretrieve(ftetwild_url, f'third_party/{ftetwild_dir}.zip')
         with zipfile.ZipFile(f'third_party/{ftetwild_dir}.zip', 'r') as zip_ref:
             zip_ref.extractall(f'third_party/{ftetwild_dir}')
-        subprocess.run(['chmod', '+x', f'third_party/{ftetwild_dir}/bin/FloatTetwild_bin'], check=True)
+        if not IS_WINDOWS:
+            subprocess.run(['chmod', '+x', f'third_party/{ftetwild_dir}/bin/FloatTetwild_bin'], check=True)
+    if not os.path.isdir(f'third_party/fTetWild'):
         Path('third_party/fTetWild').mkdir(exist_ok=True)
         for ftetwild_file in os.listdir(f'third_party/{ftetwild_dir}/bin'):
             shutil.copy(os.path.join(f'third_party/{ftetwild_dir}/bin', ftetwild_file), 'third_party/fTetWild/')
