@@ -383,7 +383,18 @@ def get_gmp_lib_found():
         # ldconfig_proc_status = ldconfig_proc.wait()  # Can be 1 for some reason...
         ldconfig_proc.wait()
         ldconfig_stdout_string = ldconfig_output.decode('utf-8')
-        if gmp_lib_name in ldconfig_stdout_string:
+
+        # Additionally check pkg-config, as the GMP might not be installed in the dev version.
+        pkgconfig_gmp_proc_status = 1
+        pkgconfig_exec = shutil.which('pkg-config')
+        if pkgconfig_exec is not None:
+            pkgconfig_gmp_proc = subprocess.Popen(
+                [pkgconfig_exec, '--exists', 'gmp'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            # (pkgconfig_gmp_output, pkgconfig_gmp_err) = pkgconfig_gmp_proc.communicate()
+            pkgconfig_gmp_proc.communicate()
+            pkgconfig_gmp_proc_status = pkgconfig_gmp_proc.wait()
+
+        if pkgconfig_gmp_proc_status == 0 and gmp_lib_name in ldconfig_stdout_string:
             return True, gmp_lib_name, None
 
     # On Windows, we will assume mpir.dll has been installed using conda via MPIR.
