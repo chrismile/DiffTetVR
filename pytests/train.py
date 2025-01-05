@@ -24,6 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import math
 import os
 import random
 import time
@@ -43,6 +44,8 @@ from datasets.tet_mesh_dataset import TetMeshDataset
 from datasets.regular_grid_dataset import RegularGridDataset
 from datasets.vpt_dataset import VptDataset, is_vpt_initialized
 from datasets.images_dataset import ImagesDataset
+from datasets.colmap_dataset import ColmapDataset
+from datasets.nerf_synthetic_dataset import NeRFSyntheticDataset
 from datasets.imgutils import save_array_png, blend_image_premul
 
 
@@ -126,6 +129,7 @@ def main():
 
     # Initialization grid; from file (=> init_grid_path) or created from a constant opacity with medium gray color.
     parser.add_argument('--init_grid_path', type=str, default=None)
+    parser.add_argument('--init_grid_largest', type=int, default=None)
     parser.add_argument('--init_grid_x', type=int, default=16)
     parser.add_argument('--init_grid_y', type=int, default=16)
     parser.add_argument('--init_grid_z', type=int, default=16)
@@ -150,6 +154,9 @@ def main():
     parser.add_argument('--gt_tf', type=str, default=None)  # Optional if regular grid is used as GT
     # Test case (B): Use images from disk as ground truth.
     parser.add_argument('--gt_images_path', type=str, default=None)
+    parser.add_argument('--gt_colmap_data_path', type=str, default=None)
+    parser.add_argument('--gt_nerf_synthetic_data_path', type=str, default=None)
+    parser.add_argument('--image_folder_name', type=str, default=None)
 
     # Debugging options.
     parser.add_argument('--record_video', action='store_true', default=False)
@@ -184,10 +191,18 @@ def main():
                 args.img_width, args.img_height, args.gt_tf, args.cam_sample_method)
     elif args.gt_images_path is not None:
         dataset = ImagesDataset(args.gt_images_path)
+    elif args.gt_colmap_data_path is not None:
+        if args.image_folder_name is None:
+            args.image_folder_name = 'images'
+        dataset = ColmapDataset(args.gt_colmap_data_path, images_dir_name=args.image_folder_name)
+    elif args.gt_nerf_synthetic_data_path is not None:
+        if args.image_folder_name is None:
+            args.image_folder_name = 'train'
+        dataset = NeRFSyntheticDataset(args.gt_nerf_synthetic_data_path, images_dir_name=args.image_folder_name)
     else:
         raise RuntimeError(
-            'Either \'--gt_grid_path\' or \'--gt_images_path\' needs to '
-            'be passed to the script to specify the used ground truth data.')
+            'Either \'--gt_grid_path\', \'--gt_images_path\', \'--gt_colmap_data_path\' or '
+            '\'--gt_nerf_synthetic_data_path\' needs to be passed to the script to specify the used ground truth data.')
     img_width = dataset.get_img_width()
     img_height = dataset.get_img_height()
     data_loader = DataLoader(dataset, batch_size=None)
@@ -200,9 +215,18 @@ def main():
         print(f'Loading initialization tet mesh from file {args.init_grid_path}...')
         tet_mesh_opt.load_from_file(args.init_grid_path)
     else:
+        aabb = dataset.get_aabb()
+
+        # Use grid with approximately even cell sizes.
+        if args.init_grid_largest is not None:
+            aabb_dimensions = aabb.get_dimensions()
+            max_dim = np.max(np.array([aabb_dimensions.x, aabb_dimensions.y, aabb_dimensions.z]))
+            args.init_grid_x = math.ceil(aabb_dimensions.x / max_dim * args.init_grid_largest)
+            args.init_grid_y = math.ceil(aabb_dimensions.y / max_dim * args.init_grid_largest)
+            args.init_grid_z = math.ceil(aabb_dimensions.z / max_dim * args.init_grid_largest)
+
         print(f'Creating initialization grid of size {args.init_grid_x}x{args.init_grid_y}x{args.init_grid_z}...')
         const_color = d.vec4(0.5, 0.5, 0.5, args.init_grid_opacity)
-        aabb = dataset.get_aabb()
         if args.init_grid_type == InitGridType.HEX:
             tet_mesh_opt.set_hex_mesh_const(aabb, args.init_grid_x, args.init_grid_y, args.init_grid_z, const_color)
         elif args.init_grid_type == InitGridType.FTETWILD:
@@ -263,10 +287,10 @@ def main():
         loss.backward()
         if args.fix_boundary and optimizer_step:
             vertex_positions.grad = torch.where(vertex_boundary_bit_tensor > 0, 0.0, vertex_positions.grad)
-        with torch.no_grad():
-            vertex_colors -= torch.min(vertex_colors, torch.zeros_like(vertex_colors))
         if optimizer_step:
             optimizer.step()
+        with torch.no_grad():
+            vertex_colors -= torch.min(vertex_colors, torch.zeros_like(vertex_colors))
         if args.record_video:
             with torch.no_grad():
                 img_numpy = np.clip(image_opt.detach().cpu().numpy(), 0.0, 1.0) * 255.0

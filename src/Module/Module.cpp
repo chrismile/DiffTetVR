@@ -62,6 +62,8 @@
 #include <Renderer/TetRegularizerPass.hpp>
 #include <Renderer/OptimizerDefines.hpp>
 #include <Renderer/Optimizer.hpp>
+#include "VoxelCarving/VoxelCarving.hpp"
+#include "VoxelCarving/DenseVoxelCarvingCPU.hpp"
 
 #ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
 #include <radix_sort/radix_sort_vk.h>
@@ -762,6 +764,27 @@ PYBIND11_MODULE(difftetvr, m) {
             .def_readwrite("export_position_gradients", &OptimizationSettings::exportPositionGradients)
             .def_readwrite("export_file_name_gradient_field", &OptimizationSettings::exportFileNameGradientField)
             .def_readwrite("is_binary_vtk", &OptimizationSettings::isBinaryVtk);
+
+    py::class_<CameraSettings>(m, "CameraSettings")
+            .def(py::init<>())
+            .def("set_intrinsics", &CameraSettings::setIntrinsics, py::arg("img_width"), py::arg("img_height"), py::arg("fovy"), py::arg("near"), py::arg("far"))
+            .def("set_view_matrix", [](CameraSettings& self, const std::vector<float>& viewMatrixData) {
+                glm::mat4 viewMatrix;
+                for (int i = 0; i < 16; i++) {
+                    viewMatrix[i / 4][i % 4] = viewMatrixData[i];
+                }
+                self.setViewMatrix(viewMatrix);
+            }, py::arg("view_matrix_array"));
+    py::enum_<VoxelCarvingType>(m, "VoxelCarvingType")
+            .value("DENSE_CPU", VoxelCarvingType::DENSE_CPU);
+    py::class_<VoxelCarving, std::shared_ptr<VoxelCarving>>(m, "VoxelCarving")
+            .def(py::init([](const sgl::AABB3& gridBoundingBox, const glm::uvec3& gridResolution, VoxelCarvingType voxelCarvingType) {
+                ensureStateExists();
+                return std::make_shared<DenseVoxelCarvingCPU>(gridBoundingBox, gridResolution);
+            }), py::arg("grid_bounding_box"), py::arg("grid_resolution"), py::arg("voxel_carving_type") = VoxelCarvingType::DENSE_CPU)
+            .def("process_next_frame", &VoxelCarving::processNextFrame, py::arg("input_image"), py::arg("camera_settings"))
+            .def("compute_non_empty_bounding_box", &VoxelCarving::computeNonEmptyBoundingBox);
+
     m.def("forward", forward,
         "Forward rendering pass.",
         py::arg("X"));

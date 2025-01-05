@@ -24,6 +24,8 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# This file stores some default paths to datasets for the run.py script. Adapt this accordingly on your system.
+
 import os
 import pathlib
 import getpass
@@ -42,4 +44,13 @@ def get_regular_grids_path():
         regular_grids_path = os.path.join(pathlib.Path.home(), 'datasets/Flow/Scalar')
     if not os.path.isdir(regular_grids_path):
         regular_grids_path = f'/media/{getpass.getuser()}/Elements/Datasets/Scalar'
+    return regular_grids_path
+
+
+def get_nerf_datasets_path():
+    regular_grids_path = '/mnt/data/3DGS'
+    if not os.path.isdir(regular_grids_path):
+        regular_grids_path = os.path.join(pathlib.Path.home(), 'datasets/NeRF')
+    if not os.path.isdir(regular_grids_path):
+        regular_grids_path = f'/media/{getpass.getuser()}/Elements16C/Datasets/NeRF'
     return regular_grids_path

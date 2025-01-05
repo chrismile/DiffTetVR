@@ -24,6 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import os
 import array
 import numpy as np
 from PIL import Image
@@ -45,22 +46,24 @@ def save_array_png(file_path, data, conv_linear_to_srgb=False):
 
 
 def load_image_array(file_path):
-    if file_path.endswith('.exr'):
+    file_path_lower = file_path.lower()
+    if file_path_lower.endswith('.exr'):
         pt = Imath.PixelType(Imath.PixelType.FLOAT)
         ref_exr = OpenEXR.InputFile(file_path)
         img = np.array([array.array('f', ref_exr.channel(ch, pt)).tolist() for ch in ("R", "G", "B", "A")], dtype=np.float32)
         dw = ref_exr.header()["dataWindow"]
-        img = img.reshape((1, 4, dw.max.y - dw.min.y + 1, dw.max.x - dw.min.x + 1))
-        img = img.transpose(0, 2, 3, 1)
+        img = img.reshape((4, dw.max.y - dw.min.y + 1, dw.max.x - dw.min.x + 1))
+        img = img.transpose(1, 2, 0)
         return img
-    elif file_path.endswith('.png'):
+    elif file_path_lower.endswith('.png') or file_path_lower.endswith('.jpg'):
         img = Image.open(file_path)
         img = np.array(img).astype(np.float32) / 255.0
-        img = img.reshape((1, img.shape[0], img.shape[1], 4))
-        img = img.transpose(0, 3, 1, 2)
+        if img.shape[2] == 3:
+            img = np.dstack((img, np.ones(shape=(img.shape[0], img.shape[1], 1), dtype=img.dtype)))
         return img
     else:
-        raise RuntimeError('Error in load_image_array: Unsupported file extension.')
+        raise RuntimeError(
+            f'Error in load_image_array: Unsupported file extension \'{os.path.splitext(file_path)[1]}\'.')
 
 
 @numba.jit

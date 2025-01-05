@@ -24,7 +24,10 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import math
 import random
+
+import difftetvr as d
 import numpy as np
 from scipy.spatial.transform import Rotation as Rotation
 
@@ -53,6 +56,43 @@ def matrix_translation(t):
         [0.0, 0.0, 1.0, t[2]],
         [0.0, 0.0, 0.0, 1.0]
     ])
+
+
+# https://stackoverflow.com/questions/1556260/convert-quaternion-rotation-to-rotation-matrix
+def matrix_quaternion(q_vec):
+    # We assume q_vec is already normalized and has the format (w, x, y, z).
+    # Otherwise: q_vec /= np.linalg.norm(q_vec)
+    qw = q_vec[0]
+    qx = q_vec[1]
+    qy = q_vec[2]
+    qz = q_vec[3]
+    return np.array(
+        [
+            [
+                1.0 - 2.0 * qy * qy - 2.0 * qz * qz,
+                2.0 * qx * qy - 2.0 * qw * qz,
+                2.0 * qz * qx + 2.0 * qw * qy,
+                0.0
+            ],
+            [
+                2.0 * qx * qy + 2.0 * qw * qz,
+                1.0 - 2.0 * qx * qx - 2.0 * qz * qz,
+                2.0 * qy * qz - 2.0 * qw * qx,
+                0.0
+            ],
+            [
+                2.0 * qz * qx - 2.0 * qw * qy,
+                2.0 * qy * qz + 2.0 * qw * qx,
+                1.0 - 2.0 * qx * qx - 2.0 * qy * qy,
+                0.0
+            ],
+            [0.0, 0.0, 0.0, 1.0]
+        ]
+    )
+
+
+def convert_focal_length_to_fov(focal_length, pixel_size):
+    return 2.0 * math.atan(0.5 * pixel_size / focal_length)
 
 
 def sample_view_matrix_circle(aabb, uniform_r=False, r_min=None, r_max=None):
@@ -249,3 +289,15 @@ def make_view_matrix(camera_position, camera_right, camera_up, camera_forward):
         for j in range(4):
             view_matrix_array[i * 4 + j] = view_matrix[j, i]
     return view_matrix_array
+
+
+def get_scale_factor(aabb: d.AABB3):
+    dimensions = aabb.get_dimensions()
+    max_dimension = np.max([dimensions.x, dimensions.y, dimensions.z])
+    return 0.5 / max_dimension
+
+
+def apply_scale_factor_aabb(aabb: d.AABB3, scale_factor: float):
+    return d.AABB3(
+        d.vec3(aabb.min.x * scale_factor, aabb.min.y * scale_factor, aabb.min.z * scale_factor),
+        d.vec3(aabb.max.x * scale_factor, aabb.max.y * scale_factor, aabb.max.z * scale_factor))

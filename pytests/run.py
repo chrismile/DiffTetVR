@@ -34,7 +34,7 @@ import ssl
 from email.message import EmailMessage
 from email.headerregistry import Address
 from email.utils import formatdate
-from datasets.paths import get_preshaded_path, get_regular_grids_path
+from datasets.paths import get_preshaded_path, get_regular_grids_path, get_nerf_datasets_path
 
 
 def send_mail(
@@ -85,12 +85,18 @@ def escape_html(s):
 
 preshaded_path = get_preshaded_path()
 regular_grids_path = get_regular_grids_path()
+nerf_datasets_path = get_nerf_datasets_path()
 
 if os.name == 'nt':
     python_cmd = 'python'
 else:
     python_cmd = 'python3'
 commands = []
+
+run_tooth_tests = False
+run_isosurface_tests = False
+run_nerf_synthetic_tests = False
+run_mip_nerf_360_tests = True
 
 shared_params_all = [
     '--renderer_type', 'projection',
@@ -102,100 +108,126 @@ shared_params = [
     # '--init_grid_type', 'ftetwild',
 ] + shared_params_all
 
-# (1) Test case for different color LR.
-for lr_col in [0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14]:
+if run_tooth_tests:
+    # (1) Test case for different color LR.
+    for lr_col in [0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14]:
+        commands.append([
+            python_cmd, 'train.py',
+            '--name', f'tooth_color_{lr_col}',
+            '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
+            '--attenuation', '25.0',
+            '--lr_col', str(lr_col),
+            '--lr_pos', '0.0',
+            '--init_grid_path', os.path.join(preshaded_path, 'tooth_uniform.bintet'),
+            '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
+            '--gt_tf', 'Tooth3Gauss.xml',
+        ])
+
+    # (2) Test case for CTF with different regularization beta.
+    for tet_reg_beta in [1.0, 10.0, 100.0, 1000.0]:
+        commands.append([
+            python_cmd, 'train.py',
+            '--name', f'tooth_ctf_reg_beta_{tet_reg_beta}',
+            '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
+            '--attenuation', '25.0',
+            '--lr_col', '0.06',
+            '--lr_pos', '0.00001',
+            '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
+            '--gt_tf', 'Tooth3Gauss.xml',
+            '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
+            '--tet_regularizer', '--tet_reg_lambda', '1000000.0', '--tet_reg_softplus_beta', str(tet_reg_beta),
+        ])
+
+    # (3) Test case for CTF with different regularization lambdas.
+    for tet_reg_lambda in [1.0, 10.0, 100.0, 1000.0, 10000.0]:
+        commands.append([
+            python_cmd, 'train.py',
+            '--name', f'tooth_ctf_reg_lambda_{tet_reg_lambda}',
+            '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
+            '--attenuation', '25.0',
+            '--lr_col', '0.06',
+            '--lr_pos', '0.00001',
+            '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
+            '--gt_tf', 'Tooth3Gauss.xml',
+            '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
+            '--tet_regularizer', '--tet_reg_lambda', str(tet_reg_lambda), '--tet_reg_softplus_beta', '100.0',
+        ])
+
+    # (4) Test case for CTF with regularizer and position gradients with different learning rates.
+    for lr_pos in [0.000001, 0.000005, 0.00001, 0.00005, 0.0001]:
+        commands.append([
+            python_cmd, 'train.py',
+            '--name', f'tooth_ctf_pos_{lr_pos}',
+            '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
+            '--attenuation', '25.0',
+            '--lr_col', '0.06',
+            '--lr_pos', str(lr_pos),
+            '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
+            '--gt_tf', 'Tooth3Gauss.xml',
+            '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
+            '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
+        ])
+
+    # (5) Test case for CTF with regularizer and position gradients with different learning rates.
+    for num_tets in [10000, 30000, 100000, 500000, 1000000]:
+        commands.append([
+            python_cmd, 'train.py',
+            '--name', f'tooth_ctf_num_tets_{num_tets}',
+            '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
+            '--attenuation', '25.0',
+            '--lr_col', '0.06',
+            '--lr_pos', '0.00001',
+            '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
+            '--gt_tf', 'Tooth3Gauss.xml',
+            '--coarse_to_fine', '--max_num_tets', str(num_tets), '--fix_boundary', '--splits_ratio', '0.05',
+            '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
+        ])
+
+if run_isosurface_tests:
+    # Test case for isosurfaces.
+    if not os.path.exists(os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso/images')):
+        commands.append([
+            python_cmd, 'render_vpt.py', '--test_case', 'ToothIso', '--img_res', '1024', '--num_frames', '128',
+            '--denoiser', 'OpenImageDenoise',
+            '--envmap', os.path.join(pathlib.Path.home(), 'Programming/C++/CloudRendering/Data/CloudDataSets/env_maps/belfast_sunset_puresky_4k_2.exr'),
+            '--brdf', 'Lambertian',
+            '-o', os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso'), '--exr'
+        ])
+
+    if os.path.exists(os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso/images')):
+        commands.append([
+            python_cmd, 'train.py',
+            '--name', 'tooth_iso',
+            '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/TestToothIso'),
+            '--attenuation', '25.0',
+            '--lr_col', '0.08',
+            '--lr_pos', '0.0',
+            '--init_grid_path', os.path.join(preshaded_path, 'tooth_uniform.bintet'),
+            '--gt_images_path', os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso'),
+        ])
+
+if run_nerf_synthetic_tests:
     commands.append([
         python_cmd, 'train.py',
-        '--name', f'tooth_color_{lr_col}',
-        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
-        '--attenuation', '25.0',
-        '--lr_col', str(lr_col),
-        '--lr_pos', '0.0',
-        '--init_grid_path', os.path.join(preshaded_path, 'tooth_uniform.bintet'),
-        '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
-        '--gt_tf', 'Tooth3Gauss.xml',
-    ])
-
-# (2) Test case for CTF with different regularization beta.
-for tet_reg_beta in [1.0, 10.0, 100.0, 1000.0]:
-    commands.append([
-        python_cmd, 'train.py',
-        '--name', f'tooth_ctf_reg_beta_{tet_reg_beta}',
-        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
-        '--attenuation', '25.0',
-        '--lr_col', '0.06',
-        '--lr_pos', '0.00001',
-        '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
-        '--gt_tf', 'Tooth3Gauss.xml',
-        '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
-        '--tet_regularizer', '--tet_reg_lambda', '1000000.0', '--tet_reg_softplus_beta', str(tet_reg_beta),
-    ])
-
-# (3) Test case for CTF with different regularization lambdas.
-for tet_reg_lambda in [1.0, 10.0, 100.0, 1000.0, 10000.0]:
-    commands.append([
-        python_cmd, 'train.py',
-        '--name', f'tooth_ctf_reg_lambda_{tet_reg_lambda}',
-        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
-        '--attenuation', '25.0',
-        '--lr_col', '0.06',
-        '--lr_pos', '0.00001',
-        '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
-        '--gt_tf', 'Tooth3Gauss.xml',
-        '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
-        '--tet_regularizer', '--tet_reg_lambda', str(tet_reg_lambda), '--tet_reg_softplus_beta', '100.0',
-    ])
-
-# (4) Test case for CTF with regularizer and position gradients with different learning rates.
-for lr_pos in [0.000001, 0.000005, 0.00001, 0.00005, 0.0001]:
-    commands.append([
-        python_cmd, 'train.py',
-        '--name', f'tooth_ctf_pos_{lr_pos}',
-        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
-        '--attenuation', '25.0',
-        '--lr_col', '0.06',
-        '--lr_pos', str(lr_pos),
-        '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
-        '--gt_tf', 'Tooth3Gauss.xml',
-        '--coarse_to_fine', '--max_num_tets', '100000', '--fix_boundary', '--splits_ratio', '0.05',
-        '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
-    ])
-
-# (5) Test case for CTF with regularizer and position gradients with different learning rates.
-for num_tets in [10000, 30000, 100000, 500000, 1000000]:
-    commands.append([
-        python_cmd, 'train.py',
-        '--name', f'tooth_ctf_num_tets_{num_tets}',
-        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
-        '--attenuation', '25.0',
-        '--lr_col', '0.06',
-        '--lr_pos', '0.00001',
-        '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
-        '--gt_tf', 'Tooth3Gauss.xml',
-        '--coarse_to_fine', '--max_num_tets', str(num_tets), '--fix_boundary', '--splits_ratio', '0.05',
-        '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
-    ])
-
-# Test case for isosurfaces.
-if not os.path.exists(os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso/images')):
-    commands.append([
-        python_cmd, 'render_vpt.py', '--test_case', 'ToothIso', '--img_res', '1024', '--num_frames', '128',
-        '--denoiser', 'OpenImageDenoise',
-        '--envmap', os.path.join(pathlib.Path.home(), 'Programming/C++/CloudRendering/Data/CloudDataSets/env_maps/belfast_sunset_puresky_4k_2.exr'),
-        '--brdf', 'Lambertian',
-        '-o', os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso'), '--exr'
-    ])
-
-if os.path.exists(os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso/images')):
-    commands.append([
-        python_cmd, 'train.py',
-        '--name', 'tooth_iso',
-        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/TestToothIso'),
+        '--name', 'lego',
+        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Lego'),
         '--attenuation', '25.0',
         '--lr_col', '0.08',
         '--lr_pos', '0.0',
-        '--init_grid_path', os.path.join(preshaded_path, 'tooth_uniform.bintet'),
-        '--gt_images_path', os.path.join(pathlib.Path.home(), 'datasets/VPT/toothiso'),
+        '--init_grid_largest', '128',
+        '--gt_nerf_synthetic_data_path', os.path.join(nerf_datasets_path, 'nerf_synthetic/lego'),
+    ])
+
+if run_mip_nerf_360_tests:
+    commands.append([
+        python_cmd, 'train.py',
+        '--name', 'bonsai',
+        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Bonsai'),
+        '--attenuation', '25.0',
+        '--lr_col', '0.08',
+        '--lr_pos', '0.0',
+        '--init_grid_largest', '128',
+        '--gt_colmap_data_path', os.path.join(nerf_datasets_path, '360_v2/bonsai'),
     ])
 
 commands_old = commands

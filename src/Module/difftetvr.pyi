@@ -357,6 +357,28 @@ class OptimizationSettings:
         pass
 
 
+class CameraSettings:
+    def __init__(self) -> None:
+        pass
+    def set_intrinsics(self, img_width: int, img_height: int, fovy: float, near: float, far: float) -> None:
+        pass
+    def set_view_matrix(self, view_matrix_array: list[float]) -> None:
+        pass
+
+class VoxelCarvingType(enum.Enum):
+    DENSE_CPU = enum.auto()  # (= 0)
+
+class VoxelCarving:
+    def __init__(
+            self, grid_bounding_box: AABB3, grid_resolution: uvec3,
+            voxel_carving_type: VoxelCarvingType = VoxelCarvingType.DENSE_CPU) -> None:
+        pass
+    def process_next_frame(self, input_image: torch.Tensor, camera_settings: CameraSettings) -> None:
+        pass
+    def compute_non_empty_bounding_box(self) -> AABB3:
+        pass
+
+
 def render(X: torch.Tensor) -> torch.Tensor:
     """
     Forward rendering pass.
