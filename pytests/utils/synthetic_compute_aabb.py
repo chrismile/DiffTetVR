@@ -355,6 +355,7 @@ def main():
         prog='difftetvr/utils/synthetic_compute_aabb.py',
         description='Computes the AABB (axis-aligned bounding box) for the synthetic NeRF datasets.')
     parser.add_argument('--datasets_path', type=str)
+    parser.add_argument('--dataset_list', nargs='+', type=str)
     parser.add_argument('--colmap_path', type=str)
     args = parser.parse_args()
     default_colmap_search_path = os.path.join(pathlib.Path.home(), 'Software/COLMAP/bin/colmap')
@@ -369,9 +370,9 @@ def main():
     if datasets_path is None:
         raise RuntimeError('Dataset path needs to be specified using \'--datasets_path\'.')
 
-    dataset_list = os.listdir(datasets_path)
-    dataset_list = ['lego']
-    for dataset_name in dataset_list:
+    if args.dataset_list is None:
+        dataset_list = os.listdir(datasets_path)
+    for dataset_name in args.dataset_list:
         dataset_path = os.path.join(datasets_path, dataset_name)
         if os.path.isdir(dataset_path):
             aabb_colmap = compute_aabb_colmap(colmap_command, dataset_path)
