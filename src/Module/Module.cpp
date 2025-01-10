@@ -547,6 +547,9 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("get_attenuation", &TetMeshVolumeRenderer::getAttenuationCoefficient)
             .def("set_attenuation", &TetMeshVolumeRenderer::setAttenuationCoefficient, py::arg("attenuation_coefficient"))
             .def("set_coarse_to_fine_target_num_tets", &TetMeshVolumeRenderer::setCoarseToFineTargetNumTets, py::arg("target_num_tets"))
+            .def("set_use_early_ray_termination", &TetMeshVolumeRenderer::setUseEarlyRayTermination, py::arg("use_early_ray_termination"))
+            .def("set_early_ray_out_thresh", &TetMeshVolumeRenderer::setEarlyRayOutThresh, py::arg("threshold"))
+            .def("set_early_ray_out_alpha", &TetMeshVolumeRenderer::setEarlyRayOutAlpha, py::arg("alpha"))
             .def("set_clear_color", [](const std::shared_ptr<TetMeshVolumeRenderer>& self, const glm::vec4& color) {
                 self->setClearColor(sgl::colorFromVec4(color));
             }, py::arg("color"))
@@ -750,6 +753,8 @@ PYBIND11_MODULE(difftetvr, m) {
             .def_readwrite("image_height", &OptimizationSettings::imageHeight)
             .def_readwrite("attenuation_coefficient", &OptimizationSettings::attenuationCoefficient)
             .def_readwrite("sample_random_view", &OptimizationSettings::sampleRandomView)
+            .def_readwrite("use_early_ray_termination", &OptimizationSettings::useEarlyRayTermination)
+            .def_readwrite("early_ray_out_thresh", &OptimizationSettings::earlyRayOutThresh)
             .def_readwrite("data_set_file_name_gt", &OptimizationSettings::dataSetFileNameGT, "Selected file name.")
             .def_readwrite("data_set_file_name_opt", &OptimizationSettings::dataSetFileNameOpt, "Selected file name.")
             .def_readwrite("use_coarse_to_fine", &OptimizationSettings::useCoarseToFine)

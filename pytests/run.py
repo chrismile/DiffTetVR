@@ -95,12 +95,12 @@ commands = []
 
 run_tooth_tests = False
 run_isosurface_tests = False
-run_nerf_synthetic_tests = True
-run_mip_nerf_360_tests = False
+run_nerf_synthetic_tests = False
+run_mip_nerf_360_tests = True
 
 shared_params_all = [
-    # '--renderer_type', 'projection',
-    '--renderer_type', 'PPLL',
+    '--renderer_type', 'projection',
+    # '--renderer_type', 'PPLL',
 ]
 shared_params = [
     '--record_video', '--save_statistics',
@@ -210,12 +210,13 @@ if run_nerf_synthetic_tests:
     nerf_scene_names = ['Lego', 'Ficus', 'Hotdog']
     for nerf_scene_name in nerf_scene_names:
         nerf_scene_name_lower = nerf_scene_name.lower()
-        if not os.path.isfile(os.path.join(nerf_datasets_path, f'nerf_synthetic/{nerf_scene_name_lower}/aabb.json')):
-            commands.append([
-                python_cmd, 'utils/synthetic_compute_aabb.py',
-                '--datasets_path', os.path.join(nerf_datasets_path, f'nerf_synthetic'),
-                '--dataset_list', nerf_scene_name_lower,
-            ])
+        # The step below is now done automatically.
+        #if not os.path.isfile(os.path.join(nerf_datasets_path, f'nerf_synthetic/{nerf_scene_name_lower}/aabb.json')):
+        #    commands.append([
+        #        python_cmd, 'datasets/synthetic/synthetic_compute_aabb.py',
+        #        '--datasets_path', os.path.join(nerf_datasets_path, f'nerf_synthetic'),
+        #        '--dataset_list', nerf_scene_name_lower,
+        #    ])
         commands.append([
             python_cmd, 'train.py',
             '--name', nerf_scene_name_lower,
@@ -226,6 +227,19 @@ if run_nerf_synthetic_tests:
             '--init_grid_largest', '128',
             '--gt_nerf_synthetic_data_path', os.path.join(nerf_datasets_path, f'nerf_synthetic/{nerf_scene_name_lower}')
         ])
+        # Use COLMAP data exported by synthetic_compute_aabb.py.
+        #commands.append([
+        #    python_cmd, 'train.py',
+        #    '--name', nerf_scene_name_lower + '_pycolmap',
+        #    '--out_dir', os.path.join(pathlib.Path.home(), f'datasets/Tet/{nerf_scene_name}_pycolmap'),
+        #    '--attenuation', '25.0',
+        #    '--lr_col', '0.08',
+        #    '--lr_pos', '0.0',
+        #    '--init_grid_largest', '128',
+        #    '--gt_colmap_data_path', os.path.join(nerf_datasets_path, f'nerf_synthetic/{nerf_scene_name_lower}'),
+        #    '--colmap_sparse_dirname', 'sparse/pycolmap',
+        #    '--image_folder_name', 'train',
+        #])
 
 if run_mip_nerf_360_tests:
     commands.append([
@@ -233,10 +247,12 @@ if run_mip_nerf_360_tests:
         '--name', 'bonsai',
         '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Bonsai'),
         '--attenuation', '25.0',
-        '--lr_col', '0.08',
+        '--lr_col', '0.06',
         '--lr_pos', '0.0',
         '--init_grid_largest', '128',
         '--gt_colmap_data_path', os.path.join(nerf_datasets_path, '360_v2/bonsai'),
+        '--image_folder_name', 'images_2',
+        '--num_epochs', '2',
     ])
 
 commands_old = commands

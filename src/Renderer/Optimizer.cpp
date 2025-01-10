@@ -236,6 +236,12 @@ void TetMeshOptimizer::renderGuiDialog() {
             ImGui::SliderIntPowerOfTwo("Image Height", (int*)&settings.imageHeight, 16, 4096);
             ImGui::SliderFloat("Attenuation", &settings.attenuationCoefficient, 0.0f, 200.0f);
             ImGui::Checkbox("Sample Random View", &settings.sampleRandomView);
+            ImGui::Checkbox("Use Early Ray Out", &settings.useEarlyRayTermination);
+            if (settings.useEarlyRayTermination) {
+                ImGui::SliderFloat(
+                        "Early Ray Alpha Thresh", &settings.earlyRayOutThresh, 1e-6f, 1e-2f, "%.1e",
+                        ImGuiSliderFlags_Logarithmic);
+            }
         }
 
         ImGui::Checkbox("Use Coarse to Fine", &settings.useCoarseToFine);
@@ -525,6 +531,8 @@ void TetMeshOptimizer::startRequest() {
     }
     tetMeshVolumeRendererGT->setTetMeshData(tetMeshGT);
     tetMeshVolumeRendererGT->setAttenuationCoefficient(settings.attenuationCoefficient);
+    tetMeshVolumeRendererGT->setUseEarlyRayTermination(settings.useEarlyRayTermination);
+    tetMeshVolumeRendererGT->setEarlyRayOutThresh(settings.earlyRayOutThresh);
     tetMeshVolumeRendererGT->setOutputImage(colorImageGT->getImageView());
     tetMeshVolumeRendererGT->recreateSwapchain(settings.imageWidth, settings.imageHeight);
     fragmentBufferSize = tetMeshVolumeRendererGT->getFragmentBufferSize();
@@ -536,6 +544,8 @@ void TetMeshOptimizer::startRequest() {
     tetMeshVolumeRendererOpt->setClearColor(sgl::Color(0, 0, 0, 0));
     tetMeshVolumeRendererOpt->setTetMeshData(tetMeshOpt);
     tetMeshVolumeRendererOpt->setAttenuationCoefficient(settings.attenuationCoefficient);
+    tetMeshVolumeRendererOpt->setUseEarlyRayTermination(settings.useEarlyRayTermination);
+    tetMeshVolumeRendererOpt->setEarlyRayOutThresh(settings.earlyRayOutThresh);
     tetMeshVolumeRendererOpt->setOutputImage(colorImageOpt->getImageView());
     tetMeshVolumeRendererOpt->recreateSwapchainExternal(
             settings.imageWidth, settings.imageHeight, fragmentBufferSize,

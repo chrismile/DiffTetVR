@@ -628,6 +628,7 @@ void TetMeshRendererPPLL::render() {
     uniformData.cameraFront = (*camera)->getCameraFront();
     uniformData.cameraPosition = (*camera)->getPosition();
     uniformData.attenuationCoefficient = attenuationCoefficient;
+    uniformData.earlyRayTerminationAlpha = 1.0f - earlyRayOutThresh;
     uniformDataBuffer->updateData(
             sizeof(UniformData), &uniformData, renderer->getVkCommandBuffer());
     renderer->insertMemoryBarrier(

@@ -79,12 +79,53 @@ void TetMeshVolumeRenderer::setTetMeshData(const TetMeshPtr& _tetMesh) {
 
 void TetMeshVolumeRenderer::setOutputImage(sgl::vk::ImageViewPtr& colorImage) {
     outputImageView = colorImage;
+    checkRecreateTerminationIndexImage();
 }
 
 void TetMeshVolumeRenderer::setAdjointPassData(
         sgl::vk::ImageViewPtr _colorAdjointImage, sgl::vk::ImageViewPtr _adjointPassBackbuffer) {
     colorAdjointImage = std::move(_colorAdjointImage);
     adjointPassBackbuffer = std::move(_adjointPassBackbuffer);
+}
+
+void TetMeshVolumeRenderer::checkRecreateTerminationIndexImage() {
+    if (!useEarlyRayTermination) {
+        terminationIndexImageView = {};
+        return;
+    }
+    if (!outputImageView) {
+        return;
+    }
+    bool recreateImage = false;
+    const auto& imageSettingsColor = outputImageView->getImage()->getImageSettings();
+    if (!terminationIndexImageView) {
+        recreateImage = true;
+    } else {
+        const auto& imageSettingsTIdx = terminationIndexImageView->getImage()->getImageSettings();
+        if (imageSettingsColor.width != imageSettingsTIdx.width
+                || imageSettingsColor.height != imageSettingsTIdx.height) {
+            recreateImage = true;
+        }
+    }
+    if (recreateImage) {
+        sgl::vk::ImageSettings imageSettings{};
+        imageSettings.width = outputImageView->getImage()->getImageSettings().width;
+        imageSettings.height = outputImageView->getImage()->getImageSettings().height;
+        imageSettings.format = VK_FORMAT_R32_UINT;
+        imageSettings.usage = VK_IMAGE_USAGE_STORAGE_BIT;
+        imageSettings.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
+        sgl::vk::Device* device = renderer->getDevice();
+        terminationIndexImageView = {};
+        terminationIndexImageView = std::make_shared<sgl::vk::ImageView>(std::make_shared<sgl::vk::Image>(
+                device, imageSettings));
+        if (renderer->getIsCommandBufferInRecordingState()) {
+            renderer->transitionImageLayout(terminationIndexImageView, VK_IMAGE_LAYOUT_GENERAL);
+        } else {
+            auto commandBuffer = device->beginSingleTimeCommands();
+            terminationIndexImageView->transitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+            device->endSingleTimeCommands(commandBuffer);
+        }
+    }
 }
 
 void TetMeshVolumeRenderer::recreateSwapchain(uint32_t width, uint32_t height) {
@@ -127,6 +168,7 @@ void TetMeshVolumeRenderer::setViewportSize(uint32_t viewportWidth, uint32_t vie
 
     sgl::vk::Device* device = renderer->getDevice();
     outputImageView = std::make_shared<sgl::vk::ImageView>(std::make_shared<sgl::vk::Image>(device, imageSettings));
+    checkRecreateTerminationIndexImage();
 
     colorImageBuffer = std::make_shared<sgl::vk::Buffer>(
             device, viewportWidth * viewportHeight * sizeof(float) * 4,
@@ -221,6 +263,23 @@ void TetMeshVolumeRenderer::setClearColor(const sgl::Color& _clearColor) {
     onClearColorChanged();
 }
 
+void TetMeshVolumeRenderer::setUseEarlyRayTermination(bool _useEarlyRayTermination) {
+    if (useEarlyRayTermination != _useEarlyRayTermination) {
+        useEarlyRayTermination = _useEarlyRayTermination;
+        setShadersDirty(VolumeRendererPassType::ALL);
+        checkRecreateTerminationIndexImage();
+        reRender = true;
+    }
+}
+
+void TetMeshVolumeRenderer::setEarlyRayOutThresh(float _thresh) {
+    earlyRayOutThresh = _thresh;
+}
+
+void TetMeshVolumeRenderer::setEarlyRayOutAlpha(float _alpha) {
+    earlyRayOutThresh = 1.0f - _alpha;
+}
+
 void TetMeshVolumeRenderer::getVulkanShaderPreprocessorDefines(
         std::map<std::string, std::string>& preprocessorDefines) {
     if (showDepthComplexity) {
@@ -228,6 +287,10 @@ void TetMeshVolumeRenderer::getVulkanShaderPreprocessorDefines(
     }
     if (useClipPlane) {
         preprocessorDefines.insert(std::make_pair("USE_CLIP_PLANE", ""));
+    }
+
+    if (useEarlyRayTermination && tetMesh && tetMesh->getUseGradients()) {
+        preprocessorDefines.insert(std::make_pair("USE_TERMINATION_INDEX", ""));
     }
 
     if (tileWidth == 1 && tileHeight == 1) {
@@ -275,6 +338,10 @@ void TetMeshVolumeRenderer::setRenderDataBindings(const sgl::vk::RenderDataPtr& 
     renderData->setStaticImageViewOptional(outputImageView, "colorImageOpt");
     renderData->setStaticImageViewOptional(colorAdjointImage, "adjointColors");
 
+    if (useEarlyRayTermination) {
+        renderData->setStaticImageViewOptional(terminationIndexImageView, "terminationIndexImage");
+    }
+
     // For clip plane data.
     if (useClipPlane) {
         renderData->setStaticBufferOptional(clipPlaneDataBuffer, "ClipPlaneDataBuffer");
@@ -320,6 +387,19 @@ void TetMeshVolumeRenderer::renderGuiShared(sgl::PropertyEditor& propertyEditor)
     }
     if (propertyEditor.addSliderFloat("Attenuation", &attenuationCoefficient, 1.0f, 1000.0f)) {
         reRender = true;
+    }
+
+    if (propertyEditor.addCheckbox("Use Early Ray Out", &useEarlyRayTermination)) {
+        setShadersDirty(VolumeRendererPassType::ALL);
+        checkRecreateTerminationIndexImage();
+        reRender = true;
+    }
+    if (useEarlyRayTermination) {
+        if (propertyEditor.addSliderFloat(
+                "Early Ray Alpha Thresh", &earlyRayOutThresh, 1e-6f, 1e-2f, "%.1e",
+                ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat)) {
+            reRender = true;
+        }
     }
 
     if (propertyEditor.addCheckbox("Use Clip Plane", &useClipPlane)) {

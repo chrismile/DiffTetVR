@@ -82,6 +82,15 @@ vec4 transferFunction(float attr) {
 }
 #endif
 
+#ifdef USE_TERMINATION_INDEX
+#ifdef BACKWARD_PASS
+layout(binding = 12, r32ui) uniform readonly uimage2D terminationIndexImage;
+#else
+layout(binding = 12, r32ui) uniform writeonly uimage2D terminationIndexImage;
+#endif
+#endif
+
+
 #include "LinkedListSort.glsl"
 
 #ifdef USE_QUICKSORT

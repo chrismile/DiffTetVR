@@ -217,6 +217,12 @@ class Renderer:
         pass
     def set_coarse_to_fine_target_num_tets(self, target_num_tets: int) -> None:
         pass
+    def set_use_early_ray_termination(self, use_early_ray_termination: bool) -> None:
+        pass
+    def set_early_ray_out_thresh(self, threshold: float) -> None:
+        pass
+    def set_early_ray_out_alpha(self, alpha: float) -> None:
+        pass
     def set_clear_color(self, color: vec4) -> None:
         pass
     def set_viewport_size(self, image_width: int, image_height: int, recreate_swapchain: bool = True) -> None:

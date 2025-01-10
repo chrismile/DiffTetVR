@@ -36,4 +36,6 @@ layout(binding = 0) uniform UniformDataBuffer {
     vec2 viewportSize;
     uint numTets;
     uint viewportLinearW;
+    float earlyRayTerminationAlpha; //< Early ray termination alpha threshold.
+    float uniformPad0, uniformPad1, uniformPad2;
 };

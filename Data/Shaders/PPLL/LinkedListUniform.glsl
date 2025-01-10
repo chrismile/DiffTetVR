@@ -23,5 +23,7 @@ layout(binding = 0) uniform UniformDataBuffer {
 
     // Size of the viewport in x direction (in pixels) without padding.
     int viewportLinearW;
-    int paddingUniform;
+
+    // Early ray termination alpha threshold.
+    float earlyRayTerminationAlpha;
 };

@@ -164,6 +164,12 @@ vec4 frontToBackPQ(uint fragsCount) {
     getNextFragment(0, fragsCount, fragment1Color, fragment1Depth, fragment1Boundary, fragment1FrontFace);
 
     for (i = 1; i < fragsCount; i++) {
+#ifdef USE_TERMINATION_INDEX
+        if (rayColor.a > earlyRayTerminationAlpha) {
+            break;
+        }
+#endif
+
         // Load the new fragment.
         fragment0Color = fragment1Color;
         fragment0Depth = fragment1Depth;
@@ -208,6 +214,11 @@ vec4 frontToBackPQ(uint fragsCount) {
     if (rayColor.a > 1e-5) {
         rayColor.rgb = rayColor.rgb / rayColor.a; // Correct rgb with alpha
     }
+#endif
+
+#ifdef USE_TERMINATION_INDEX
+    ivec2 workIdx = ivec2(gl_FragCoord.xy);
+    imageStore(terminationIndexImage, workIdx, uvec4(i));
 #endif
 
     return rayColor;

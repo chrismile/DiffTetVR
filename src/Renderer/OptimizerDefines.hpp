@@ -92,6 +92,9 @@ struct OptimizationSettings {
     uint32_t imageHeight = 512;
     float attenuationCoefficient = 100.0f;
     bool sampleRandomView = true;
+    // Early ray termination.
+    bool useEarlyRayTermination = true;
+    float earlyRayOutThresh = 1e-4f; // 1 - earlyRayOutAlpha
     // Selected file name.
     std::string dataSetFileNameGT, dataSetFileNameOpt;
     // Coarse to fine.

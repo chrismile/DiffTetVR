@@ -163,6 +163,10 @@ int main(int argc, char *argv[]) {
         if (targetRequirements.ext_name_count > 0) {
             delete[] targetRequirements.ext_names;
         }
+
+        // target.c, radix_sort_vk_target_auto_detect:
+        // radix_sort_vk_target_t* target_ptr = MALLOC_MACRO(sizeof(radix_sort_vk_target_t));
+        free(target);
         return true;
     };
     device->setPhysicalDeviceCheckCallback(physicalDeviceCheckCallback);

@@ -101,6 +101,9 @@ public:
     virtual void setClearColor(const sgl::Color& _clearColor);
     void setNewTilingMode(int newTileWidth, int newTileHeight, bool useMortonCode = false);
     inline void setUseAbsGrad(bool _useAbsGrad) { useAbsGrad = _useAbsGrad; }
+    void setUseEarlyRayTermination(bool _useEarlyRayTermination);
+    void setEarlyRayOutThresh(float _thresh);
+    void setEarlyRayOutAlpha(float _alpha);
 
     // Public interface, only for backward pass.
     virtual void setAdjointPassData(
@@ -129,6 +132,7 @@ public:
     [[nodiscard]] inline const sgl::CameraPtr& getCamera() const { return *camera; }
     [[nodiscard]] inline const TetMeshPtr& getTetMesh() const { return tetMesh; }
     [[nodiscard]] inline const sgl::vk::ImageViewPtr& getOutputImageView() const { return outputImageView; }
+    [[nodiscard]] inline const sgl::vk::ImageViewPtr& getTerminationIndexImageView() const { return terminationIndexImageView; }
     [[nodiscard]] inline size_t getFragmentBufferSize() const { return fragmentBufferSize; }
     [[nodiscard]] inline const sgl::vk::BufferPtr& getFragmentBuffer() const { return fragmentBuffer; }
     [[nodiscard]] inline const sgl::vk::BufferPtr& getStartOffsetBuffer() const { return startOffsetBuffer; }
@@ -159,6 +163,7 @@ protected:
     virtual void onClearColorChanged()=0;
     virtual void reallocateFragmentBuffer() {}
     virtual void setShadersDirty(VolumeRendererPassType passType)=0;
+    void checkRecreateTerminationIndexImage();
 
 #ifndef DISABLE_IMGUI
     void renderGuiShared(sgl::PropertyEditor& propertyEditor);
@@ -182,6 +187,9 @@ protected:
     bool useShading = false;
     TetQualityMetric tetQualityMetric = DEFAULT_QUALITY_METRIC;
     sgl::TransferFunctionWindow* transferFunctionWindow;
+
+    // For early ray termination.
+    sgl::vk::ImageViewPtr terminationIndexImageView;
 
     // For adjoint pass.
     sgl::vk::ImageViewPtr colorAdjointImage;
@@ -216,6 +224,10 @@ protected:
     bool useCoarseToFine = false;
     uint32_t coarseToFineMaxNumTets = 0;
     bool useAbsGrad = false;
+
+    // Early ray out information.
+    bool useEarlyRayTermination = true;
+    float earlyRayOutThresh = 1e-4f; // 1 - earlyRayOutAlpha
 
     // Per-pixel linked list data (only written to in subclass TetMeshRendererPPLL).
     bool useExternalFragmentBuffer = false;

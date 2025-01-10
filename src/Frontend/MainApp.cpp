@@ -208,9 +208,9 @@ MainApp::~MainApp() {
     volumeData = {};
     dataViews.clear();
     delete viewManager;
-    viewManager = nullptr;
+    viewManager = nullptr;*/
 
-    IGFD_Destroy(fileDialogInstance);*/
+    IGFD_Destroy(fileDialogInstance);
 
 /*#ifdef SUPPORT_CUDA_INTEROP
     if (sgl::vk::getIsNvrtcFunctionTableInitialized()) {

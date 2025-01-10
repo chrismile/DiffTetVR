@@ -130,7 +130,7 @@ private:
         uint32_t numTets;
         uint32_t useLinearDepthCorrection;
         float linearDepthCorrection;
-        float pad0;
+        float earlyRayTerminationAlpha; //< Early ray termination alpha threshold.
     };
     UniformData uniformData = {};
     sgl::vk::BufferPtr uniformDataBuffer;

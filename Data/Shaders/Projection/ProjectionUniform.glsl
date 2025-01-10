@@ -34,5 +34,5 @@ layout(binding = 0) uniform UniformDataBuffer {
     uint numTets;
     uint useLinearDepthCorrection;
     float linearDepthCorrection;
-    float pad0;
+    float earlyRayTerminationAlpha; //< Early ray termination alpha threshold.
 };

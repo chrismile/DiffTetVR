@@ -86,6 +86,8 @@ vec4 frontToBackPQ(uint fragsCount) {
         minHeapSink4(i, fragsCount); // Sink all inner nodes
     }
 
+    ivec2 workIdx = ivec2(gl_FragCoord.xy);
+
     vec4 fragment0Color, fragment1Color;
     float fragment0Depth, fragment1Depth;
     bool fragment0Boundary, fragment1Boundary;
@@ -94,11 +96,14 @@ vec4 frontToBackPQ(uint fragsCount) {
     vec3 pf0, pf00, pf01, pf02, pf1, pf10, pf11, pf12;
     vec4 cf00, cf01, cf02, cf10, cf11, cf12;
     float uf0, vf0, uf1, vf1;
+#ifdef USE_TERMINATION_INDEX
+    uint terminationIndex = fragsCount - imageLoad(terminationIndexImage, workIdx).x;
+    if (terminationIndex == 0u)
+#endif
     getNextFragment(
             0, fragsCount, fragment0Color, fragment0Depth, fragment0Boundary, fragment0FrontFace,
             if00, if01, if02, pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0);
 
-    ivec2 workIdx = ivec2(gl_FragCoord.xy);
     vec4 colorRayOut = imageLoad(colorImageOpt, workIdx);
     vec4 dOut_dColorRayOut = imageLoad(adjointColors, workIdx);
 
@@ -115,6 +120,9 @@ vec4 frontToBackPQ(uint fragsCount) {
     float t, tSeg;
     for (i = 1; i < fragsCount; i++) {
         // Load the new fragment.
+#ifdef USE_TERMINATION_INDEX
+        if (i > terminationIndex) {
+#endif
         fragment1Color = fragment0Color;
         fragment1Depth = fragment0Depth;
         fragment1Boundary = fragment0Boundary;
@@ -131,9 +139,19 @@ vec4 frontToBackPQ(uint fragsCount) {
         cf12 = cf02;
         uf1 = uf0;
         vf1 = vf0;
+#ifdef USE_TERMINATION_INDEX
+        }
+        if (i >= terminationIndex)
+#endif
         getNextFragment(
                 i, fragsCount, fragment0Color, fragment0Depth, fragment0Boundary, fragment0FrontFace,
                 if00, if01, if02, pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0);
+
+#ifdef USE_TERMINATION_INDEX
+        if (i <= terminationIndex) {
+            continue;
+        }
+#endif
 
         // Skip if the closest fragment is a boundary face.
         if ((fragment0Boundary && !fragment0FrontFace) && (fragment1Boundary && fragment1FrontFace)) {

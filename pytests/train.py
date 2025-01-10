@@ -155,6 +155,7 @@ def main():
     # Test case (B): Use images from disk as ground truth.
     parser.add_argument('--gt_images_path', type=str, default=None)
     parser.add_argument('--gt_colmap_data_path', type=str, default=None)
+    parser.add_argument('--colmap_sparse_dirname', type=str, default='sparse/0')
     parser.add_argument('--gt_nerf_synthetic_data_path', type=str, default=None)
     parser.add_argument('--image_folder_name', type=str, default=None)
 
@@ -194,7 +195,9 @@ def main():
     elif args.gt_colmap_data_path is not None:
         if args.image_folder_name is None:
             args.image_folder_name = 'images'
-        dataset = ColmapDataset(args.gt_colmap_data_path, images_dir_name=args.image_folder_name)
+        dataset = ColmapDataset(
+            args.gt_colmap_data_path, images_dir_name=args.image_folder_name,
+            sparse_dirname=args.colmap_sparse_dirname)
     elif args.gt_nerf_synthetic_data_path is not None:
         if args.image_folder_name is None:
             args.image_folder_name = 'train'

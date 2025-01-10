@@ -107,6 +107,8 @@ private:
         glm::vec2 viewportSize;
         uint32_t numTets;
         uint32_t viewportLinearW;
+        float earlyRayTerminationAlpha; //< Early ray termination alpha threshold.
+        float pad0, pad1, pad2;
     };
     UniformData uniformData = {};
     sgl::vk::BufferPtr uniformDataBuffer;

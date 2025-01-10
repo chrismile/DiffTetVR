@@ -916,7 +916,7 @@ if $build_with_tetgen_support; then
         rm -rf ./tetgen*
         wget "https://github.com/chrismile/tetgen/releases/download/v${tetgen_version}/${tetgen_dir_name}.zip"
         unzip "${tetgen_dir_name}.zip" -d "${tetgen_dir_name}"
-        if [ $use_msys = true ]; then
+        if [ $use_msys = false ]; then
             chmod +x "${tetgen_dir_name}/bin/tetgen"
         fi
         rm "${tetgen_dir_name}.zip"

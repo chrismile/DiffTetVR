@@ -34,6 +34,7 @@ from .dataset import Dataset3D
 from .imgutils import load_image_array
 from .sample_view import matrix_translation, matrix_quaternion, convert_focal_length_to_fov, get_scale_factor, \
     apply_scale_factor_aabb
+from .synthetic.aabb_depth import compute_aabb_from_depth_images
 
 
 class NeRFSyntheticDataset(torch.utils.data.Dataset, Dataset3D):
@@ -69,8 +70,11 @@ class NeRFSyntheticDataset(torch.utils.data.Dataset, Dataset3D):
                     d.vec3(aabb_json[0], aabb_json[1], aabb_json[2]),
                     d.vec3(aabb_json[3], aabb_json[4], aabb_json[5]))
         else:
-            # TODO: Add this step automatically.
-            raise RuntimeError('Run utils/synthetic_compute_aabb.py first to pre-create AABB information.')
+            self.aabb = compute_aabb_from_depth_images(data_dir)
+            with open(os.path.join(data_dir, 'aabb.json'), 'w') as aabb_file:
+                aabb_file.write(
+                    f'[{self.aabb.min.x}, {self.aabb.min.y}, {self.aabb.min.z}, '
+                    f'{self.aabb.max.x}, {self.aabb.max.y}, {self.aabb.max.z}]')
         self.scale_factor = get_scale_factor(self.aabb)
         self.aabb = apply_scale_factor_aabb(self.aabb, self.scale_factor)
 

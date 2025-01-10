@@ -126,8 +126,7 @@ sgl::AABB3 DenseVoxelCarvingCPU::computeNonEmptyBoundingBox() {
                 return lhs;
             });
 #else
-    // TODO
-    exportVolume("/home/christoph/datasets/imgs/test.cvol");
+    //exportVolume("/home/christoph/datasets/imgs/test.cvol"); // For testing.
     return sgl::AABB3(glm::vec3(minX, minY, minZ), glm::vec3(maxX, maxY, maxZ));
 #endif
 }

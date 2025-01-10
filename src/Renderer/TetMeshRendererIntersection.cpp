@@ -592,6 +592,7 @@ void TetMeshRendererIntersection::render() {
     uniformData.viewportLinearW = uint32_t(windowWidth);
     uniformData.attenuationCoefficient = attenuationCoefficient;
     uniformData.numTets = uint32_t(tetMesh->getNumCells());
+    uniformData.earlyRayTerminationAlpha = 1.0f - earlyRayOutThresh;
     uniformDataBuffer->updateData(
             sizeof(UniformData), &uniformData, renderer->getVkCommandBuffer());
     renderer->insertMemoryBarrier(
