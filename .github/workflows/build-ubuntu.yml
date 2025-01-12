@@ -2,9 +2,9 @@ name: Build on Ubuntu
 
 on:
   push:
-    branches: [ main ]
+    branches: [ unused ]
   pull_request:
-    branches: [ main ]
+    branches: [ unused ]
 
 env:
   BUILD_TYPE: Release
