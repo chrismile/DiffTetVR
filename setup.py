@@ -39,7 +39,9 @@ from setuptools import setup, find_packages
 from setuptools.command.egg_info import egg_info
 from setuptools.dist import Distribution
 from setuptools.command import bdist_egg
-from torch.utils.cpp_extension import include_paths, library_paths, BuildExtension, IS_WINDOWS, IS_HIP_EXTENSION, ROCM_VERSION
+import torch
+from torch.utils.cpp_extension import include_paths, library_paths, BuildExtension, \
+    IS_WINDOWS, IS_HIP_EXTENSION, ROCM_VERSION, ROCM_HOME, CUDA_HOME
 
 extra_compile_args = []
 if IS_WINDOWS:
@@ -73,12 +75,12 @@ def TorchExtension(name, sources, *args, **kwargs):
     libraries.append('torch')
     libraries.append('torch_cpu')
     libraries.append('torch_python')
-    if IS_HIP_EXTENSION:
+    if IS_HIP_EXTENSION:  # (ROCM_HOME is not None) and (torch.version.hip is not None)
         assert ROCM_VERSION is not None
         libraries.append('amdhip64' if ROCM_VERSION >= (3, 5) else 'hip_hcc')
         libraries.append('c10_hip')
         libraries.append('torch_hip')
-    else:
+    elif CUDA_HOME is not None and torch.cuda.is_available():
         libraries.append('cudart')
         libraries.append('c10_cuda')
         libraries.append('torch_cuda')
@@ -105,7 +107,6 @@ def get_cmake_exec():
         if cmake_exec is None and os.path.isfile(cmake_default_path):
             cmake_exec = cmake_default_path
     return cmake_exec
-
 
 
 #sgl_sources = [ 'third_party/sgl/src/Graphics/Vulkan/Utils/Device.cpp' ]
@@ -330,9 +331,14 @@ else:
     defines.append(('GLSLANG_OSINCLUDE_UNIX', ''))
 
 
-# TODO: Add support for not using CUDA.
-defines.append(('SUPPORT_CUDA_INTEROP',))
-source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCuda.cpp')
+if IS_HIP_EXTENSION:  # (ROCM_HOME is not None) and (torch.version.hip is not None)
+    defines.append(('SUPPORT_HIP_INTEROP',))
+    source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropHIP.cpp')
+elif CUDA_HOME is not None and torch.cuda.is_available():
+    defines.append(('SUPPORT_CUDA_INTEROP',))
+    source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCuda.cpp')
+else:
+    defines.append(('SUPPORT_CPU_INTEROP',))
 
 
 tmp_path = 'tmp/fuchsia_radix_sort'
