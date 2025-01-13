@@ -409,6 +409,11 @@ def get_gmp_lib_found():
     return False, gmp_lib_name, None
 
 
+if platform.machine() == 'x86_64' or platform.machine() == 'AMD64':
+    os_arch = 'x86_64'
+else:
+    os_arch = 'aarch64'
+
 support_ftetwild, gmp_lib_name, gmp_path = get_gmp_lib_found()
 if support_ftetwild:
     if os.path.isdir('third_party/fTetWild'):
@@ -467,7 +472,7 @@ elif platform.machine() == 'x86_64' or platform.machine() == 'AMD64':
     if IS_WINDOWS:
         target = 'x86_64-windows'
     else:
-        target = 'x86_64-linux'
+        target = f'{os_arch}-linux'
     ftetwild_dir = f'fTetWild-v{ftetwild_version}-{target}'
     ftetwild_url = f'https://github.com/chrismile/fTetWild/releases/download/v{ftetwild_version}/{ftetwild_dir}.zip'
     if not os.path.isdir(f'third_party/{ftetwild_dir}'):
@@ -488,10 +493,6 @@ if support_tetgen:
     if IS_WINDOWS:
         target = 'x86_64-windows-gnu'
     else:
-        if platform.machine() == 'x86_64' or platform.machine() == 'AMD64':
-            os_arch = 'x86_64'
-        else:
-            os_arch = 'aarch64'
         target = f'{os_arch}-linux'
     tetgen_dir = f'tetgen-v{tetgen_version}-{target}'
     tetgen_url = f'https://github.com/chrismile/tetgen/releases/download/v{tetgen_version}/{tetgen_dir}.zip'

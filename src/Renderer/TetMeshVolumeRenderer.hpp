@@ -41,6 +41,7 @@
 #endif
 
 #include "Tet/TetQuality.hpp"
+#include "TetMeshRendererType.hpp"
 
 namespace sgl { namespace vk {
 class Renderer;
@@ -78,16 +79,12 @@ enum class VolumeRendererPassType {
     ALL = int(GATHER) | int(RESOLVE) | int(OTHER)
 };
 
-enum class RendererType {
-    PPLL, PROJECTION, INTERSECTION
-};
-
 class TetMeshVolumeRenderer {
 public:
     explicit TetMeshVolumeRenderer(
             sgl::vk::Renderer* renderer, sgl::CameraPtr* camera, sgl::TransferFunctionWindow* transferFunctionWindow);
     virtual ~TetMeshVolumeRenderer();
-    [[nodiscard]] virtual RendererType getRendererType() const = 0;
+    [[nodiscard]] virtual TetMeshRendererType getRendererType() const = 0;
 
     // Public interface.
     void setOutputImage(sgl::vk::ImageViewPtr& colorImage);

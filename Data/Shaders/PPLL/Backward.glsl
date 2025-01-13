@@ -37,12 +37,21 @@ layout(push_constant) uniform PushConstants {
 void getNextFragment(
         in uint i, in uint fragsCount, out vec4 color, out float depthLinear, out bool boundary, out bool frontFace,
         out uint i0, out uint i1, out uint i2, out vec3 p, out vec3 p0, out vec3 p1, out vec3 p2,
-        out vec4 c0, out vec4 c1, out vec4 c2, out float u, out float v) {
+        out vec4 c0, out vec4 c1, out vec4 c2, out float u, out float v
+#ifdef USE_TERMINATION_INDEX
+        , bool skipLayer
+#endif
+) {
     minHeapSink4(0, fragsCount - i);
     uint faceBits = colorList[0];
     float depthBufferValue = depthList[0];
     colorList[0] = colorList[fragsCount - i - 1];
     depthList[0] = depthList[fragsCount - i - 1];
+#ifdef USE_TERMINATION_INDEX
+    if (skipLayer) {
+        return;
+    }
+#endif
 
     depthLinear = convertDepthBufferValueToLinearDepth(depthBufferValue);
     frontFace = (faceBits & 1u) == 1u ? true : false;
@@ -98,11 +107,14 @@ vec4 frontToBackPQ(uint fragsCount) {
     float uf0, vf0, uf1, vf1;
 #ifdef USE_TERMINATION_INDEX
     uint terminationIndex = fragsCount - imageLoad(terminationIndexImage, workIdx).x;
-    if (terminationIndex == 0u)
 #endif
     getNextFragment(
             0, fragsCount, fragment0Color, fragment0Depth, fragment0Boundary, fragment0FrontFace,
-            if00, if01, if02, pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0);
+            if00, if01, if02, pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0
+#ifdef USE_TERMINATION_INDEX
+            , terminationIndex != 0u
+#endif
+    );
 
     vec4 colorRayOut = imageLoad(colorImageOpt, workIdx);
     vec4 dOut_dColorRayOut = imageLoad(adjointColors, workIdx);
@@ -141,11 +153,14 @@ vec4 frontToBackPQ(uint fragsCount) {
         vf1 = vf0;
 #ifdef USE_TERMINATION_INDEX
         }
-        if (i >= terminationIndex)
 #endif
         getNextFragment(
                 i, fragsCount, fragment0Color, fragment0Depth, fragment0Boundary, fragment0FrontFace,
-                if00, if01, if02, pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0);
+                if00, if01, if02, pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0
+#ifdef USE_TERMINATION_INDEX
+                , i < terminationIndex
+#endif
+        );
 
 #ifdef USE_TERMINATION_INDEX
         if (i <= terminationIndex) {

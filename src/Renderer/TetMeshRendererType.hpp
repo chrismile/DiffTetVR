@@ -35,5 +35,6 @@ enum class TetMeshRendererType {
 const char* const TET_MESH_RENDERER_TYPES[] = {
         "Per-pixel linked lists", "Projection (Shirley-Tuchmann)", "Intersection"
 };
+typedef TetMeshRendererType RendererType;
 
 #endif //DIFFTETVR_TETMESHRENDERERTYPE_HPP

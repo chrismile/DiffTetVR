@@ -95,12 +95,12 @@ commands = []
 
 run_tooth_tests = False
 run_isosurface_tests = False
-run_nerf_synthetic_tests = False
-run_mip_nerf_360_tests = True
+run_nerf_synthetic_tests = True
+run_mip_nerf_360_tests = False
 
 shared_params_all = [
-    '--renderer_type', 'projection',
-    # '--renderer_type', 'PPLL',
+    # '--renderer_type', 'projection',
+    '--renderer_type', 'PPLL',
 ]
 shared_params = [
     '--record_video', '--save_statistics',

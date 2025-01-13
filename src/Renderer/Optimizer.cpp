@@ -236,11 +236,13 @@ void TetMeshOptimizer::renderGuiDialog() {
             ImGui::SliderIntPowerOfTwo("Image Height", (int*)&settings.imageHeight, 16, 4096);
             ImGui::SliderFloat("Attenuation", &settings.attenuationCoefficient, 0.0f, 200.0f);
             ImGui::Checkbox("Sample Random View", &settings.sampleRandomView);
-            ImGui::Checkbox("Use Early Ray Out", &settings.useEarlyRayTermination);
-            if (settings.useEarlyRayTermination) {
-                ImGui::SliderFloat(
-                        "Early Ray Alpha Thresh", &settings.earlyRayOutThresh, 1e-6f, 1e-2f, "%.1e",
-                        ImGuiSliderFlags_Logarithmic);
+            if (tetMeshRendererType == RendererType::PPLL) {
+                ImGui::Checkbox("Use Early Ray Out", &settings.useEarlyRayTermination);
+                if (settings.useEarlyRayTermination) {
+                    ImGui::SliderFloat(
+                            "Early Ray Alpha Thresh", &settings.earlyRayOutThresh, 1e-6f, 1e-2f, "%.1e",
+                            ImGuiSliderFlags_Logarithmic);
+                }
             }
         }
 
