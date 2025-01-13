@@ -246,6 +246,16 @@ class TetRegularizer:
         pass
 
 
+class TetMeshVtkWriter:
+    """
+    For logging purposes (e.g., writing gradients).
+    """
+    def __init__(self, file_path: str, is_binary: bool = True) -> None:
+        pass
+    def write_next_time_step(self, tet_mesh: TetMesh):
+        pass
+
+
 class RegularGrid:
     def __init__(self) -> None:
         pass

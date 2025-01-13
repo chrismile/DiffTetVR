@@ -143,6 +143,8 @@ def main():
     parser.add_argument(
         '--split_grad_type', action=SplitGradientTypeAction, default=d.SplitGradientType.ABS_COLOR)
     parser.add_argument('--splits_ratio', type=float, default=0.05)
+    parser.add_argument('--coarse_to_fine_save_intermediate', action='store_true', default=False)
+    parser.add_argument('--coarse_to_fine_log_gradients', action='store_true', default=False)
 
     # Ground truth data sources.
     # Test case (A): Render tet dataset as ground truth.
@@ -280,6 +282,10 @@ def main():
         video_out_path = os.path.join(args.out_dir, f'{args.name}.mp4')
         video = cv2.VideoWriter(video_out_path, fourcc, 5.0, (img_width, img_height))
 
+    if args.coarse_to_fine_log_gradients:
+        vtk_file_path = os.path.join(args.out_dir, f'{args.name}.vtk')
+        vtk_writer = d.TetMeshVtkWriter(vtk_file_path)
+
     def training_step(view_matrix_array, optimizer_step=True):
         nonlocal vertex_colors
         if optimizer_step:
@@ -324,6 +330,12 @@ def main():
             if tet_mesh_opt.get_num_cells() >= args.max_num_tets:
                 break
 
+            if args.coarse_to_fine_save_intermediate:
+                mesh_out_path = os.path.join(args.out_dir, f'{args.name}_{tet_mesh_opt.get_num_cells()}.bintet')
+                print(f'Saving intermediate mesh to "{mesh_out_path}"...')
+                tet_mesh_opt.set_vertices_changed_on_device()
+                tet_mesh_opt.save_to_file(mesh_out_path)
+
             # Accumulate gradients.
             print('Accumulating gradients...')
             if use_accum_abs_grads:
@@ -333,6 +345,9 @@ def main():
                 training_step(view_matrix_array, False)
             if use_accum_abs_grads:
                 diff_renderer.set_use_abs_grad(False)
+            if args.coarse_to_fine_log_gradients:
+                vtk_writer.write_next_time_step(tet_mesh_opt)
+
             # Split the tets incident to the vertices with the largest gradients.
             tet_mesh_opt.split_by_largest_gradient_magnitudes(renderer, args.split_grad_type, args.splits_ratio)
             vertex_colors = tet_mesh_opt.get_vertex_colors()
@@ -356,7 +371,10 @@ def main():
     time_end = time.time()
     print(f'Optimization finished ({time_end - time_start}s).')
 
-    mesh_out_path = os.path.join(args.out_dir, f'{args.name}.bintet')
+    if args.coarse_to_fine_save_intermediate:
+        mesh_out_path = os.path.join(args.out_dir, f'{args.name}_{tet_mesh_opt.get_num_cells()}.bintet')
+    else:
+        mesh_out_path = os.path.join(args.out_dir, f'{args.name}.bintet')
     print(f'Saving mesh to "{mesh_out_path}"...')
     tet_mesh_opt.set_vertices_changed_on_device()
     tet_mesh_opt.save_to_file(mesh_out_path)

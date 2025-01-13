@@ -25,6 +25,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import numpy as np
+from numba import njit
 try:
     import open3d as o3d  # pip install open3d
     can_use_o3d = True
@@ -56,3 +57,12 @@ def align_axes_point_cloud(pcd, points):
     points_aligned = np.dot(points, np.transpose(base_transform))
     return points_aligned, base_transform
 
+
+def get_axes_points(axes, radius=0.1, num_points=200):
+    axes_points = []
+    for i in range(3):
+        axis_points = np.empty((num_points, 3))
+        for j in range(num_points):
+            axis_points[j, :] = (radius * j / (num_points - 1)) * axes[:, i]
+        axes_points.append(axis_points)
+    return axes_points

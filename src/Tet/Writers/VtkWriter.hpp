@@ -31,9 +31,17 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
+
+class TetMesh;
+typedef std::shared_ptr<TetMesh> TetMeshPtr;
+
+namespace sgl { namespace vk {
+class Renderer;
+}}
 
 class VtkWriter {
 public:
@@ -57,6 +65,9 @@ public:
             const glm::vec3* vertexPositionGradients,
             const glm::vec4* vertexColorGradients,
             int numPoints);
+
+    /// Writes the time step using the data from a TetMesh object.
+    void writeNextTimeStep(sgl::vk::Renderer* renderer, const TetMeshPtr& tetMesh);
 
 private:
     void writeVtkHeader(FILE* file) const;

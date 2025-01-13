@@ -93,9 +93,10 @@ else:
     python_cmd = 'python3'
 commands = []
 
-run_tooth_tests = False
+run_tooth_tests_params = False
+run_tooth_tests_numtets = True
 run_isosurface_tests = False
-run_nerf_synthetic_tests = True
+run_nerf_synthetic_tests = False
 run_mip_nerf_360_tests = False
 
 shared_params_all = [
@@ -108,7 +109,7 @@ shared_params = [
     # '--init_grid_type', 'ftetwild',
 ] + shared_params_all
 
-if run_tooth_tests:
+if run_tooth_tests_params:
     # (1) Test case for different color LR.
     for lr_col in [0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14]:
         commands.append([
@@ -168,20 +169,22 @@ if run_tooth_tests:
             '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
         ])
 
-    # (5) Test case for CTF with regularizer and position gradients with different learning rates.
-    for num_tets in [10000, 30000, 100000, 500000, 1000000]:
-        commands.append([
-            python_cmd, 'train.py',
-            '--name', f'tooth_ctf_num_tets_{num_tets}',
-            '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
-            '--attenuation', '25.0',
-            '--lr_col', '0.06',
-            '--lr_pos', '0.00001',
-            '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
-            '--gt_tf', 'Tooth3Gauss.xml',
-            '--coarse_to_fine', '--max_num_tets', str(num_tets), '--fix_boundary', '--splits_ratio', '0.05',
-            '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '100.0',
-        ])
+if run_tooth_tests_numtets:
+    # (5) Test case for CTF with regularizer and large number of tets.
+    commands.append([
+        python_cmd, 'train.py',
+        '--name', f'tooth_ctf_num_tets',
+        '--out_dir', os.path.join(pathlib.Path.home(), 'datasets/Tet/Test'),
+        '--num_iterations', '800',
+        '--attenuation', '25.0',
+        '--lr_col', '0.04',
+        '--lr_pos', '0.00001',
+        '--gt_grid_path', os.path.join(regular_grids_path, 'Tooth [256 256 161](CT)', 'tooth_cropped.dat'),
+        '--gt_tf', 'Tooth3Gauss.xml',
+        '--coarse_to_fine', '--max_num_tets', '1000000', '--fix_boundary', '--splits_ratio', '0.05',
+        '--tet_regularizer', '--tet_reg_lambda', '10.0', '--tet_reg_softplus_beta', '1000.0',
+        '--coarse_to_fine_save_intermediate', '--coarse_to_fine_log_gradients',
+    ])
 
 if run_isosurface_tests:
     # Test case for isosurfaces.
@@ -264,7 +267,7 @@ for command in commands_old:
         commands.append(command)
 del commands_old
 
-if run_tooth_tests:
+if run_tooth_tests_params and run_tooth_tests_numtets:
     commands.append([python_cmd, 'eval.py'] + shared_params_all)
 
 

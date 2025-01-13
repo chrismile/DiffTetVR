@@ -40,7 +40,7 @@ from .dataset import Dataset3D
 from .imgutils import load_image_array
 from .sample_view import matrix_translation, matrix_quaternion, convert_focal_length_to_fov, get_scale_factor, \
     apply_scale_factor_aabb
-from .colmap.colmap_align_axes import align_axes_point_cloud
+from .colmap.colmap_align_axes import align_axes_point_cloud, get_axes_points
 
 
 def read_u64(file):
@@ -205,15 +205,25 @@ class ColmapDataset(torch.utils.data.Dataset, Dataset3D):
         # radius = np.linalg.norm(max_vec - min_vec) * 5e-3
         # pcd_filtered, filtered_indices = pcd.remove_radius_outlier(nb_points=5, radius=radius)
         # o3d.io.write_point_cloud('0_pts_filt.ply', pcd_filtered)
-        o3d.visualization.draw_geometries([pcd_filtered])
+        # o3d.visualization.draw_geometries([pcd_filtered])
         # visualize_outliers(pcd, filtered_indices)
         indices_arr = np.array(filtered_indices, dtype=int)
         points_3d_sel = points_3d[indices_arr]
 
         points_aligned, transform = align_axes_point_cloud(pcd_filtered, points_3d_sel)
-        pcd_aligned = o3d.geometry.PointCloud()
-        pcd_aligned.points = o3d.utility.Vector3dVector(points_aligned)
-        o3d.visualization.draw_geometries([pcd_aligned])
+        # pcd_aligned = o3d.geometry.PointCloud()
+        # pcd_aligned.points = o3d.utility.Vector3dVector(points_aligned)
+        # o3d.visualization.draw_geometries([pcd_aligned])
+
+        # min_vec_filtered = np.min(points_3d_sel, axis=0)
+        # max_vec_filtered = np.max(points_3d_sel, axis=0)
+        # radius_filtered = 0.5 * np.linalg.norm(max_vec_filtered - min_vec_filtered)
+        # axes = np.linalg.inv(transform)
+        # axis_pts = get_axes_points(axes, radius=radius_filtered)
+        # points_3d_with_axes = np.concatenate((points_3d_sel, axis_pts[0], axis_pts[1], axis_pts[2]))
+        # pcd_with_axes = o3d.geometry.PointCloud()
+        # pcd_with_axes.points = o3d.utility.Vector3dVector(points_3d_with_axes)
+        # o3d.visualization.draw_geometries([pcd_with_axes])
 
         min_vec = np.min(points_aligned, axis=0)
         max_vec = np.max(points_aligned, axis=0)

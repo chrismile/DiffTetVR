@@ -36,7 +36,10 @@
 #include <Utils/File/Logfile.hpp>
 #include <Utils/File/FileUtils.hpp>
 #include <Graphics/Color.hpp>
+#include <Graphics/Vulkan/Buffers/Buffer.hpp>
+#include <Graphics/Vulkan/Render/Renderer.hpp>
 
+#include "Tet/TetMesh.hpp"
 #include "Tet/Loaders/LoadersUtil.hpp"
 #include "VtkWriter.hpp"
 
@@ -97,6 +100,71 @@ void VtkWriter::writeNextTimeStep(
     delete[] vertexAlphaGradients;
     fclose(file);
     timeStepNumber++;
+}
+
+void VtkWriter::writeNextTimeStep(sgl::vk::Renderer* renderer, const TetMeshPtr& tetMesh) {
+    //renderer->insertMemoryBarrier(
+    //        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+    //        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+    sgl::vk::BufferPtr vertexPositionStagingBuffer;
+    sgl::vk::BufferPtr vertexColorStagingBuffer;
+    sgl::vk::BufferPtr vertexPositionGradientStagingBuffer;
+    sgl::vk::BufferPtr vertexColorGradientStagingBuffer;
+    const auto& cellIndices = tetMesh->getCellIndices();
+    auto vertexPositionBuffer = tetMesh->getVertexPositionBuffer();
+    auto vertexColorBuffer = tetMesh->getVertexColorBuffer();
+    auto vertexPositionGradientBuffer = tetMesh->getVertexPositionGradientBuffer();
+    auto vertexColorGradientBuffer = tetMesh->getVertexColorGradientBuffer();
+    if (!vertexPositionStagingBuffer
+            || vertexPositionStagingBuffer->getSizeInBytes() != vertexPositionBuffer->getSizeInBytes()) {
+        vertexPositionStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                renderer->getDevice(), vertexPositionBuffer->getSizeInBytes(),
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+    }
+    if (!vertexColorStagingBuffer
+            || vertexColorStagingBuffer->getSizeInBytes() != vertexColorBuffer->getSizeInBytes()) {
+        vertexColorStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                renderer->getDevice(), vertexColorBuffer->getSizeInBytes(),
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+    }
+    if (!vertexPositionGradientStagingBuffer
+            || vertexPositionGradientStagingBuffer->getSizeInBytes() != vertexPositionGradientBuffer->getSizeInBytes()) {
+        vertexPositionGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                renderer->getDevice(), vertexPositionGradientBuffer->getSizeInBytes(),
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+    }
+    if (!vertexColorGradientStagingBuffer
+            || vertexColorGradientStagingBuffer->getSizeInBytes() != vertexColorGradientBuffer->getSizeInBytes()) {
+        vertexColorGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                renderer->getDevice(), vertexColorGradientBuffer->getSizeInBytes(),
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+    }
+    vertexPositionBuffer->copyDataTo(
+            vertexPositionStagingBuffer, 0, 0, vertexPositionStagingBuffer->getSizeInBytes(),
+            renderer->getVkCommandBuffer());
+    vertexColorBuffer->copyDataTo(
+            vertexColorStagingBuffer, 0, 0, vertexColorStagingBuffer->getSizeInBytes(),
+            renderer->getVkCommandBuffer());
+    vertexPositionGradientBuffer->copyDataTo(
+            vertexPositionGradientStagingBuffer, 0, 0, vertexPositionGradientBuffer->getSizeInBytes(),
+            renderer->getVkCommandBuffer());
+    vertexColorGradientBuffer->copyDataTo(
+            vertexColorGradientStagingBuffer, 0, 0, vertexColorGradientBuffer->getSizeInBytes(),
+            renderer->getVkCommandBuffer());
+    renderer->syncWithCpu();
+
+    auto* vertexPositions = reinterpret_cast<glm::vec3*>(vertexPositionStagingBuffer->mapMemory());
+    auto* vertexColors = reinterpret_cast<glm::vec4*>(vertexColorStagingBuffer->mapMemory());
+    auto* vertexPositionGradients = reinterpret_cast<glm::vec3*>(vertexPositionGradientStagingBuffer->mapMemory());
+    auto* vertexColorGradients = reinterpret_cast<glm::vec4*>(vertexColorGradientStagingBuffer->mapMemory());
+    const auto numVertices = int(vertexPositionBuffer->getSizeInBytes() / sizeof(glm::vec3));
+    writeNextTimeStep(
+            cellIndices, vertexPositions, vertexColors,
+            vertexPositionGradients, vertexColorGradients, numVertices);
+    vertexPositionStagingBuffer->unmapMemory();
+    vertexColorStagingBuffer->unmapMemory();
+    vertexPositionGradientStagingBuffer->unmapMemory();
+    vertexColorGradientStagingBuffer->unmapMemory();
 }
 
 void VtkWriter::writeVtkHeader(FILE* file) const {

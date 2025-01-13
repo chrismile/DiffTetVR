@@ -54,6 +54,7 @@
 
 #include <Tet/TetMesh.hpp>
 #include <Tet/RegularGrid.hpp>
+#include <Tet/Writers/VtkWriter.hpp>
 #include <Renderer/TetMeshVolumeRenderer.hpp>
 #include <Renderer/TetMeshRendererPPLL.hpp>
 #include <Renderer/TetMeshRendererProjection.hpp>
@@ -649,6 +650,19 @@ PYBIND11_MODULE(difftetvr, m) {
                 self->computeGrad();
                 sState->vulkanFinished();
             });
+
+    // Can be used for logging purposes (e.g., writing gradients).
+    py::class_<VtkWriter, std::shared_ptr<VtkWriter>>(m, "TetMeshVtkWriter")
+            .def(py::init([](const std::string& filePath, bool isBinary) {
+                auto vtkWriter = std::make_shared<VtkWriter>();
+                vtkWriter->initializeWriter(filePath, isBinary);
+                return vtkWriter;
+            }), py::arg("file_path"), py::arg("is_binary") = true)
+            .def("write_next_time_step", [](const std::shared_ptr<VtkWriter>& self, const TetMeshPtr& tetMesh) {
+                sState->vulkanBegin();
+                self->writeNextTimeStep(sState->renderer, tetMesh);
+                sState->vulkanFinished();
+            }, py::arg("tet_mesh"));
 
     py::class_<RegularGrid, RegularGridPtr>(m, "RegularGrid")
             .def(py::init([]() {
