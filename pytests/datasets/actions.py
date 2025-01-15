@@ -58,3 +58,18 @@ class RendererTypeAction(argparse.Action):
 
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, self.table[values])
+
+
+class TestCaseAction(argparse.Action):
+    def __init__(self, *args, **kwargs):
+        table = {
+            'SINGLE_TETRAHEDRON': d.TestCase.SINGLE_TETRAHEDRON,
+            'SINGLE_TETRAHEDRON'.lower(): d.TestCase.SINGLE_TETRAHEDRON,
+            'CUBE_CENTRAL_GRADIENT': d.TestCase.CUBE_CENTRAL_GRADIENT,
+            'CUBE_CENTRAL_GRADIENT'.lower(): d.TestCase.CUBE_CENTRAL_GRADIENT,
+        }
+        super().__init__(*args, choices=table, **kwargs)
+        self.table = table
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, self.table[values])

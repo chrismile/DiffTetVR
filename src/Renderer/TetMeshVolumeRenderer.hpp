@@ -35,9 +35,11 @@
 #include <Graphics/Color.hpp>
 #include <Graphics/Scene/Camera.hpp>
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#ifdef BUILD_PYTHON_MODULE
 #include <torch/types.h>
-#include <Graphics/Vulkan/Utils/InteropCuda.hpp>
+#ifdef SUPPORT_COMPUTE_INTEROP
+#include <Graphics/Vulkan/Utils/InteropCompute.hpp>
+#endif
 #endif
 
 #include "Tet/TetQuality.hpp"
@@ -117,7 +119,8 @@ public:
     virtual void renderAdjoint()=0;
 
     // PyTorch buffer interface.
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#ifdef BUILD_PYTHON_MODULE
+    void setUseComputeInterop(bool _useComputeInterop);
     void setViewportSize(uint32_t viewportWidth, uint32_t viewportHeight);
     torch::Tensor getImageTensor();
     void copyOutputImageToBuffer();
@@ -192,11 +195,19 @@ protected:
     sgl::vk::ImageViewPtr colorAdjointImage;
     sgl::vk::ImageViewPtr adjointPassBackbuffer;
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#ifdef BUILD_PYTHON_MODULE
+    bool useComputeInterop = false;
+#ifdef SUPPORT_COMPUTE_INTEROP
     sgl::vk::BufferPtr colorImageBuffer;
     sgl::vk::BufferPtr colorAdjointImageBuffer;
-    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr colorImageBufferCu;
-    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr colorAdjointImageBufferCu;
+    sgl::vk::BufferComputeApiExternalMemoryVkPtr colorImageBufferCu;
+    sgl::vk::BufferComputeApiExternalMemoryVkPtr colorAdjointImageBufferCu;
+#endif
+    // CPU interop.
+    sgl::vk::BufferPtr colorImageBufferCpu;
+    sgl::vk::BufferPtr colorAdjointImageBufferCpu;
+    void* colorImageBufferCpuPtr = nullptr;
+    void* colorAdjointImageBufferCpuPtr = nullptr;
 #endif
 
     // Window data.

@@ -70,6 +70,66 @@ struct OvmRepresentationData {
 };
 #endif
 
+const int hexFaceTable[6][4] = {
+        // Use consistent winding for faces at the boundary (normals pointing out of the cell - no arbitrary decisions).
+        { 0,1,2,3 },
+        { 5,4,7,6 },
+        { 4,5,1,0 },
+        { 4,0,3,7 },
+        { 6,7,3,2 },
+        { 1,5,6,2 },
+};
+/*
+ * Vertex and edge IDs:
+ *
+ *      3 +----------------+ 2
+ *       /|               /|
+ *      / |              / |
+ *     /  |             /  |
+ *    /   |            /   |
+ * 7 +----------------+ 6  |
+ *   |    |           |    |
+ *   |    |           |    |
+ *   |    |           |    |
+ *   |  0 +-----------|----+ 1
+ *   |   /            |   /
+ *   |  /             |  /
+ *   | /              | /
+ *   |/               |/
+ * 4 +----------------+ 5
+ *
+ * Tet mapping: https://cs.stackexchange.com/questions/89910/how-to-decompose-a-unit-cube-into-tetrahedra
+ */
+const int HEX_TO_TET_TABLE[6][4] = {
+        // { 0, 4, 7, 6 }, -1
+        // { 0, 4, 5, 6 }, +1
+        // { 0, 3, 7, 6 }, +1
+        // { 0, 3, 2, 6 }, -1
+        // { 0, 1, 5, 6 }, -1
+        // { 0, 1, 2, 6 }, +1
+        { 0, 4, 7, 6 },
+        { 0, 4, 6, 5 },
+        { 0, 3, 6, 7 },
+        { 0, 3, 2, 6 },
+        { 0, 1, 5, 6 },
+        { 0, 1, 6, 2 },
+};
+
+void convertHexToTetIndices(const std::vector<uint32_t>& hexIndices, std::vector<uint32_t>& tetIndices) {
+    // Add all tet indices.
+    uint32_t hex[8];
+    for (size_t i = 0; i < hexIndices.size(); i += 8) {
+        for (size_t j = 0; j < 8; j++) {
+            hex[j] = hexIndices[i + j];
+        }
+        for (int tet = 0; tet < 6; tet++) {
+            for (int idx = 0; idx < 4; idx++) {
+                tetIndices.push_back(hex[HEX_TO_TET_TABLE[tet][idx]]);
+            }
+        }
+    }
+}
+
 template <typename T>
 static std::pair<std::vector<std::string>, std::function<TetMeshLoader*()>> registerTetMeshLoader() {
     return { T::getSupportedExtensions(), []() { return new T{}; }};
@@ -152,43 +212,104 @@ void TetMesh::setUseGradients(bool _useGradient) {
     }
 }
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#ifdef BUILD_PYTHON_MODULE
+void TetMesh::setUseComputeInterop(bool _useComputeInterop) {
+    useComputeInterop = _useComputeInterop;
+}
+
+void TetMesh::copyGradientsToCpu(sgl::vk::Renderer* renderer) {
+    vertexPositionGradientBuffer->copyDataTo(vertexPositionGradientBufferCpu, renderer->getVkCommandBuffer());
+    vertexColorGradientBuffer->copyDataTo(vertexColorGradientBufferCpu, renderer->getVkCommandBuffer());
+}
+
 torch::Tensor TetMesh::getVertexPositionTensor() {
-    torch::Tensor vertexPositionTensor = torch::from_blob(
-            reinterpret_cast<float*>(vertexPositionBufferCu->getCudaDevicePtr()),
-            { int(vertexPositions.size()), int(3) },
-            torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(useGradients));
-    if (useGradients) {
-        torch::Tensor vertexPositionGradientTensor = torch::from_blob(
-                reinterpret_cast<float*>(vertexPositionGradientBufferCu->getCudaDevicePtr()),
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        torch::Tensor vertexPositionTensor = torch::from_blob(
+                vertexPositionBufferCu->getDevicePtr<float>(),
                 { int(vertexPositions.size()), int(3) },
-                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
-        vertexPositionTensor.mutable_grad() = vertexPositionGradientTensor;
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(useGradients));
+        if (useGradients) {
+            torch::Tensor vertexPositionGradientTensor = torch::from_blob(
+                    vertexPositionGradientBufferCu->getDevicePtr<float>(),
+                    { int(vertexPositions.size()), int(3) },
+                    torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
+            vertexPositionTensor.mutable_grad() = vertexPositionGradientTensor;
+        }
+        return vertexPositionTensor;
+    } else {
+#endif
+        fetchVertexDataFromDeviceIfNecessary();
+        torch::Tensor vertexPositionTensor = torch::from_blob(
+                vertexPositions.data(),
+                { int(vertexPositions.size()), int(3) },
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU).requires_grad(useGradients));
+        if (useGradients) {
+            torch::Tensor vertexPositionGradientTensor = torch::from_blob(
+                    vertexPositionGradientBufferCpuPtr,
+                    { int(vertexPositions.size()), int(3) },
+                    torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
+            vertexPositionTensor.mutable_grad() = vertexPositionGradientTensor;
+        }
+        return vertexPositionTensor;
+#ifdef SUPPORT_COMPUTE_INTEROP
     }
-    return vertexPositionTensor;
+#endif
 }
 
 torch::Tensor TetMesh::getVertexColorTensor() {
-    torch::Tensor vertexColorTensor = torch::from_blob(
-            reinterpret_cast<float*>(vertexColorBufferCu->getCudaDevicePtr()),
-            { int(vertexColors.size()), int(4) },
-            torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(useGradients));
-    if (useGradients) {
-        torch::Tensor vertexColorGradientTensor = torch::from_blob(
-                reinterpret_cast<float*>(vertexColorGradientBufferCu->getCudaDevicePtr()),
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        torch::Tensor vertexColorTensor = torch::from_blob(
+                vertexColorBufferCu->getDevicePtr<float>(),
                 { int(vertexColors.size()), int(4) },
-                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
-        vertexColorTensor.mutable_grad() = vertexColorGradientTensor;
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(useGradients));
+        if (useGradients) {
+            torch::Tensor vertexColorGradientTensor = torch::from_blob(
+                    vertexColorGradientBufferCu->getDevicePtr<float>(),
+                    { int(vertexColors.size()), int(4) },
+                    torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
+            vertexColorTensor.mutable_grad() = vertexColorGradientTensor;
+        }
+        return vertexColorTensor;
+    } else {
+#endif
+        fetchVertexDataFromDeviceIfNecessary();
+        torch::Tensor vertexColorTensor = torch::from_blob(
+                vertexColors.data(),
+                { int(vertexColors.size()), int(4) },
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU).requires_grad(useGradients));
+        if (useGradients) {
+            torch::Tensor vertexColorGradientTensor = torch::from_blob(
+                    vertexColorGradientBufferCpuPtr,
+                    { int(vertexColors.size()), int(4) },
+                    torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
+            vertexColorTensor.mutable_grad() = vertexColorGradientTensor;
+        }
+        return vertexColorTensor;
+#ifdef SUPPORT_COMPUTE_INTEROP
     }
-    return vertexColorTensor;
+#endif
 }
 
 torch::Tensor TetMesh::getVertexBoundaryBitTensor() {
-    torch::Tensor vertexBoundaryBitTensor = torch::from_blob(
-            reinterpret_cast<float*>(vertexBoundaryBitBufferCu->getCudaDevicePtr()),
-            { int(vertexPositions.size()), int(1) },
-            torch::TensorOptions().dtype(torch::kUInt8).device(torch::kCUDA));
-    return vertexBoundaryBitTensor;
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        torch::Tensor vertexBoundaryBitTensor = torch::from_blob(
+                vertexBoundaryBitBufferCu->getDevicePtr<uint32_t>(),
+                { int(vertexPositions.size()), int(1) },
+                torch::TensorOptions().dtype(torch::kInt32).device(torch::kCUDA));
+        return vertexBoundaryBitTensor;
+    } else {
+#endif
+        torch::Tensor vertexBoundaryBitTensor = torch::from_blob(
+                verticesBoundarySlim.data(),
+                { int(vertexPositions.size()), int(1) },
+                torch::TensorOptions().dtype(torch::kInt32).device(torch::kCPU));
+        return vertexBoundaryBitTensor;
+#ifdef SUPPORT_COMPUTE_INTEROP
+    }
+#endif
 }
 #endif
 
@@ -289,13 +410,21 @@ void TetMesh::uploadDataToDevice() {
     tetQualityBuffer = {};
     vertexPositionGradientBuffer = {};
     vertexColorGradientBuffer = {};
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_COMPUTE_INTEROP)
     vertexPositionBufferCu = {};
     vertexColorBufferCu = {};
     vertexBoundaryBitBufferCu = {};
     vertexPositionGradientBufferCu = {};
     vertexColorGradientBufferCu = {};
 #endif
+    vertexPositionBufferCpu = {};
+    vertexColorBufferCpu = {};
+    vertexPositionGradientBufferCpu = {};
+    vertexColorGradientBufferCpu = {};
+    vertexPositionBufferCpuPtr = nullptr;
+    vertexColorBufferCpuPtr = nullptr;
+    vertexPositionGradientBufferCpuPtr = nullptr;
+    vertexColorGradientBufferCpuPtr = nullptr;
 
     cellIndicesBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(uint32_t) * cellIndices.size(), cellIndices.data(),
@@ -314,56 +443,86 @@ void TetMesh::uploadDataToDevice() {
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY);
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_COMPUTE_INTEROP)
+    if (useComputeInterop) {
+        vertexPositionBuffer = std::make_shared<sgl::vk::Buffer>(
+                device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+        vertexColorBuffer = std::make_shared<sgl::vk::Buffer>(
+                device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+        vertexBoundaryBitBuffer = std::make_shared<sgl::vk::Buffer>(
+                device, sizeof(uint32_t) * verticesBoundarySlim.size(), verticesBoundarySlim.data(),
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+        vertexPositionBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexPositionBuffer);
+        vertexColorBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexColorBuffer);
+        vertexBoundaryBitBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexBoundaryBitBuffer);
+        if (useGradients) {
+            vertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(
+                    device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+            vertexColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(
+                    device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+            vertexPositionGradientBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexPositionGradientBuffer);
+            vertexColorGradientBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexColorGradientBuffer);
+        }
+    } else {
+#endif
     vertexPositionBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+            VMA_MEMORY_USAGE_GPU_ONLY);
     vertexColorBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+            VMA_MEMORY_USAGE_GPU_ONLY);
     vertexBoundaryBitBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(uint32_t) * verticesBoundarySlim.size(), verticesBoundarySlim.data(),
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY, true, true);
-    vertexPositionBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(vertexPositionBuffer);
-    vertexColorBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(vertexColorBuffer);
-    vertexBoundaryBitBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(vertexBoundaryBitBuffer);
+            VMA_MEMORY_USAGE_GPU_ONLY);
     if (useGradients) {
         vertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(
                 device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+                VMA_MEMORY_USAGE_GPU_ONLY);
         vertexColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(
                 device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                VMA_MEMORY_USAGE_GPU_ONLY, true, true);
-        vertexPositionGradientBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(vertexPositionGradientBuffer);
-        vertexColorGradientBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(vertexColorGradientBuffer);
+                VMA_MEMORY_USAGE_GPU_ONLY);
     }
-#else
-    vertexPositionBuffer = std::make_shared<sgl::vk::Buffer>(
-            device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
-    vertexColorBuffer = std::make_shared<sgl::vk::Buffer>(
-            device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
-    vertexBoundaryBitBuffer = std::make_shared<sgl::vk::Buffer>(
-            device, sizeof(uint32_t) * verticesBoundarySlim.size(), verticesBoundarySlim.data(),
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
-    if (useGradients) {
-        vertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(
-                device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
-                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                VMA_MEMORY_USAGE_GPU_ONLY);
-        vertexColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(
-                device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
-                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                VMA_MEMORY_USAGE_GPU_ONLY);
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_COMPUTE_INTEROP)
+    }
+#endif
+
+#ifdef BUILD_PYTHON_MODULE
+    if (!useComputeInterop) {
+        vertexPositionBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                device, vertexPositionBuffer->getSizeInBytes(),
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+        vertexColorBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                device, vertexColorBuffer->getSizeInBytes(),
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+        if (useGradients) {
+            vertexPositionGradientBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                    device, vertexPositionGradientBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+            vertexColorGradientBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                    device, vertexColorGradientBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+        }
+        // Persistently map the CPU buffers.
+        vertexPositionBufferCpuPtr = vertexPositionBufferCpu->mapMemory();
+        vertexColorBufferCpuPtr = vertexColorBufferCpu->mapMemory();
+        if (useGradients) {
+            vertexPositionGradientBufferCpuPtr = vertexPositionGradientBufferCpu->mapMemory();
+            vertexColorGradientBufferCpuPtr = vertexColorGradientBufferCpu->mapMemory();
+        }
     }
 #endif
 }
@@ -374,6 +533,39 @@ void TetMesh::setTetQualityMetric(TetQualityMetric _tetQualityMetric) {
         isTetQualityDataDirty = true;
         getTetQualityBuffer();
     }
+}
+
+void TetMesh::setVerticesChangedOnDevice(bool _verticesChanged) {
+#ifdef BUILD_PYTHON_MODULE
+    if (useComputeInterop) {
+        verticesChangedOnDevice = _verticesChanged;
+    } else if (_verticesChanged) {
+        // Data actually changed on the CPU, not the device. Copy data from CPU to GPU.
+        auto commandBuffer = device->beginSingleTimeCommands();
+        vertexPositionBufferCpu->copyHostMemoryToAllocation(vertexPositions.data());
+        vertexColorBufferCpu->copyHostMemoryToAllocation(vertexColors.data());
+        device->insertMemoryBarrier(
+                VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                commandBuffer);
+        vertexPositionBufferCpu->copyDataTo(vertexPositionBuffer, commandBuffer);
+        vertexColorBufferCpu->copyDataTo(vertexColorBuffer, commandBuffer);
+        device->endSingleTimeCommands(commandBuffer);
+    }
+#else
+    verticesChangedOnDevice = _verticesChanged;
+#endif
+}
+
+void TetMesh::onZeroGrad() {
+#ifdef BUILD_PYTHON_MODULE
+    if (!useComputeInterop) {
+        auto commandBuffer = device->beginSingleTimeCommands();
+        vertexPositionGradientBuffer->fill(0, commandBuffer);
+        vertexColorGradientBuffer->fill(0, commandBuffer);
+        device->endSingleTimeCommands(commandBuffer);
+    }
+#endif
 }
 
 void TetMesh::fetchVertexDataFromDeviceIfNecessary() {
@@ -470,6 +662,54 @@ const sgl::vk::BufferPtr& TetMesh::getTetQualityBuffer() {
     return tetQualityBuffer;
 }
 
+
+static void createBaseCubeHex(
+        float width, std::vector<uint32_t>& hexIndices,
+        std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors) {
+    constexpr float alphaScale = 0.25f;
+    const float ml = -width * 0.5f;
+    const float mr = +width * 0.5f;
+    vertexPositions = {
+            { -4.0f, -4.0f, +4.0f }, // 0
+            {    ml, -4.0f, +4.0f }, // 1
+            {  0.0f, -4.0f, +4.0f }, // 2
+            {    mr, -4.0f, +4.0f }, // 3
+            { +4.0f, -4.0f, +4.0f }, // 4
+
+            { +4.0f, -4.0f, -4.0f }, // 5
+            {    mr, -4.0f, -4.0f }, // 6
+            {  0.0f, -4.0f, -4.0f }, // 7
+            {    ml, -4.0f, -4.0f }, // 8
+            { -4.0f, -4.0f, -4.0f }, // 9
+
+            { -4.0f, +4.0f, +4.0f }, // 10
+            {    ml, +4.0f, +4.0f }, // 11
+            {  0.0f, +4.0f, +4.0f }, // 12
+            {    mr, +4.0f, +4.0f }, // 13
+            { +4.0f, +4.0f, +4.0f }, // 14
+
+            { +4.0f, +4.0f, -4.0f }, // 15
+            {    mr, +4.0f, -4.0f }, // 16
+            {  0.0f, +4.0f, -4.0f }, // 17
+            {    ml, +4.0f, -4.0f }, // 18
+            { -4.0f, +4.0f, -4.0f }, // 19
+    };
+    glm::vec4 c0(0.5, 0.5, 0.5, 0.0625 * alphaScale);
+    glm::vec4 c1(1.0, 0.0, 0.0, 0.125 * alphaScale);
+    vertexColors = {
+            c0, c0, c1, c0, c0,
+            c0, c0, c1, c0, c0,
+            c0, c0, c1, c0, c0,
+            c0, c0, c1, c0, c0,
+    };
+    hexIndices = {
+            9, 8, 18, 19, 0, 1, 11, 10,
+            8, 7, 17, 18, 1, 2, 12, 11,
+            7, 6, 16, 17, 2, 3, 13, 12,
+            6, 5, 15, 16, 3, 4, 14, 13
+    };
+}
+
 void TetMesh::loadTestData(TestCase testCase) {
     if (testCase == TestCase::SINGLE_TETRAHEDRON) {
         std::vector<uint32_t> _cellIndices = { 0, 1, 2, 3 };
@@ -520,6 +760,16 @@ void TetMesh::loadTestData(TestCase testCase) {
                 {0.0f, 0.0f, 1.0f, 0.1f},
         };*/
         setTetMeshData(_cellIndices, _vertexPositions, _vertexColors);
+    } else if (testCase == TestCase::CUBE_CENTRAL_GRADIENT) {
+        const float width = 4.0f;
+        std::vector<uint32_t> hexIndices;
+        createBaseCubeHex(width, hexIndices, vertexPositions, vertexColors);
+        const float scale = 1.0f / 16.0f;
+        for (glm::vec3& p : vertexPositions) {
+            p *= scale;
+        }
+        convertHexToTetIndices(hexIndices, cellIndices);
+        setTetMeshDataInternal();
     }
 }
 
@@ -1116,106 +1366,63 @@ void TetMesh::subdivideVertices(const std::vector<float>& gradientMagnitudes, ui
 
 void TetMesh::splitByLargestGradientMagnitudes(
         sgl::vk::Renderer* renderer, SplitGradientType splitGradientType, float numSplitsRatio) {
-    if (!vertexPositionGradientStagingBuffer
-            || vertexPositionGradientStagingBuffer->getSizeInBytes() != vertexPositionGradientBuffer->getSizeInBytes()) {
-        vertexPositionGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
-                device, vertexPositionGradientBuffer->getSizeInBytes(),
-                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+#ifdef BUILD_PYTHON_MODULE
+    if (useComputeInterop) {
+#endif
+        if (!vertexPositionGradientBufferCpu
+                || vertexPositionGradientBufferCpu->getSizeInBytes() != vertexPositionGradientBuffer->getSizeInBytes()) {
+            vertexPositionGradientBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                    device, vertexPositionGradientBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        }
+        if (!vertexColorGradientBufferCpu
+                || vertexColorGradientBufferCpu->getSizeInBytes() != vertexColorGradientBuffer->getSizeInBytes()) {
+            vertexColorGradientBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                    device, vertexColorGradientBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        }
+        vertexPositionGradientBuffer->copyDataTo(
+                vertexPositionGradientBufferCpu, 0, 0, vertexPositionGradientBuffer->getSizeInBytes(),
+                renderer->getVkCommandBuffer());
+        vertexColorGradientBuffer->copyDataTo(
+                vertexColorGradientBufferCpu, 0, 0, vertexColorGradientBuffer->getSizeInBytes(),
+                renderer->getVkCommandBuffer());
+        renderer->syncWithCpu();
+        vertexPositionGradientBufferCpuPtr = vertexPositionGradientBufferCpu->mapMemory();
+        vertexColorGradientBufferCpuPtr = vertexColorGradientBufferCpu->mapMemory();
+#ifdef BUILD_PYTHON_MODULE
     }
-    if (!vertexColorGradientStagingBuffer
-            || vertexColorGradientStagingBuffer->getSizeInBytes() != vertexColorGradientBuffer->getSizeInBytes()) {
-        vertexColorGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
-                device, vertexColorGradientBuffer->getSizeInBytes(),
-                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
-    }
-    vertexPositionGradientBuffer->copyDataTo(
-            vertexPositionGradientStagingBuffer, 0, 0, vertexPositionGradientBuffer->getSizeInBytes(),
-            renderer->getVkCommandBuffer());
-    vertexColorGradientBuffer->copyDataTo(
-            vertexColorGradientStagingBuffer, 0, 0, vertexColorGradientBuffer->getSizeInBytes(),
-            renderer->getVkCommandBuffer());
-    renderer->syncWithCpu();
-    auto* vertexPositionGradients = reinterpret_cast<glm::vec3*>(vertexPositionGradientStagingBuffer->mapMemory());
-    auto* vertexColorGradients = reinterpret_cast<glm::vec4*>(vertexColorGradientStagingBuffer->mapMemory());
+#endif
+#ifndef BUILD_PYTHON_MODULE
     setVerticesChangedOnDevice(true);
+#endif
 
     std::vector<float> gradientMagnitudes(getNumVertices());
     if (splitGradientType == SplitGradientType::POSITION
             || splitGradientType == SplitGradientType::ABS_POSITION) {
         computeVectorMagnitudeField(
-                vertexPositionGradients, gradientMagnitudes.data(), int(getNumVertices()));
+                reinterpret_cast<glm::vec3*>(vertexPositionGradientBufferCpuPtr),
+                gradientMagnitudes.data(), int(getNumVertices()));
     } else {
         computeVectorMagnitudeField(
-                vertexColorGradients, gradientMagnitudes.data(), int(getNumVertices()));
+                reinterpret_cast<glm::vec4*>(vertexColorGradientBufferCpuPtr),
+                gradientMagnitudes.data(), int(getNumVertices()));
     }
     auto numSplits = uint32_t(std::ceil(double(numSplitsRatio) * double(getNumVertices())));
     subdivideVertices(gradientMagnitudes, numSplits);
 
-    vertexPositionGradientStagingBuffer->unmapMemory();
-    vertexColorGradientStagingBuffer->unmapMemory();
-}
-
-
-
-const int hexFaceTable[6][4] = {
-        // Use consistent winding for faces at the boundary (normals pointing out of the cell - no arbitrary decisions).
-        { 0,1,2,3 },
-        { 5,4,7,6 },
-        { 4,5,1,0 },
-        { 4,0,3,7 },
-        { 6,7,3,2 },
-        { 1,5,6,2 },
-};
-/*
- * Vertex and edge IDs:
- *
- *      3 +----------------+ 2
- *       /|               /|
- *      / |              / |
- *     /  |             /  |
- *    /   |            /   |
- * 7 +----------------+ 6  |
- *   |    |           |    |
- *   |    |           |    |
- *   |    |           |    |
- *   |  0 +-----------|----+ 1
- *   |   /            |   /
- *   |  /             |  /
- *   | /              | /
- *   |/               |/
- * 4 +----------------+ 5
- *
- * Tet mapping: https://cs.stackexchange.com/questions/89910/how-to-decompose-a-unit-cube-into-tetrahedra
- */
-const int HEX_TO_TET_TABLE[6][4] = {
-        // { 0, 4, 7, 6 }, -1
-        // { 0, 4, 5, 6 }, +1
-        // { 0, 3, 7, 6 }, +1
-        // { 0, 3, 2, 6 }, -1
-        // { 0, 1, 5, 6 }, -1
-        // { 0, 1, 2, 6 }, +1
-        { 0, 4, 7, 6 },
-        { 0, 4, 6, 5 },
-        { 0, 3, 6, 7 },
-        { 0, 3, 2, 6 },
-        { 0, 1, 5, 6 },
-        { 0, 1, 6, 2 },
-};
-
-void convertHexToTetIndices(const std::vector<uint32_t>& hexIndices, std::vector<uint32_t>& tetIndices) {
-    // Add all tet indices.
-    uint32_t hex[8];
-    for (size_t i = 0; i < hexIndices.size(); i += 8) {
-        for (size_t j = 0; j < 8; j++) {
-            hex[j] = hexIndices[i + j];
-        }
-        for (int tet = 0; tet < 6; tet++) {
-            for (int idx = 0; idx < 4; idx++) {
-                tetIndices.push_back(hex[HEX_TO_TET_TABLE[tet][idx]]);
-            }
-        }
+#ifdef BUILD_PYTHON_MODULE
+    if (useComputeInterop) {
+#endif
+        vertexPositionGradientBufferCpu->unmapMemory();
+        vertexColorGradientBufferCpu->unmapMemory();
+        vertexPositionGradientBufferCpuPtr = nullptr;
+        vertexColorGradientBufferCpuPtr = nullptr;
+#ifdef BUILD_PYTHON_MODULE
     }
+#endif
 }
+
 
 void TetMesh::setHexMeshConst(
         const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor) {

@@ -34,9 +34,11 @@
 #include <Graphics/Color.hpp>
 #include <Graphics/Scene/Camera.hpp>
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#ifdef BUILD_PYTHON_MODULE
 #include <torch/types.h>
-#include <Graphics/Vulkan/Utils/InteropCuda.hpp>
+#ifdef SUPPORT_COMPUTE_INTEROP
+#include <Graphics/Vulkan/Utils/InteropCompute.hpp>
+#endif
 #endif
 
 namespace sgl { namespace vk {
@@ -102,6 +104,7 @@ public:
 
     // PyTorch buffer interface.
 #if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+    void setUseComputeInterop(bool _useComputeInterop);
     void setViewportSize(uint32_t viewportWidth, uint32_t viewportHeight);
     torch::Tensor getImageTensor();
     void copyOutputImageToBuffer();
@@ -119,9 +122,15 @@ private:
     sgl::Color clearColor;
     bool reRender = false;
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#ifdef BUILD_PYTHON_MODULE
+    bool useComputeInterop = false;
+#ifdef SUPPORT_COMPUTE_INTEROP
     sgl::vk::BufferPtr colorImageBuffer;
-    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr colorImageBufferCu;
+    sgl::vk::BufferComputeApiExternalMemoryVkPtr colorImageBufferCu;
+#endif
+    // CPU interop.
+    sgl::vk::BufferPtr colorImageBufferCpu;
+    void* colorImageBufferCpuPtr = nullptr;
 #endif
 
     float attenuationCoefficient = 100.0f;

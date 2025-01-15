@@ -254,36 +254,37 @@ void TetMeshOptimizer::renderGuiDialog() {
                     "Split Gradient Type", (int*)&settings.splitGradientType,
                     SPLIT_GRADIENT_TYPE_NAMES, IM_ARRAYSIZE(SPLIT_GRADIENT_TYPE_NAMES));
             ImGui::SliderFloat("#Splits Ratio", &settings.numSplitsRatio, 0.0f, 1.0f);
-            ImGui::Checkbox("Use Init. Grid", &settings.useConstantInitGrid);
-            if (settings.useConstantInitGrid) {
-                ImGui::Combo(
-                        "Init Grid Type", (int*)&settings.initGridType,
-                        INIT_GRID_TYPE_NAMES, IM_ARRAYSIZE(INIT_GRID_TYPE_NAMES));
-                ImGui::SliderInt3("Init Grid Size", (int*)&settings.initGridResolution.x, 1, 128);
-                if (settings.initGridType == InitGridType::MESHING_FTETWILD) {
-                    ImGui::SliderDouble("Ideal Edge Length", &settings.fTetWildParams.relativeIdealEdgeLength, 0.01, 0.5);
-                    ImGui::SliderDouble("Epsilon", &settings.fTetWildParams.epsilon, 1e-4, 1e-2);
-                    ImGui::Checkbox("Skip Simplify", &settings.fTetWildParams.skipSimplify);
-                    ImGui::Checkbox("Coarsen", &settings.fTetWildParams.coarsen);
-                } else if (settings.initGridType == InitGridType::MESHING_TETGEN) {
-                    ImGui::Checkbox("Use Steiner Points", &settings.tetGenParams.useSteinerPoints);
-                    if (settings.tetGenParams.useSteinerPoints) {
-                        ImGui::Checkbox("Use Radius-Edge Ratio", &settings.tetGenParams.useRadiusEdgeRatioBound);
-                        if (settings.tetGenParams.useRadiusEdgeRatioBound) {
-                            ImGui::SliderDouble("Radius-Edge Ratio Bound", &settings.tetGenParams.radiusEdgeRatioBound, 0.1f, 2.0f);
-                        }
-                        ImGui::Checkbox("Use Max. Volume", &settings.tetGenParams.useMaximumVolumeConstraint);
-                        if (settings.tetGenParams.useMaximumVolumeConstraint) {
-                            ImGui::SliderDouble("Max. Tetrahedron Volume", &settings.tetGenParams.maximumTetrahedronVolume, 0.1f, 2.0f);
-                        }
+        }
+
+        ImGui::Checkbox("Use Init. Grid", &settings.useConstantInitGrid);
+        if (settings.useConstantInitGrid) {
+            ImGui::Combo(
+                    "Init Grid Type", (int*)&settings.initGridType,
+                    INIT_GRID_TYPE_NAMES, IM_ARRAYSIZE(INIT_GRID_TYPE_NAMES));
+            ImGui::SliderInt3("Init Grid Size", (int*)&settings.initGridResolution.x, 1, 128);
+            if (settings.initGridType == InitGridType::MESHING_FTETWILD) {
+                ImGui::SliderDouble("Ideal Edge Length", &settings.fTetWildParams.relativeIdealEdgeLength, 0.01, 0.5);
+                ImGui::SliderDouble("Epsilon", &settings.fTetWildParams.epsilon, 1e-4, 1e-2);
+                ImGui::Checkbox("Skip Simplify", &settings.fTetWildParams.skipSimplify);
+                ImGui::Checkbox("Coarsen", &settings.fTetWildParams.coarsen);
+            } else if (settings.initGridType == InitGridType::MESHING_TETGEN) {
+                ImGui::Checkbox("Use Steiner Points", &settings.tetGenParams.useSteinerPoints);
+                if (settings.tetGenParams.useSteinerPoints) {
+                    ImGui::Checkbox("Use Radius-Edge Ratio", &settings.tetGenParams.useRadiusEdgeRatioBound);
+                    if (settings.tetGenParams.useRadiusEdgeRatioBound) {
+                        ImGui::SliderDouble("Radius-Edge Ratio Bound", &settings.tetGenParams.radiusEdgeRatioBound, 0.1f, 2.0f);
                     }
-                    ImGui::Checkbox("Coarsen", &settings.tetGenParams.coarsen);
-                    ImGui::SliderDouble("Max. Dihedral Angle", &settings.tetGenParams.maximumDihedralAngle, 10.0f, 180.0f);
-                    ImGui::SliderInt("Mesh Opt. Level", &settings.tetGenParams.meshOptimizationLevel, 0, 10);
-                    ImGui::Checkbox("Use Edge/Face Flips", &settings.tetGenParams.useEdgeAndFaceFlips);
-                    ImGui::Checkbox("Use Vertex Smoothing", &settings.tetGenParams.useVertexSmoothing);
-                    ImGui::Checkbox("Use Vertex Ins./Del.", &settings.tetGenParams.useVertexInsertionAndDeletion);
+                    ImGui::Checkbox("Use Max. Volume", &settings.tetGenParams.useMaximumVolumeConstraint);
+                    if (settings.tetGenParams.useMaximumVolumeConstraint) {
+                        ImGui::SliderDouble("Max. Tetrahedron Volume", &settings.tetGenParams.maximumTetrahedronVolume, 0.1f, 2.0f);
+                    }
                 }
+                ImGui::Checkbox("Coarsen", &settings.tetGenParams.coarsen);
+                ImGui::SliderDouble("Max. Dihedral Angle", &settings.tetGenParams.maximumDihedralAngle, 10.0f, 180.0f);
+                ImGui::SliderInt("Mesh Opt. Level", &settings.tetGenParams.meshOptimizationLevel, 0, 10);
+                ImGui::Checkbox("Use Edge/Face Flips", &settings.tetGenParams.useEdgeAndFaceFlips);
+                ImGui::Checkbox("Use Vertex Smoothing", &settings.tetGenParams.useVertexSmoothing);
+                ImGui::Checkbox("Use Vertex Ins./Del.", &settings.tetGenParams.useVertexInsertionAndDeletion);
             }
         }
 

@@ -41,9 +41,11 @@
 
 #include <Math/Geometry/AABB3.hpp>
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#ifdef BUILD_PYTHON_MODULE
 #include <torch/types.h>
-#include <Graphics/Vulkan/Utils/InteropCuda.hpp>
+#ifdef SUPPORT_COMPUTE_INTEROP
+#include <Graphics/Vulkan/Utils/InteropCompute.hpp>
+#endif
 #endif
 
 #include "../Renderer/OptimizerDefines.hpp"
@@ -75,7 +77,7 @@ struct FaceSlim {
 };
 
 enum class TestCase {
-    SINGLE_TETRAHEDRON
+    SINGLE_TETRAHEDRON, CUBE_CENTRAL_GRADIENT
 };
 
 enum class TetMeshRepresentationType {
@@ -96,7 +98,8 @@ public:
     [[nodiscard]] inline bool isDirty() const { return isVisualRepresentationDirty; }
     inline void resetDirty() { isVisualRepresentationDirty = false; }
     [[nodiscard]] inline const sgl::AABB3& getBoundingBox() { return boundingBox; }
-    void setVerticesChangedOnDevice(bool _verticesChanged) { verticesChangedOnDevice = _verticesChanged; }
+    void setVerticesChangedOnDevice(bool _verticesChanged);
+    void onZeroGrad();
     void setTetQualityMetric(TetQualityMetric _tetQualityMetric);
 
     /// Returns whether any tetrahedral element is degenerate (i.e., has a volume <= 0).
@@ -117,9 +120,9 @@ public:
             const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
             const TetGenParams& params);
 
-    [[nodiscard]] const std::vector<uint32_t>& getCellIndices() const { return cellIndices; }
-    [[nodiscard]] const std::vector<glm::vec3>& getVertexPositions() const { return vertexPositions; }
-    [[nodiscard]] const std::vector<glm::vec4>& getVertexColors() const { return vertexColors; }
+    [[nodiscard]] const std::vector<uint32_t>& getCellIndices() { return cellIndices; }
+    [[nodiscard]] const std::vector<glm::vec3>& getVertexPositions() { fetchVertexDataFromDeviceIfNecessary(); return vertexPositions; }
+    [[nodiscard]] const std::vector<glm::vec4>& getVertexColors() { fetchVertexDataFromDeviceIfNecessary(); return vertexColors; }
     const sgl::vk::BufferPtr& getCellIndicesBuffer() { return cellIndicesBuffer; }
     const sgl::vk::BufferPtr& getTriangleIndexBuffer() { return triangleIndexBuffer; }
     const sgl::vk::BufferPtr& getVertexPositionBuffer() { return vertexPositionBuffer; }
@@ -137,7 +140,9 @@ public:
     sgl::vk::BufferPtr getVertexColorGradientBuffer() { return vertexColorGradientBuffer; }
 
     // PyTorch buffer interface.
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#ifdef BUILD_PYTHON_MODULE
+    void setUseComputeInterop(bool _useComputeInterop);
+    void copyGradientsToCpu(sgl::vk::Renderer* renderer);
     torch::Tensor getVertexPositionTensor();
     torch::Tensor getVertexColorTensor();
     torch::Tensor getVertexBoundaryBitTensor();
@@ -221,14 +226,26 @@ private:
     bool useGradients = false;
     sgl::vk::BufferPtr vertexPositionGradientBuffer;
     sgl::vk::BufferPtr vertexColorGradientBuffer;
-    sgl::vk::BufferPtr vertexPositionGradientStagingBuffer;
-    sgl::vk::BufferPtr vertexColorGradientStagingBuffer;
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
-    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexPositionBufferCu;
-    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexColorBufferCu;
-    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexBoundaryBitBufferCu;
-    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexPositionGradientBufferCu;
-    sgl::vk::BufferCudaDriverApiExternalMemoryVkPtr vertexColorGradientBufferCu;
+
+    // CPU buffers.
+    sgl::vk::BufferPtr vertexPositionBufferCpu;
+    sgl::vk::BufferPtr vertexColorBufferCpu;
+    sgl::vk::BufferPtr vertexPositionGradientBufferCpu;
+    sgl::vk::BufferPtr vertexColorGradientBufferCpu;
+    void* vertexPositionBufferCpuPtr = nullptr;
+    void* vertexColorBufferCpuPtr = nullptr;
+    void* vertexPositionGradientBufferCpuPtr = nullptr;
+    void* vertexColorGradientBufferCpuPtr = nullptr;
+
+#ifdef BUILD_PYTHON_MODULE
+    bool useComputeInterop = false;
+#ifdef SUPPORT_COMPUTE_INTEROP
+    sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexPositionBufferCu;
+    sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexColorBufferCu;
+    sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexBoundaryBitBufferCu;
+    sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexPositionGradientBufferCu;
+    sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexColorGradientBufferCu;
+#endif
 #endif
 };
 

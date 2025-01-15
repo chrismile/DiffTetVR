@@ -333,12 +333,14 @@ else:
 
 if IS_HIP_EXTENSION:  # (ROCM_HOME is not None) and (torch.version.hip is not None)
     defines.append(('SUPPORT_HIP_INTEROP',))
+    defines.append(('SUPPORT_COMPUTE_INTEROP',))
     source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropHIP.cpp')
+    source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCompute.cpp')
 elif CUDA_HOME is not None and torch.cuda.is_available():
     defines.append(('SUPPORT_CUDA_INTEROP',))
+    defines.append(('SUPPORT_COMPUTE_INTEROP',))
     source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCuda.cpp')
-else:
-    defines.append(('SUPPORT_CPU_INTEROP',))
+    source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCompute.cpp')
 
 
 tmp_path = 'tmp/fuchsia_radix_sort'

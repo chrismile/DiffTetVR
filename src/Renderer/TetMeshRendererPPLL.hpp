@@ -49,7 +49,7 @@ const int MESH_MODE_DEPTH_COMPLEXITIES_PPLL[4][2] = {
         {20, 100}, // avg and max depth complexity medium
         {80, 256}, // avg and max depth complexity medium
         //{120, 380} // avg and max depth complexity very large
-        {100, 520}, // avg and max depth complexity very large
+        {140, 520}, // avg and max depth complexity very large
         {400, 900} // avg and max depth complexity very large
 };
 
@@ -152,7 +152,7 @@ private:
 
     // Per-pixel linked list settings.
     enum LargeMeshMode {
-        MESH_SIZE_SMALL, MESH_SIZE_MEDIUM, MESH_SIZE_MEDIUM_LARGE, MESH_SIZE_LARGE
+        MESH_SIZE_SMALL = 0, MESH_SIZE_MEDIUM = 1, MESH_SIZE_MEDIUM_LARGE = 2, MESH_SIZE_LARGE = 3
     };
     LargeMeshMode largeMeshMode = MESH_SIZE_SMALL;
     int expectedAvgDepthComplexity = MESH_MODE_DEPTH_COMPLEXITIES_PPLL[0][0];

@@ -15,20 +15,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-22.04, ubuntu-24.04, windows-2022 ]
+        os: [ ubuntu-latest, windows-latest ]
 
     runs-on: ${{ matrix.os }}
     name: "Build Python module on ${{ matrix.os }} using pip"
+
+    env:
+      swiftshader_DIR: ${{ github.workspace }}/swiftshader
+      swiftshader_COMMIT_ID: 23b93c7cfe27e205e178a135a6ea24d1dcba1068
 
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
 
-      - uses: Jimver/cuda-toolkit@v0.2.19
-        id: cuda-toolkit
-        with:
-          cuda: '12.4.0'
+      # CUDA is disabled for now, as it made difficulties with the default GitHub actions runners.
+      #- uses: Jimver/cuda-toolkit@v0.2.19
+      #  id: cuda-toolkit
+      #  with:
+      #    cuda: '12.4.0'
 
       - uses: conda-incubator/setup-miniconda@v3
         with:
@@ -40,6 +45,41 @@ jobs:
         shell: bash -el {0}
         run: |
           export CONDA_ALWAYS_YES="true"
-          conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
+          #conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
+          conda install pytorch torchvision torchaudio cpuonly -c pytorch
           conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
           pip install .
+
+      - name: Cache SwiftShader binaries
+        id: cache-swiftshader
+        uses: actions/cache@v4
+        if: runner.os == 'Linux'
+        with:
+          path: ${{env.swiftshader_DIR}}
+          key: ${{runner.os}}-swiftshader-${{env.BUILD_TYPE}}-${{env.swiftshader_COMMIT_ID}}
+
+      - name: Build (SwiftShader)
+        if: runner.os == 'Linux' && steps.cache-swiftshader.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/google/swiftshader.git ${{env.swiftshader_DIR}}
+          git -C ${{env.swiftshader_DIR}} checkout ${{env.swiftshader_COMMIT_ID}}
+          git -C ${{env.swiftshader_DIR}} submodule update --init
+          cmake ${{env.swiftshader_DIR}} -B ${{env.swiftshader_DIR}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+          cmake --build ${{env.swiftshader_DIR}}/build --config ${{env.BUILD_TYPE}} --parallel 4
+
+      - name: Run tests
+        shell: bash -el {0}
+        if: runner.os == 'Linux'
+        run: |
+          echo "USER=$USER" >> $GITHUB_ENV
+          export VK_ICD_FILENAMES="${{env.swiftshader_DIR}}/build/Linux/vk_swiftshader_icd.json"
+          if [ "${{env.PKG_CONFIG_PATH}}" != "" ]; then
+            VK_LAYER_PATH=""
+            source "VulkanSDK/$(ls VulkanSDK)/setup-env.sh"
+          fi
+          cd pytests
+          mkdir test_out
+          python train.py --device_name cpu --name unit_test --out_dir test_out \
+          --attenuation 100.0 --lr_col 0.01 --lr_pos 0.0 --iterations 50 --epochs 4 --init_grid_largest 8 \
+          --gt_grid_test_case CUBE_CENTRAL_GRADIENT \
+          --save_statistics --cam_sample_method replicate_cpp

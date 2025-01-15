@@ -38,7 +38,7 @@ import torch
 from torch.utils.data import DataLoader
 import difftetvr as d
 from pyutils import DifferentiableRenderer
-from datasets.actions import enum_action, SplitGradientTypeAction, RendererTypeAction
+from datasets.actions import enum_action, SplitGradientTypeAction, RendererTypeAction, TestCaseAction
 from datasets.camera_sample_method import CameraSampleMethod
 from datasets.tet_mesh_dataset import TetMeshDataset
 from datasets.regular_grid_dataset import RegularGridDataset
@@ -111,10 +111,11 @@ def main():
     # Rendering settings.
     parser.add_argument('--renderer_type', action=RendererTypeAction, default=d.RendererType.PPLL)
     parser.add_argument('--attenuation', type=float, default=100.0)
+    parser.add_argument('--device_name', type=str, default=None)
 
     # Main optimization parameters.
-    parser.add_argument('--num_epochs', type=int, default=1)  # Only used if not coarse-to-fine.
-    parser.add_argument('--num_iterations', type=int, default=200)
+    parser.add_argument('--num_epochs', '--epochs', type=int, default=1)  # Only used if not coarse-to-fine.
+    parser.add_argument('--num_iterations', '--iterations', type=int, default=200)
     parser.add_argument('--loss', type=str, default='l2')
     parser.add_argument('--lr_col', type=float, default=0.04)
     parser.add_argument('--lr_pos', type=float, default=0.001)
@@ -149,6 +150,7 @@ def main():
     # Ground truth data sources.
     # Test case (A): Render tet dataset as ground truth.
     parser.add_argument('--gt_grid_path', type=str, default=None)
+    parser.add_argument('--gt_grid_test_case', action=TestCaseAction, default=None)
     parser.add_argument('--img_width', type=int, default=512)
     parser.add_argument('--img_height', type=int, default=512)
     parser.add_argument(
@@ -171,9 +173,29 @@ def main():
     if not os.path.isdir(args.out_dir):
         pathlib.Path(args.out_dir).mkdir(parents=False, exist_ok=True)
 
+    if args.device_name is not None:
+        d.set_device_type(torch.device(args.device_name).type)
+    # d.set_device_type(torch.device('cpu').type)
+
     renderer = d.Renderer(renderer_type=args.renderer_type)
     renderer.set_attenuation(args.attenuation)
     renderer.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))
+
+    # Create the initialization grid (1/2).
+    tet_mesh_opt = d.TetMesh()
+    tet_mesh_opt.set_use_gradients(True)
+    if args.coarse_to_fine:
+        tet_mesh_opt.set_force_use_ovm_representation()
+    if args.init_grid_path is not None:
+        print(f'Loading initialization tet mesh from file {args.init_grid_path}...')
+        tet_mesh_opt.load_from_file(args.init_grid_path)
+        num_tets_init = tet_mesh_opt.get_num_cells()
+    else:
+        if args.init_grid_largest is not None:
+            # We estimate num_tets_init, just to get an estimate for the shared fragment buffers for the PPLL renderer.
+            num_tets_init = int(args.init_grid_largest ** 3)
+        else:
+            num_tets_init = args.init_grid_x * args.init_grid_y * args.init_grid_z
 
     # Create the ground truth data set.
     tet_mesh_gt = None
@@ -184,7 +206,7 @@ def main():
             tet_mesh_gt = d.TetMesh()
             tet_mesh_gt.load_from_file(args.gt_grid_path)
             dataset = TetMeshDataset(
-                tet_mesh_gt, args.num_iterations, renderer, args.coarse_to_fine, args.max_num_tets,
+                tet_mesh_gt, args.num_iterations, renderer, args.coarse_to_fine, args.max_num_tets, num_tets_init,
                 args.img_width, args.img_height, args.cam_sample_method)
         else:
             regular_grid = d.RegularGrid()
@@ -192,6 +214,12 @@ def main():
             dataset = RegularGridDataset(
                 regular_grid, args.num_iterations, args.attenuation, args.coarse_to_fine, args.max_num_tets,
                 args.img_width, args.img_height, args.gt_tf, args.cam_sample_method)
+    elif args.gt_grid_test_case is not None:
+        tet_mesh_gt = d.TetMesh()
+        tet_mesh_gt.load_test_data(args.gt_grid_test_case)
+        dataset = TetMeshDataset(
+            tet_mesh_gt, args.num_iterations, renderer, args.coarse_to_fine, args.max_num_tets, num_tets_init,
+            args.img_width, args.img_height, args.cam_sample_method)
     elif args.gt_images_path is not None:
         dataset = ImagesDataset(args.gt_images_path)
     elif args.gt_colmap_data_path is not None:
@@ -212,14 +240,8 @@ def main():
     img_height = dataset.get_img_height()
     data_loader = DataLoader(dataset, batch_size=None)
 
-    tet_mesh_opt = d.TetMesh()
-    tet_mesh_opt.set_use_gradients(True)
-    if args.coarse_to_fine:
-        tet_mesh_opt.set_force_use_ovm_representation()
-    if args.init_grid_path is not None:
-        print(f'Loading initialization tet mesh from file {args.init_grid_path}...')
-        tet_mesh_opt.load_from_file(args.init_grid_path)
-    else:
+    # Create the initialization grid (2/2).
+    if args.init_grid_path is None:
         aabb = dataset.get_aabb()
 
         # Use grid with approximately even cell sizes.
@@ -290,17 +312,19 @@ def main():
         nonlocal vertex_colors
         if optimizer_step:
             optimizer.zero_grad(set_to_none=False)
+            tet_mesh_opt.on_zero_grad()  # Necessary for CPU device to propagate zeros to Vulkan buffers.
         renderer.set_view_matrix(view_matrix_array.numpy())
         image_opt = diff_renderer()
         loss = loss_fn(image_opt, image_gt)
         loss.backward()
-        if args.fix_boundary and optimizer_step:
-            vertex_positions.grad = torch.where(vertex_boundary_bit_tensor > 0, 0.0, vertex_positions.grad)
         if optimizer_step:
+            if args.fix_boundary:
+                vertex_positions.grad = torch.where(vertex_boundary_bit_tensor > 0, 0.0, vertex_positions.grad)
             optimizer.step()
-        with torch.no_grad():
-            vertex_colors -= torch.min(vertex_colors, torch.zeros_like(vertex_colors))
-        if args.record_video:
+            with torch.no_grad():
+                vertex_colors -= torch.min(vertex_colors, torch.zeros_like(vertex_colors))
+            tet_mesh_opt.set_vertices_changed()
+        if args.record_video and optimizer_step:
             with torch.no_grad():
                 img_numpy = np.clip(image_opt.detach().cpu().numpy(), 0.0, 1.0) * 255.0
                 img_numpy = img_numpy.astype(np.uint8)
@@ -333,7 +357,6 @@ def main():
             if args.coarse_to_fine_save_intermediate:
                 mesh_out_path = os.path.join(args.out_dir, f'{args.name}_{tet_mesh_opt.get_num_cells()}.bintet')
                 print(f'Saving intermediate mesh to "{mesh_out_path}"...')
-                tet_mesh_opt.set_vertices_changed_on_device()
                 tet_mesh_opt.save_to_file(mesh_out_path)
 
             # Accumulate gradients.
@@ -341,6 +364,7 @@ def main():
             if use_accum_abs_grads:
                 diff_renderer.set_use_abs_grad(True)
             optimizer.zero_grad(set_to_none=False)
+            tet_mesh_opt.on_zero_grad()  # Necessary for CPU device to propagate zeros to Vulkan buffers.
             for image_gt, view_matrix_array in data_loader:
                 training_step(view_matrix_array, False)
             if use_accum_abs_grads:
@@ -376,7 +400,6 @@ def main():
     else:
         mesh_out_path = os.path.join(args.out_dir, f'{args.name}.bintet')
     print(f'Saving mesh to "{mesh_out_path}"...')
-    tet_mesh_opt.set_vertices_changed_on_device()
     tet_mesh_opt.save_to_file(mesh_out_path)
     if args.record_video:
         video.release()

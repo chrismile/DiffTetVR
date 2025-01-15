@@ -36,7 +36,7 @@ from .camera_sample_method import CameraSampleMethod
 class TetMeshDataset(torch.utils.data.Dataset, Dataset3D):
     def __init__(
             self, tet_mesh_gt: d.TetMesh, num_iterations: int, renderer_opt: d.Renderer,
-            coarse_to_fine: bool, max_num_tets: int, img_width: int, img_height: int,
+            coarse_to_fine: bool, max_num_tets: int, num_tets_init: int, img_width: int, img_height: int,
             cam_sample_method: CameraSampleMethod):
         super().__init__()
         self.tet_mesh_gt = tet_mesh_gt
@@ -52,7 +52,10 @@ class TetMeshDataset(torch.utils.data.Dataset, Dataset3D):
         self.is_spherical = radii_sorted[2] / radii_sorted[0] < 1.9
         self.renderer = d.Renderer(renderer_opt.get_renderer_type())
         if coarse_to_fine:
-            self.renderer.set_coarse_to_fine_target_num_tets(max_num_tets)
+            self.renderer.set_coarse_to_fine_target_num_tets(max(max_num_tets, num_tets_init))
+        else:
+            # We always use at least num_tets_init, as fragment buffers are shared.
+            self.renderer.set_coarse_to_fine_target_num_tets(num_tets_init)
         self.renderer.set_tet_mesh(self.tet_mesh_gt)
         self.renderer.set_attenuation(renderer_opt.get_attenuation())
         self.renderer.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))

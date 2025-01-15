@@ -36,9 +36,10 @@
 #include <ImGui/Widgets/NumberFormatting.hpp>
 #endif
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_COMPUTE_INTEROP)
 #include <c10/cuda/CUDAStream.h>
 #endif
+#include <Graphics/Vulkan/Utils/InteropCuda.hpp>
 
 #include "Tet/TetMesh.hpp"
 #include "TetMeshVolumeRenderer.hpp"
@@ -147,15 +148,25 @@ void TetMeshVolumeRenderer::recreateSwapchainExternal(
     getScreenSizeWithTiling(paddedWindowWidth, paddedWindowHeight);
 }
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#ifdef BUILD_PYTHON_MODULE
+void TetMeshVolumeRenderer::setUseComputeInterop(bool _useComputeInterop) {
+    useComputeInterop = _useComputeInterop;
+}
+
 void TetMeshVolumeRenderer::setViewportSize(uint32_t viewportWidth, uint32_t viewportHeight) {
     outputImageView = {};
     colorAdjointImage = {};
     adjointPassBackbuffer = {};
+#ifdef SUPPORT_COMPUTE_INTEROP
     colorImageBuffer = {};
     colorAdjointImageBuffer = {};
     colorImageBufferCu = {};
     colorAdjointImageBufferCu = {};
+#endif
+    colorImageBufferCpu = {};
+    colorAdjointImageBufferCpu = {};
+    colorImageBufferCpuPtr = nullptr;
+    colorAdjointImageBufferCpuPtr = nullptr;
 
     sgl::vk::ImageSettings imageSettings{};
     imageSettings.width = viewportWidth;
@@ -170,11 +181,24 @@ void TetMeshVolumeRenderer::setViewportSize(uint32_t viewportWidth, uint32_t vie
     outputImageView = std::make_shared<sgl::vk::ImageView>(std::make_shared<sgl::vk::Image>(device, imageSettings));
     checkRecreateTerminationIndexImage();
 
-    colorImageBuffer = std::make_shared<sgl::vk::Buffer>(
-            device, viewportWidth * viewportHeight * sizeof(float) * 4,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY, true, true);
-    colorImageBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(colorImageBuffer);
+    const size_t imageSize = viewportWidth * viewportHeight * sizeof(float) * 4;
+
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        colorImageBuffer = std::make_shared<sgl::vk::Buffer>(
+                device, imageSize,
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+        colorImageBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(colorImageBuffer);
+    } else {
+#endif
+        colorImageBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                device, imageSize,
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        colorImageBufferCpuPtr = colorImageBufferCpu->mapMemory();
+#ifdef SUPPORT_COMPUTE_INTEROP
+    }
+#endif
 
     if (tetMesh && tetMesh->getUseGradients()) {
         imageSettings.usage =
@@ -192,12 +216,23 @@ void TetMeshVolumeRenderer::setViewportSize(uint32_t viewportWidth, uint32_t vie
         adjointPassBackbuffer = std::make_shared<sgl::vk::ImageView>(std::make_shared<sgl::vk::Image>(
                 device, imageSettings));
 
-        colorAdjointImageBuffer = std::make_shared<sgl::vk::Buffer>(
-                device, viewportWidth * viewportHeight * sizeof(float) * 4,
-                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                VMA_MEMORY_USAGE_GPU_ONLY, true, true);
-        colorAdjointImageBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(
-                colorAdjointImageBuffer);
+#ifdef SUPPORT_COMPUTE_INTEROP
+        if (useComputeInterop) {
+            colorAdjointImageBuffer = std::make_shared<sgl::vk::Buffer>(
+                    device, imageSize,
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+            colorAdjointImageBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(
+                    colorAdjointImageBuffer);
+        } else {
+#endif
+            colorAdjointImageBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                    device, imageSize,
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            colorAdjointImageBufferCpuPtr = colorAdjointImageBufferCpu->mapMemory();
+#ifdef SUPPORT_COMPUTE_INTEROP
+        }
+#endif
 
         setAdjointPassData(colorAdjointImage, adjointPassBackbuffer);
     }
@@ -207,37 +242,78 @@ torch::Tensor TetMeshVolumeRenderer::getImageTensor() {
     auto imageWidth = outputImageView->getImage()->getImageSettings().width;
     auto imageHeight = outputImageView->getImage()->getImageSettings().height;
     bool useGradients = tetMesh->getUseGradients();
-    torch::Tensor imageTensor = torch::from_blob(
-            reinterpret_cast<float*>(colorImageBufferCu->getCudaDevicePtr()),
-            { int(imageHeight), int(imageWidth), int(4) },
-            torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(useGradients));
-    if (useGradients) {
-        torch::Tensor imageAdjointTensor = torch::from_blob(
-                reinterpret_cast<float*>(colorAdjointImageBufferCu->getCudaDevicePtr()),
+
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        torch::Tensor imageTensor = torch::from_blob(
+                colorImageBufferCu->getDevicePtr<float>(),
                 { int(imageHeight), int(imageWidth), int(4) },
-                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
-        imageTensor.mutable_grad() = imageAdjointTensor;
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(useGradients));
+        if (useGradients) {
+            torch::Tensor imageAdjointTensor = torch::from_blob(
+                    colorAdjointImageBufferCu->getDevicePtr<float>(),
+                    { int(imageHeight), int(imageWidth), int(4) },
+                    torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
+            imageTensor.mutable_grad() = imageAdjointTensor;
+        }
+        return imageTensor;
+    } else {
+#endif
+        torch::Tensor imageTensor = torch::from_blob(
+                colorImageBufferCpuPtr,
+                { int(imageHeight), int(imageWidth), int(4) },
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU).requires_grad(useGradients));
+        if (useGradients) {
+            torch::Tensor imageAdjointTensor = torch::from_blob(
+                    colorAdjointImageBufferCpuPtr,
+                    { int(imageHeight), int(imageWidth), int(4) },
+                    torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
+            imageTensor.mutable_grad() = imageAdjointTensor;
+        }
+        return imageTensor;
+#ifdef SUPPORT_COMPUTE_INTEROP
     }
-    return imageTensor;
+#endif
 }
 
 void TetMeshVolumeRenderer::copyOutputImageToBuffer() {
     renderer->transitionImageLayout(outputImageView, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-    outputImageView->getImage()->copyToBuffer(colorImageBuffer, renderer->getVkCommandBuffer());
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        outputImageView->getImage()->copyToBuffer(colorImageBuffer, renderer->getVkCommandBuffer());
+    } else {
+#endif
+        outputImageView->getImage()->copyToBuffer(colorImageBufferCpu, renderer->getVkCommandBuffer());
+#ifdef SUPPORT_COMPUTE_INTEROP
+    }
+#endif
     renderer->transitionImageLayout(outputImageView, VK_IMAGE_LAYOUT_GENERAL);
 }
 
 void TetMeshVolumeRenderer::copyAdjointBufferToImagePreCheck(void* devicePtr) {
-    if (reinterpret_cast<CUdeviceptr>(devicePtr) != colorAdjointImageBufferCu->getCudaDevicePtr()) {
-        //sgl::Logfile::get()->writeError(
-        //        "Error in TetMeshVolumeRenderer::copyAdjointBufferToImagePreCheck: "
-        //        "Mismatch in internal adjoint buffer device address and tensor content.", false);
-        cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-        CUresult cuResult = sgl::vk::g_cudaDeviceApiFunctionTable.cuMemcpyAsync(
-                colorAdjointImageBufferCu->getCudaDevicePtr(), reinterpret_cast<CUdeviceptr>(devicePtr),
-                colorAdjointImageBuffer->getSizeInBytes(), stream);
-        sgl::vk::checkCUresult(cuResult, "Error in cuMemcpyAsync: ");
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        if (devicePtr != colorAdjointImageBufferCu->getDevicePtr<void>()) {
+            //sgl::Logfile::get()->writeError(
+            //        "Error in TetMeshVolumeRenderer::copyAdjointBufferToImagePreCheck: "
+            //        "Mismatch in internal adjoint buffer device address and tensor content.", false);
+            //cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+            //CUresult cuResult = sgl::vk::g_cudaDeviceApiFunctionTable.cuMemcpyAsync(
+            //        colorAdjointImageBufferCu->getCudaDevicePtr(), reinterpret_cast<CUdeviceptr>(devicePtr),
+            //        colorAdjointImageBuffer->getSizeInBytes(), stream);
+            //sgl::vk::checkCUresult(cuResult, "Error in cuMemcpyAsync: ");
+            sgl::vk::StreamWrapper stream{};
+            stream.stream = reinterpret_cast<void*>(at::cuda::getCurrentCUDAStream().stream());
+            colorAdjointImageBufferCu->copyFromDevicePtrAsync(devicePtr, stream);
+        }
+    } else {
+#endif
+        if (devicePtr != colorAdjointImageBufferCpuPtr) {
+            colorAdjointImageBufferCpu->copyHostMemoryToAllocation(devicePtr);
+        }
+#ifdef SUPPORT_COMPUTE_INTEROP
     }
+#endif
 }
 
 void TetMeshVolumeRenderer::copyAdjointBufferToImage() {
@@ -246,7 +322,15 @@ void TetMeshVolumeRenderer::copyAdjointBufferToImage() {
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
             VK_ACCESS_NONE_KHR, VK_ACCESS_TRANSFER_WRITE_BIT);
-    colorAdjointImage->getImage()->copyFromBuffer(colorAdjointImageBuffer, renderer->getVkCommandBuffer());
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        colorAdjointImage->getImage()->copyFromBuffer(colorAdjointImageBuffer, renderer->getVkCommandBuffer());
+    } else {
+#endif
+        colorAdjointImage->getImage()->copyFromBuffer(colorAdjointImageBufferCpu, renderer->getVkCommandBuffer());
+#ifdef SUPPORT_COMPUTE_INTEROP
+    }
+#endif
     renderer->insertImageMemoryBarrier(
             colorAdjointImage->getImage(),
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,

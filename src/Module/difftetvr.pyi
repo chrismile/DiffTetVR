@@ -31,7 +31,7 @@ import typing
 import enum
 
 __all__ = [
-    "forward",
+    "set_device_type",
 ]
 
 
@@ -112,7 +112,8 @@ class TetGenParams:
 
 
 class TestCase(enum.Enum):
-    SINGLE_TETRAHEDRON = enum.auto() # (= 0)
+    SINGLE_TETRAHEDRON = enum.auto()    # (= 0)
+    CUBE_CENTRAL_GRADIENT = enum.auto() # (= 1)
 
 class SplitGradientType(enum.Enum):
     POSITION = enum.auto()     # (= 0)
@@ -133,7 +134,10 @@ class TetMesh:
         pass
     def get_bounding_box(self) -> AABB3:
         pass
-    def set_vertices_changed_on_device(self, vertices_changed: bool = True) -> None:
+    def set_vertices_changed(self, vertices_changed: bool = True) -> None:
+        pass
+    def on_zero_grad(self) -> None:
+        """ Necessary for CPU device to propagate zeros to Vulkan buffers. No-op for other devices. """
         pass
 
     def set_force_use_ovm_representation(self) -> None:
@@ -395,7 +399,26 @@ class VoxelCarving:
         pass
 
 
-def render(X: torch.Tensor) -> torch.Tensor:
+#class TorchDeviceType(enum.Enum):
+#    CPU = enum.auto()    # (= 0)
+#    CUDA = enum.auto()   # (= 1)
+#    MKLDNN = enum.auto() # (= 2)
+#    OPENGL = enum.auto() # (= 3)
+#    OPENCL = enum.auto() # (= 4)
+#    IDEEP = enum.auto()  # (= 5)
+#    HIP = enum.auto()    # (= 6)
+#    FPGA = enum.auto()   # (= 7)
+#    ORT = enum.auto()    # (= 8)
+#    XLA = enum.auto()    # (= 9)
+#    VULKAN = enum.auto() # (= 10)
+#    METAL = enum.auto()  # (= 11)
+#
+#def set_device_type(device_type: TorchDeviceType) -> None:
+#    """
+#    Sets the used device type. May only be called at the beginning of the program.
+#    """
+
+def set_device_type(device_type: str) -> None:
     """
-    Forward rendering pass.
+    Sets the used device type. May only be called at the beginning of the program.
     """

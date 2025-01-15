@@ -40,7 +40,7 @@
 #include <utility>
 #endif
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_COMPUTE_INTEROP)
 #include <c10/cuda/CUDAStream.h>
 #endif
 
@@ -134,10 +134,18 @@ void RegularGridRendererDVR::recreateSwapchain(uint32_t width, uint32_t height) 
 }
 
 #if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+void RegularGridRendererDVR::setUseComputeInterop(bool _useComputeInterop) {
+    useComputeInterop = _useComputeInterop;
+}
+
 void RegularGridRendererDVR::setViewportSize(uint32_t viewportWidth, uint32_t viewportHeight) {
     outputImageView = {};
+#ifdef SUPPORT_COMPUTE_INTEROP
     colorImageBuffer = {};
     colorImageBufferCu = {};
+#endif
+    colorImageBufferCpu = {};
+    colorImageBufferCpuPtr = nullptr;
 
     sgl::vk::ImageSettings imageSettings{};
     imageSettings.width = viewportWidth;
@@ -151,21 +159,46 @@ void RegularGridRendererDVR::setViewportSize(uint32_t viewportWidth, uint32_t vi
     sgl::vk::Device* device = renderer->getDevice();
     outputImageView = std::make_shared<sgl::vk::ImageView>(std::make_shared<sgl::vk::Image>(device, imageSettings));
 
-    colorImageBuffer = std::make_shared<sgl::vk::Buffer>(
-            device, viewportWidth * viewportHeight * sizeof(float) * 4,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY, true, true);
-    colorImageBufferCu = std::make_shared<sgl::vk::BufferCudaDriverApiExternalMemoryVk>(colorImageBuffer);
+    const size_t imageSize = viewportWidth * viewportHeight * sizeof(float) * 4;
+
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        colorImageBuffer = std::make_shared<sgl::vk::Buffer>(
+                device, imageSize,
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+        colorImageBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(colorImageBuffer);
+    } else {
+#endif
+        colorImageBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                device, imageSize,
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        colorImageBufferCpuPtr = colorImageBufferCpu->mapMemory();
+#ifdef SUPPORT_COMPUTE_INTEROP
+    }
+#endif
 }
 
 torch::Tensor RegularGridRendererDVR::getImageTensor() {
     auto imageWidth = outputImageView->getImage()->getImageSettings().width;
     auto imageHeight = outputImageView->getImage()->getImageSettings().height;
-    torch::Tensor imageTensor = torch::from_blob(
-            reinterpret_cast<float*>(colorImageBufferCu->getCudaDevicePtr()),
-            { int(imageHeight), int(imageWidth), int(4) },
-            torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
-    return imageTensor;
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        torch::Tensor imageTensor = torch::from_blob(
+                colorImageBufferCu->getDevicePtr<float>(),
+                { int(imageHeight), int(imageWidth), int(4) },
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
+        return imageTensor;
+    } else {
+#endif
+        torch::Tensor imageTensor = torch::from_blob(
+                colorImageBufferCpuPtr,
+                { int(imageHeight), int(imageWidth), int(4) },
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
+        return imageTensor;
+#ifdef SUPPORT_COMPUTE_INTEROP
+    }
+#endif
 }
 
 void RegularGridRendererDVR::copyOutputImageToBuffer() {
@@ -174,7 +207,15 @@ void RegularGridRendererDVR::copyOutputImageToBuffer() {
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
             VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT);
-    outputImageView->getImage()->copyToBuffer(colorImageBuffer, renderer->getVkCommandBuffer());
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        outputImageView->getImage()->copyToBuffer(colorImageBuffer, renderer->getVkCommandBuffer());
+    } else {
+#endif
+        outputImageView->getImage()->copyToBuffer(colorImageBufferCpu, renderer->getVkCommandBuffer());
+#ifdef SUPPORT_COMPUTE_INTEROP
+    }
+#endif
     renderer->transitionImageLayout(outputImageView, VK_IMAGE_LAYOUT_GENERAL);
 }
 #endif

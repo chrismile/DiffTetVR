@@ -33,10 +33,8 @@
 #include <torch/types.h>
 #include <torch/extension.h>
 
+#if defined(SUPPORT_COMPUTE_INTEROP)
 #include <c10/cuda/CUDAStream.h>
-
-#if defined(SUPPORT_CUDA_INTEROP) && CUDA_VERSION < 11020
-#error Please install CUDA >= 11.2 for timeline semaphore support.
 #endif
 
 #include <Utils/AppSettings.hpp>
@@ -49,8 +47,31 @@
 #include <Graphics/Vulkan/Image/Image.hpp>
 #include <Graphics/Vulkan/Render/CommandBuffer.hpp>
 #include <Graphics/Vulkan/Render/Renderer.hpp>
-#include <Graphics/Vulkan/Utils/InteropCuda.hpp>
 #include <ImGui/Widgets/TransferFunctionWindow.hpp>
+
+#if defined(SUPPORT_CUDA_INTEROP) && CUDA_VERSION < 11020
+#error Please install CUDA >= 11.2 for timeline semaphore support.
+#endif
+
+#if defined(SUPPORT_COMPUTE_INTEROP)
+#include <Graphics/Vulkan/Utils/InteropCompute.hpp>
+#endif
+
+#ifdef SUPPORT_CUDA_INTEROP
+namespace sgl { namespace vk {
+DLL_OBJECT bool initializeCudaDeviceApiFunctionTable();
+DLL_OBJECT bool getIsCudaDeviceApiFunctionTableInitialized();
+DLL_OBJECT void freeCudaDeviceApiFunctionTable();
+}}
+#endif
+
+#ifdef SUPPORT_HIP_INTEROP
+namespace sgl { namespace vk {
+DLL_OBJECT bool initializeHipDeviceApiFunctionTable();
+DLL_OBJECT bool getIsHipDeviceApiFunctionTableInitialized();
+DLL_OBJECT void freeHipDeviceApiFunctionTable();
+}}
+#endif
 
 #include <Tet/TetMesh.hpp>
 #include <Tet/RegularGrid.hpp>
@@ -101,17 +122,23 @@ public:
 
     uint32_t cachedWidth = 0, cachedHeight = 0;
 
-    // For invocation of Vulkan command buffer in CUDA stream.
+    torch::DeviceType usedDeviceType = torch::DeviceType::CPU;
+
+    // For invocation of Vulkan command buffer in CUDA/HIP stream.
     size_t commandBufferIdx = 0;
     std::vector<sgl::vk::CommandBufferPtr> commandBuffers;
     std::vector<sgl::vk::FencePtr> fences;
     sgl::vk::CommandBufferPtr commandBuffer;
     sgl::vk::FencePtr fence;
-    sgl::vk::SemaphoreVkCudaDriverApiInteropPtr renderReadySemaphore;
-    sgl::vk::SemaphoreVkCudaDriverApiInteropPtr renderFinishedSemaphore;
     uint64_t timelineValue = 0;
+#ifdef SUPPORT_COMPUTE_INTEROP
+    sgl::vk::SemaphoreVkComputeApiInteropPtr renderReadySemaphore;
+    sgl::vk::SemaphoreVkComputeApiInteropPtr renderFinishedSemaphore;
+#endif
 };
 static ApplicationState* sState = nullptr;
+static torch::DeviceType globalDeviceType = torch::DeviceType::CPU;
+static bool globalDeviceTypeSetManually = false;
 
 void vulkanErrorCallbackHeadless() {
     std::cerr << "Application callback" << std::endl;
@@ -162,14 +189,10 @@ ApplicationState::ApplicationState() {
     sgl::AppSettings::get()->getSettings().addKeyValue("window-debugContext", true);
     sgl::AppSettings::get()->setRenderSystem(sgl::RenderSystem::VULKAN);
     std::vector<const char*> optionalInstanceExtensions;
-#ifdef SUPPORT_DLSS
-    getInstanceDlssSupportInfo(optionalInstanceExtensions);
-    sgl::AppSettings::get()->setRequiredVulkanInstanceExtensions(optionalInstanceExtensions);
-#endif
     sgl::AppSettings::get()->createHeadless();
 
     std::vector<const char*> optionalDeviceExtensions;
-#ifdef SUPPORT_CUDA_INTEROP
+#ifdef SUPPORT_COMPUTE_INTEROP
     optionalDeviceExtensions = sgl::vk::Device::getCudaInteropDeviceExtensions();
 #endif
     optionalDeviceExtensions.push_back(VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
@@ -265,18 +288,74 @@ ApplicationState::ApplicationState() {
     sgl::AppSettings::get()->setUseMatrixBlock(false);
     sgl::AppSettings::get()->initializeSubsystems();
 
-    // Synchronize needs to be called to make sure cuInit has been called.
-    torch::cuda::synchronize();
+    if (globalDeviceTypeSetManually) {
+        usedDeviceType = globalDeviceType;
+    } else {
+        usedDeviceType = torch::DeviceType::CPU;
+#ifdef SUPPORT_COMPUTE_INTEROP
+        if (torch::cuda::is_available()) {
 #ifdef SUPPORT_CUDA_INTEROP
-    if (!sgl::vk::getIsCudaDeviceApiFunctionTableInitialized()) {
-        bool success = sgl::vk::initializeCudaDeviceApiFunctionTable();
-        if (!success) {
-            sgl::Logfile::get()->throwError(
-                    "Error in VolumetricPathTracingModuleRenderer::setRenderingResolution: "
-                    "sgl::vk::initializeCudaDeviceApiFunctionTable() failed.", false);
+            usedDeviceType = torch::DeviceType::CUDA;
+#elif defined(SUPPORT_HIP_INTEROP)
+            usedDeviceType = torch::DeviceType::HIP;
+#endif
         }
+#endif
+    }
+
+    bool isBuildConfigurationSupported = false;
+    if (usedDeviceType == torch::DeviceType::CPU)
+        isBuildConfigurationSupported = true;
+#ifdef SUPPORT_CUDA_INTEROP
+    if (usedDeviceType == torch::DeviceType::CUDA)
+        isBuildConfigurationSupported = true;
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+    if (usedDeviceType == torch::DeviceType::HIP)
+        isBuildConfigurationSupported = true;
+#endif
+    if (!isBuildConfigurationSupported) {
+        sgl::Logfile::get()->throwError("Error in ApplicationState::ApplicationState: Unsupported device type.");
+    }
+
+    // Synchronize needs to be called to make sure cuInit has been called.
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+        torch::cuda::synchronize();
     }
 #endif
+    if (usedDeviceType == torch::DeviceType::CUDA) {
+#ifdef SUPPORT_CUDA_INTEROP
+        if (!sgl::vk::getIsCudaDeviceApiFunctionTableInitialized()) {
+            bool success = sgl::vk::initializeCudaDeviceApiFunctionTable();
+            if (!success) {
+                usedDeviceType = torch::DeviceType::CPU;
+                sgl::Logfile::get()->writeError(
+                        "Error in ApplicationState::ApplicationState: "
+                        "sgl::vk::initializeCudaDeviceApiFunctionTable() failed. Switching to CPU.", false);
+            }
+        }
+#else
+        sgl::Logfile::get()->throwError(
+                        "Error in ApplicationState::ApplicationState: DeviceType::CUDA is not supported.", false);
+#endif
+    }
+    if (usedDeviceType == torch::DeviceType::HIP) {
+#ifdef SUPPORT_HIP_INTEROP
+        if (!sgl::vk::getIsHipDeviceApiFunctionTableInitialized()) {
+            bool success = sgl::vk::initializeHipDeviceApiFunctionTable();
+            if (!success) {
+                usedDeviceType = torch::DeviceType::CPU;
+                sgl::Logfile::get()->writeError(
+                        "Error in ApplicationState::ApplicationState: "
+                        "sgl::vk::initializeHipDeviceApiFunctionTable() failed. Switching to CPU.", false);
+            }
+        }
+#else
+        sgl::Logfile::get()->throwError(
+                "Error in ApplicationState::ApplicationState: DeviceType::HIP is not supported.", false);
+#endif
+    }
 
     renderer = new sgl::vk::Renderer(sgl::AppSettings::get()->getPrimaryDevice());
     camera = std::make_shared<sgl::Camera>();
@@ -292,28 +371,40 @@ ApplicationState::ApplicationState() {
             false, []() -> std::string { return ""; },
             transferFunctionWindow);
 
-    renderReadySemaphore = std::make_shared<sgl::vk::SemaphoreVkCudaDriverApiInterop>(
-            device, 0, VK_SEMAPHORE_TYPE_TIMELINE, timelineValue);
-    renderFinishedSemaphore = std::make_shared<sgl::vk::SemaphoreVkCudaDriverApiInterop>(
-            device, 0, VK_SEMAPHORE_TYPE_TIMELINE, timelineValue);
-    const uint32_t maxNumCommandBuffers = 30;
+    uint32_t maxNumCommandBuffers = 1;
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+        renderReadySemaphore = std::make_shared<sgl::vk::SemaphoreVkComputeApiInterop>(
+                device, 0, VK_SEMAPHORE_TYPE_TIMELINE, timelineValue);
+        renderFinishedSemaphore = std::make_shared<sgl::vk::SemaphoreVkComputeApiInterop>(
+                device, 0, VK_SEMAPHORE_TYPE_TIMELINE, timelineValue);
+        maxNumCommandBuffers = 30;
+    }
+#endif
     sgl::vk::CommandPoolType commandPoolType;
     commandPoolType.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     for (uint32_t frameIdx = 0; frameIdx < maxNumCommandBuffers; frameIdx++) {
         commandBuffers.push_back(std::make_shared<sgl::vk::CommandBuffer>(device, commandPoolType));
-        fences.push_back(std::make_shared<sgl::vk::Fence>(device, VK_FENCE_CREATE_SIGNALED_BIT));
+        fences.push_back(std::make_shared<sgl::vk::Fence>(
+                device, usedDeviceType == torch::DeviceType::CPU ? 0 : VK_FENCE_CREATE_SIGNALED_BIT));
     }
 }
 
 ApplicationState::~ApplicationState() {
-    torch::cuda::synchronize();
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+        torch::cuda::synchronize();
+    }
+#endif
     device->waitIdle();
     commandBuffers = {};
     fences = {};
     commandBuffer = {};
     fence = {};
+#ifdef SUPPORT_COMPUTE_INTEROP
     renderReadySemaphore = {};
     renderFinishedSemaphore = {};
+#endif
 
     delete optimizer;
     delete transferFunctionWindow;
@@ -323,36 +414,115 @@ ApplicationState::~ApplicationState() {
         sgl::vk::freeCudaDeviceApiFunctionTable();
     }
 #endif
+#ifdef SUPPORT_HIP_INTEROP
+    if (sgl::vk::getIsHipDeviceApiFunctionTableInitialized()) {
+        sgl::vk::freeHipDeviceApiFunctionTable();
+    }
+#endif
     sgl::AppSettings::get()->release();
 }
 
 void ApplicationState::vulkanBegin() {
-    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
     timelineValue++;
     selectNextCommandBuffer();
-    fence->wait();
-    fence->reset();
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+        fence->wait();
+        fence->reset();
+    }
+#endif
     commandBuffer->setFence(fence);
-    renderReadySemaphore->signalSemaphoreCuda(stream, timelineValue);
-    renderReadySemaphore->setWaitSemaphoreValue(timelineValue);
-    commandBuffer->pushWaitSemaphore(renderReadySemaphore, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+        sgl::vk::StreamWrapper stream{};
+#ifdef SUPPORT_COMPUTE_INTEROP
+        if (usedDeviceType == torch::DeviceType::CUDA) {
+            stream.cuStream = at::cuda::getCurrentCUDAStream();
+        }
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+        if (usedDeviceType == torch::DeviceType::HIP) {
+            //stream.hipStream = at::cuda::getCurrentCUDAStream(); // TODO: This doesn't work; check docs.
+            stream.stream = reinterpret_cast<void*>(at::cuda::getCurrentCUDAStream().stream());
+        }
+#endif
+        renderReadySemaphore->signalSemaphoreComputeApi(stream, timelineValue);
+        renderReadySemaphore->setWaitSemaphoreValue(timelineValue);
+        commandBuffer->pushWaitSemaphore(renderReadySemaphore, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    }
+#endif
     renderer->pushCommandBuffer(commandBuffer);
     renderer->beginCommandBuffer();
 }
 
 void ApplicationState::vulkanFinished() {
-    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-    renderFinishedSemaphore->setSignalSemaphoreValue(timelineValue);
-    commandBuffer->pushSignalSemaphore(renderFinishedSemaphore);
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+        renderFinishedSemaphore->setSignalSemaphoreValue(timelineValue);
+        commandBuffer->pushSignalSemaphore(renderFinishedSemaphore);
+    }
+#endif
     renderer->endCommandBuffer();
     renderer->submitToQueue();
-    renderFinishedSemaphore->waitSemaphoreCuda(stream, timelineValue);
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+        sgl::vk::StreamWrapper stream{};
+#ifdef SUPPORT_COMPUTE_INTEROP
+        if (usedDeviceType == torch::DeviceType::CUDA) {
+            stream.cuStream = at::cuda::getCurrentCUDAStream();
+        }
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+        if (usedDeviceType == torch::DeviceType::HIP) {
+            //stream.hipStream = at::cuda::getCurrentCUDAStream(); // TODO: This doesn't work; check docs.
+            stream.stream = reinterpret_cast<void*>(at::cuda::getCurrentCUDAStream().stream());
+        }
+#endif
+        renderFinishedSemaphore->waitSemaphoreComputeApi(stream, timelineValue);
+    }
+#endif
+
+    if (usedDeviceType == torch::DeviceType::CPU) {
+        fence->wait();
+        fence->reset();
+    }
 }
 
 void ApplicationState::selectNextCommandBuffer() {
     commandBuffer = commandBuffers.at(commandBufferIdx);
     fence = fences.at(commandBufferIdx);
-    commandBufferIdx = (commandBufferIdx + 1) % commandBuffers.size();
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP)
+#endif
+        commandBufferIdx = (commandBufferIdx + 1) % commandBuffers.size();
+}
+
+/// Sets the used device type. May only be called at the beginning of the program.
+void setUsedDeviceType(const std::string& deviceTypeName /* torch::DeviceType deviceType */) {
+    if (sState) {
+        throw std::runtime_error(
+                "Error in setUsedDevice: This function must be called before the application state has been created.");
+    }
+
+    torch::DeviceType deviceType = torch::DeviceType::CPU;
+    std::string deviceTypeNameLower = sgl::toLowerCopy(deviceTypeName);
+    if (deviceTypeNameLower == torch::DeviceTypeName(torch::DeviceType::CPU, true)) {
+        deviceType = torch::DeviceType::CPU;
+    } else if (deviceTypeNameLower == torch::DeviceTypeName(torch::DeviceType::CUDA, true)) {
+#ifdef SUPPORT_CUDA_INTEROP
+        deviceType = torch::DeviceType::CUDA;
+#elif defined(SUPPORT_HIP_INTEROP)
+        deviceType = torch::DeviceType::HIP;
+#endif
+    } else if (deviceTypeNameLower == torch::DeviceTypeName(torch::DeviceType::HIP, true)) {
+        deviceType = torch::DeviceType::HIP;
+    } else {
+        sgl::Logfile::get()->throwError(
+                "Error in setUsedDeviceType: Unsupported device type '" + deviceTypeName + "'.");
+    }
+
+    globalDeviceTypeSetManually = true;
+    globalDeviceType = deviceType;
 }
 
 static void ensureStateExists() {
@@ -471,7 +641,8 @@ PYBIND11_MODULE(difftetvr, m) {
             .def_readwrite("use_vertex_insertion_and_deletion", &TetGenParams::useVertexInsertionAndDeletion, "");
 
     py::enum_<TestCase>(m, "TestCase", py::arithmetic(), "")
-            .value("SINGLE_TETRAHEDRON", TestCase::SINGLE_TETRAHEDRON, "");
+            .value("SINGLE_TETRAHEDRON", TestCase::SINGLE_TETRAHEDRON, "")
+            .value("CUBE_CENTRAL_GRADIENT", TestCase::CUBE_CENTRAL_GRADIENT, "");
     py::enum_<SplitGradientType>(m, "SplitGradientType")
             .value("POSITION", SplitGradientType::POSITION)
             .value("COLOR", SplitGradientType::COLOR)
@@ -483,14 +654,20 @@ PYBIND11_MODULE(difftetvr, m) {
     py::class_<TetMesh, TetMeshPtr>(m, "TetMesh")
             .def(py::init([]() {
                 ensureStateExists();
-                return std::make_shared<TetMesh>(sState->device, sState->transferFunctionWindow);
+                auto tetMesh = std::make_shared<TetMesh>(sState->device, sState->transferFunctionWindow);
+#ifdef SUPPORT_COMPUTE_INTEROP
+                tetMesh->setUseComputeInterop(sState->usedDeviceType != torch::DeviceType::CPU);
+#endif
+                return tetMesh;
             }))
             .def("set_use_gradients", &TetMesh::setUseGradients, py::arg("use_gradients") = true)
             .def("load_test_data", &TetMesh::loadTestData, py::arg("test_case"))
             .def("load_from_file", &TetMesh::loadFromFile, py::arg("file_path"))
             .def("save_to_file", &TetMesh::saveToFile, py::arg("file_path"))
             .def("get_bounding_box", &TetMesh::getBoundingBox)
-            .def("set_vertices_changed_on_device", &TetMesh::setVerticesChangedOnDevice, py::arg("vertices_changed") = true)
+            .def("set_vertices_changed", &TetMesh::setVerticesChangedOnDevice, py::arg("vertices_changed") = true)
+            .def("on_zero_grad", &TetMesh::onZeroGrad,
+                 "Necessary for CPU device to propagate zeros to Vulkan buffers. No-op for other devices.")
             .def("set_force_use_ovm_representation", &TetMesh::setForceUseOvmRepresentation, "Coarse to fine strategy.")
             .def("set_hex_mesh_const", &TetMesh::setHexMeshConst,
                  py::arg("aabb"), py::arg("xs"), py::arg("ys"), py::arg("zs"), py::arg("const_color"),
@@ -516,7 +693,11 @@ PYBIND11_MODULE(difftetvr, m) {
                     const TetMeshPtr& self, const std::shared_ptr<TetMeshVolumeRenderer>& volumeRenderer,
                     SplitGradientType splitGradientType, float splitsRatio) {
                 sState->vulkanBegin();
-                torch::cuda::synchronize();
+#ifdef SUPPORT_COMPUTE_INTEROP
+                if (sState->usedDeviceType == torch::DeviceType::CUDA || sState->usedDeviceType == torch::DeviceType::HIP) {
+                    torch::cuda::synchronize();
+                }
+#endif
                 self->splitByLargestGradientMagnitudes(sState->renderer, splitGradientType, splitsRatio);
                 volumeRenderer->setTetMeshData(self);
                 sState->vulkanFinished();
@@ -529,18 +710,25 @@ PYBIND11_MODULE(difftetvr, m) {
     py::class_<TetMeshVolumeRenderer, std::shared_ptr<TetMeshVolumeRenderer>>(m, "Renderer")
             .def(py::init([](RendererType rendererType) {
                 ensureStateExists();
+                TetMeshVolumeRenderer* volumeRenderer = nullptr;
                 if (rendererType == RendererType::PPLL) {
-                    return std::shared_ptr<TetMeshVolumeRenderer>(new TetMeshRendererPPLL(
-                            sState->renderer, &sState->camera, sState->transferFunctionWindow));
+                    volumeRenderer = new TetMeshRendererPPLL(
+                            sState->renderer, &sState->camera, sState->transferFunctionWindow);
                 } else if (rendererType == RendererType::PROJECTION) {
-                    return std::shared_ptr<TetMeshVolumeRenderer>(new TetMeshRendererProjection(
-                            sState->renderer, &sState->camera, sState->transferFunctionWindow));
+                    volumeRenderer = new TetMeshRendererProjection(
+                            sState->renderer, &sState->camera, sState->transferFunctionWindow);
                 } else if (rendererType == RendererType::INTERSECTION) {
-                    return std::shared_ptr<TetMeshVolumeRenderer>(new TetMeshRendererIntersection(
-                            sState->renderer, &sState->camera, sState->transferFunctionWindow));
+                    volumeRenderer = new TetMeshRendererIntersection(
+                            sState->renderer, &sState->camera, sState->transferFunctionWindow);
                 } else {
                     return std::shared_ptr<TetMeshVolumeRenderer>();
                 }
+#ifdef SUPPORT_COMPUTE_INTEROP
+                if (volumeRenderer) {
+                    volumeRenderer->setUseComputeInterop(sState->usedDeviceType != torch::DeviceType::CPU);
+                }
+#endif
+                return std::shared_ptr<TetMeshVolumeRenderer>(volumeRenderer);
             }), py::arg("renderer_type") = RendererType::PPLL)
             .def("get_renderer_type", &TetMeshVolumeRenderer::getRendererType)
             .def("set_tet_mesh", &TetMeshVolumeRenderer::setTetMeshData, py::arg("tet_mesh"))
@@ -603,9 +791,10 @@ PYBIND11_MODULE(difftetvr, m) {
                 return self->getImageTensor();
             })
             .def("render_adjoint", [](const std::shared_ptr<TetMeshVolumeRenderer>& self, torch::Tensor imageAdjointTensor, bool useAbsGrad) {
-                if (imageAdjointTensor.device().type() != torch::DeviceType::CUDA) {
+                if (imageAdjointTensor.device().type() != sState->usedDeviceType) {
                     sgl::Logfile::get()->throwError(
-                            "Error in render_adjoint: The tensors must be on a CUDA device.", false);
+                            "Error in render_adjoint: The tensors must be on the device used at initialization time.",
+                            false);
                 }
                 if (imageAdjointTensor.sizes().size() != 3) {
                     sgl::Logfile::get()->throwError(
@@ -633,6 +822,9 @@ PYBIND11_MODULE(difftetvr, m) {
                 sState->vulkanBegin();
                 self->copyAdjointBufferToImage();
                 self->renderAdjoint();
+                if (sState->usedDeviceType == torch::DeviceType::CPU) {
+                    self->getTetMesh()->copyGradientsToCpu(sState->renderer);
+                }
                 sState->vulkanFinished();
                 self->setUseAbsGrad(false);
             }, py::arg("image_adjoint"), py::arg("use_abs_grad"));
@@ -681,8 +873,14 @@ PYBIND11_MODULE(difftetvr, m) {
     py::class_<RegularGridRendererDVR, std::shared_ptr<RegularGridRendererDVR>>(m, "RegularGridRenderer")
             .def(py::init([]() {
                 ensureStateExists();
-                return std::make_shared<RegularGridRendererDVR>(
+                auto regularGridRenderer = std::make_shared<RegularGridRendererDVR>(
                         sState->renderer, &sState->camera, sState->transferFunctionWindow);
+#ifdef SUPPORT_COMPUTE_INTEROP
+                if (regularGridRenderer) {
+                    regularGridRenderer->setUseComputeInterop(sState->usedDeviceType != torch::DeviceType::CPU);
+                }
+#endif
+                return regularGridRenderer;
             }))
             .def("set_regular_grid", &RegularGridRendererDVR::setRegularGridData, py::arg("regular_grid"))
             .def("get_regular_grid", &RegularGridRendererDVR::getRegularGridData)
@@ -804,8 +1002,21 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("process_next_frame", &VoxelCarving::processNextFrame, py::arg("input_image"), py::arg("camera_settings"))
             .def("compute_non_empty_bounding_box", &VoxelCarving::computeNonEmptyBoundingBox);
 
-    m.def("forward", forward,
-        "Forward rendering pass.",
-        py::arg("X"));
+    /*py::enum_<torch::DeviceType>(m, "TorchDeviceType")
+            .value("CPU", torch::DeviceType::CPU)
+            .value("CUDA", torch::DeviceType::CUDA)
+            .value("MKLDNN", torch::DeviceType::MKLDNN)
+            .value("OPENGL", torch::DeviceType::OPENGL)
+            .value("OPENCL", torch::DeviceType::OPENCL)
+            .value("IDEEP", torch::DeviceType::IDEEP)
+            .value("HIP", torch::DeviceType::HIP)
+            .value("FPGA", torch::DeviceType::FPGA)
+            .value("ORT", torch::DeviceType::ORT)
+            .value("XLA", torch::DeviceType::XLA)
+            .value("VULKAN", torch::DeviceType::Vulkan)
+            .value("METAL", torch::DeviceType::Metal);*/
+    m.def("set_device_type", setUsedDeviceType,
+        "Sets the used device type. May only be called at the beginning of the program.",
+        py::arg("device_type"));
     m.add_object("_cleanup", py::capsule(difftetvrCleanup));
 }
