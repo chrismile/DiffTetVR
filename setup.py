@@ -376,10 +376,13 @@ if glslang_validator_path is None:
                     f'third_party/{vulkan_installer_exe}',
                     '--accept-licenses', '--default-answer', '--confirm-command', 'install'], check=True)
                 os.remove(f'third_party/{vulkan_installer_exe}')
+            # https://github.com/python/cpython/issues/105889
             if 'PATH' in env_cmake:
                 env_cmake['PATH'] += f';C:\\VulkanSDK\\{vulkan_version}\\Bin'
+                os.environ['PATH'] += f';C:\\VulkanSDK\\{vulkan_version}\\Bin'
             else:
                 env_cmake['PATH'] = f'C:\\VulkanSDK\\{vulkan_version}\\Bin'
+                os.environ['PATH'] = f'C:\\VulkanSDK\\{vulkan_version}\\Bin'
             env_cmake['VULKAN_SDK'] = f'C:\\VulkanSDK\\{vulkan_version}'
         else:
             raise RuntimeError('Missing Vulkan SDK. Please install it from https://vulkan.lunarg.com/sdk/home#windows.')
@@ -416,7 +419,8 @@ if glslang_validator_path is None:
                 with open(shaderc_pkgconfig_file, 'w') as pkgconf_file:
                     pkgconf_file.writelines(pkgconf_lines)
         else:
-            vulkan_sdk_root = os.path.join('third_party', 'VulkanSDK', os.listdir('third_party/VulkanSDK')[0])
+            vulkan_sdk_root = os.path.abspath(os.path.join(
+                'third_party', 'VulkanSDK', os.listdir('third_party/VulkanSDK')[0]))
         vulkan_bin_path = os.path.join(vulkan_sdk_root, os_arch, 'bin')
         vulkan_lib_path = os.path.join(vulkan_sdk_root, os_arch, 'lib')
         if 'PATH' in env_cmake:
@@ -430,8 +434,10 @@ if glslang_validator_path is None:
         env_cmake['VULKAN_SDK'] = vulkan_sdk_root
         glslang_validator_path = shutil.which('glslangValidator', path=vulkan_bin_path)
 cmake_exec = get_cmake_exec()
+print('----------')
+print(env_cmake)
+print('----------')
 subprocess.run([cmake_exec, '-E', 'environment'], env=env_cmake, check=True)
-sys.exit(1)
 if not os.path.isfile(radix_sort_lib_path):
     volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk'
     volk_header_path = os.path.abspath(volk_header_path)
@@ -446,6 +452,7 @@ if not os.path.isfile(radix_sort_lib_path):
         f'-DVOLK_INCLUDE_DIR={volk_header_path}',
         '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'], env=env_cmake, check=True)
     subprocess.run([cmake_exec, '--build', f'{tmp_path}/build', '--config', 'Release'], check=True)
+sys.exit(1)
 
 
 # fTetWild, according to https://github.com/wildmeshing/fTetWild, relies on GMP or MPIR.
