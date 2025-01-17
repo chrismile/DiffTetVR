@@ -64,11 +64,12 @@ class EggInfoInstallLicense(egg_info):
 
 def TorchExtension(name, sources, *args, **kwargs):
     include_dirs = kwargs.get('include_dirs', [])
-    include_dirs += include_paths(cuda=True)
+    use_cuda = CUDA_HOME is not None or ROCM_HOME is not None
+    include_dirs += include_paths(cuda=use_cuda)
     kwargs['include_dirs'] = include_dirs
 
     library_dirs = kwargs.get('library_dirs', [])
-    library_dirs += library_paths(cuda=True)
+    library_dirs += library_paths(cuda=use_cuda)
     kwargs['library_dirs'] = library_dirs
 
     libraries = kwargs.get('libraries', [])
@@ -400,15 +401,14 @@ if glslang_validator_path is None:
             with tarfile.open('third_party/vulkan-sdk.tar.gz', 'r') as tar_ref:
                 tar_ref.extractall('third_party/VulkanSDK')
             os.remove('third_party/vulkan-sdk.tar.gz')
-            vulkan_sdk_root = os.path.abspath(os.path.join(
-                'third_party', 'VulkanSDK', os.listdir('third_party/VulkanSDK')[0]))
+            vulkan_sdk_path = os.path.join('third_party', 'VulkanSDK', os.listdir('third_party/VulkanSDK')[0])
+            vulkan_sdk_root = os.path.abspath(os.path.join(vulkan_sdk_path, os_arch))
             if os_arch != "x86_64":
                 subprocess.run([
-                    os.path.join(vulkan_sdk_root, 'vulkansdk'),
+                    os.path.join(vulkan_sdk_path, 'vulkansdk'),
                     '-j', f'{os.cpu_count()}', 'vulkan-loader', 'glslang', 'shaderc'], check=True)
             # Fix pkgconfig file.
-            shaderc_pkgconfig_file = os.path.join(vulkan_sdk_root, os_arch, 'lib', 'pkgconfig', 'shaderc.pc')
-            prefix_path = os.path.realpath(os.path.join(vulkan_sdk_root, os_arch))
+            shaderc_pkgconfig_file = os.path.join(vulkan_sdk_root, 'lib', 'pkgconfig', 'shaderc.pc')
             if os.path.isfile(shaderc_pkgconfig_file):
                 # subprocess.run([
                 #     'sed', '-i', f"'3s;.*;prefix=\"'{prefix_path}'\";'", shaderc_pkgconfig_file], check=True)
@@ -416,15 +416,15 @@ if glslang_validator_path is None:
                 #     'sed', '-i', "'5s;.*;libdir=${prefix}/lib;'", shaderc_pkgconfig_file], check=True)
                 with open(shaderc_pkgconfig_file, 'r') as pkgconf_file:
                     pkgconf_lines = pkgconf_file.readlines()
-                    pkgconf_lines[3] = f'prefix="{prefix_path}"\n'
+                    pkgconf_lines[3] = f'prefix="{vulkan_sdk_root}"\n'
                     pkgconf_lines[5] = 'libdir=${prefix}/lib\n'
                 with open(shaderc_pkgconfig_file, 'w') as pkgconf_file:
                     pkgconf_file.writelines(pkgconf_lines)
         else:
             vulkan_sdk_root = os.path.abspath(os.path.join(
-                'third_party', 'VulkanSDK', os.listdir('third_party/VulkanSDK')[0]))
-        vulkan_bin_path = os.path.join(vulkan_sdk_root, os_arch, 'bin')
-        vulkan_lib_path = os.path.join(vulkan_sdk_root, os_arch, 'lib')
+                'third_party', 'VulkanSDK', os.listdir('third_party/VulkanSDK')[0], os_arch))
+        vulkan_bin_path = os.path.join(vulkan_sdk_root, 'bin')
+        vulkan_lib_path = os.path.join(vulkan_sdk_root, 'lib')
         if 'PATH' in env_cmake:
             env_cmake['PATH'] += f':{vulkan_bin_path}'
         else:
@@ -435,8 +435,6 @@ if glslang_validator_path is None:
             env_cmake['LD_LIBRARY_PATH'] = vulkan_lib_path
         env_cmake['VULKAN_SDK'] = vulkan_sdk_root
         glslang_validator_path = shutil.which('glslangValidator', path=vulkan_bin_path)
-cmake_exec = get_cmake_exec()
-subprocess.run([cmake_exec, '-E', 'environment'], env=env_cmake, check=True)
 if not os.path.isfile(radix_sort_lib_path):
     volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk'
     volk_header_path = os.path.abspath(volk_header_path)
