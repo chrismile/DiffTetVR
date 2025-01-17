@@ -429,6 +429,9 @@ if glslang_validator_path is None:
             env_cmake['LD_LIBRARY_PATH'] = vulkan_lib_path
         env_cmake['VULKAN_SDK'] = vulkan_sdk_root
         glslang_validator_path = shutil.which('glslangValidator', path=vulkan_bin_path)
+cmake_exec = get_cmake_exec()
+subprocess.run([cmake_exec, '-E', 'environment'], env=env_cmake, check=True)
+sys.exit(1)
 if not os.path.isfile(radix_sort_lib_path):
     volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk'
     volk_header_path = os.path.abspath(volk_header_path)
@@ -443,9 +446,6 @@ if not os.path.isfile(radix_sort_lib_path):
         f'-DVOLK_INCLUDE_DIR={volk_header_path}',
         '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'], env=env_cmake, check=True)
     subprocess.run([cmake_exec, '--build', f'{tmp_path}/build', '--config', 'Release'], check=True)
-cmake_exec = get_cmake_exec()
-subprocess.run([cmake_exec, '-E', 'environment'], env=env_cmake, check=True)
-sys.exit(1)
 
 
 # fTetWild, according to https://github.com/wildmeshing/fTetWild, relies on GMP or MPIR.
