@@ -46,8 +46,8 @@ jobs:
         run: |
           export CONDA_ALWAYS_YES="true"
           #conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
-          conda install pytorch torchvision torchaudio cpuonly -c pytorch
-          conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
+          conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv \
+          conda-forge::openexr-python pytorch torchvision torchaudio cpuonly -c pytorch
           pip install .
 
       - name: Cache SwiftShader binaries
