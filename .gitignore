@@ -79,6 +79,7 @@ vcpkg_installed/*
 third_party/vcpkg
 third_party/fTetWild*
 third_party/tetgen*
+third_party/VulkanSDK
 
 # macOS
 .DS_Store

@@ -43,6 +43,7 @@
 #endif
 
 #include "Tet/TetMesh.hpp"
+#include "RadixSortHelper.hpp"
 #include "TetMeshRendererProjection.hpp"
 
 class GenerateTrianglesProjPass : public sgl::vk::ComputePass {
@@ -480,6 +481,27 @@ TetMeshRendererProjection::TetMeshRendererProjection(
         sgl::vk::Renderer* renderer, sgl::CameraPtr* camera, sgl::TransferFunctionWindow* transferFunctionWindow)
         : TetMeshVolumeRenderer(renderer, camera, transferFunctionWindow) {
     sgl::vk::Device* device = renderer->getDevice();
+#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
+    if (!getIsFuchsiaRadixSortSupported()) {
+        sortingAlgorithm = SortingAlgorithm::CPU_STD_SORT;
+    } else {
+        const auto& physicalDeviceProperties = device->getPhysicalDeviceProperties();
+        const auto& subgroupProperties = device->getPhysicalDeviceSubgroupProperties();
+        radixSortVkTarget = radix_sort_vk_target_auto_detect(&physicalDeviceProperties, &subgroupProperties, 2u);
+        if (!radixSortVkTarget) {
+            sgl::Logfile::get()->throwError(
+                    "Error in TetMeshRendererProjection::TetMeshRendererProjection: Could not detect radix sort target.");
+        }
+        radixSortVk = radix_sort_vk_create(device->getVkDevice(), nullptr, VK_NULL_HANDLE, radixSortVkTarget);
+        if (!radixSortVk) {
+            sgl::Logfile::get()->throwError(
+                    "Error in TetMeshRendererProjection::TetMeshRendererProjection: Could not fetch radix sort implementation.");
+        }
+    }
+#else
+    sortingAlgorithm = SortingAlgorithm::CPU_STD_SORT;
+#endif
+
     uniformDataBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(UniformData),
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -500,21 +522,6 @@ TetMeshRendererProjection::TetMeshRendererProjection(
     computeTrianglesDepthPass = std::make_shared<ComputeTrianglesDepthProjPass>(this);
     projectedRasterPass = std::make_shared<ProjectedRasterPass>(this);
 
-#ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
-    const auto& physicalDeviceProperties = device->getPhysicalDeviceProperties();
-    const auto& subgroupProperties = device->getPhysicalDeviceSubgroupProperties();
-    radixSortVkTarget = radix_sort_vk_target_auto_detect(&physicalDeviceProperties, &subgroupProperties, 2u);
-    if (!radixSortVkTarget) {
-        sgl::Logfile::get()->throwError(
-                "Error in TetMeshRendererProjection::TetMeshRendererProjection: Could not detect radix sort target.");
-    }
-    radixSortVk = radix_sort_vk_create(device->getVkDevice(), nullptr, VK_NULL_HANDLE, radixSortVkTarget);
-    if (!radixSortVk) {
-        sgl::Logfile::get()->throwError(
-                "Error in TetMeshRendererProjection::TetMeshRendererProjection: Could not fetch radix sort implementation.");
-    }
-#endif
-
     TetMeshRendererProjection::onClearColorChanged();
 }
 
@@ -525,6 +532,9 @@ TetMeshRendererProjection::~TetMeshRendererProjection() {
     if (radixSortVk) {
         radix_sort_vk_destroy(radixSortVk, device->getVkDevice(), nullptr);
     }
+    // target.c, radix_sort_vk_target_auto_detect:
+    // radix_sort_vk_target_t* target_ptr = MALLOC_MACRO(sizeof(radix_sort_vk_target_t));
+    free(radixSortVkTarget);
 #endif
 }
 

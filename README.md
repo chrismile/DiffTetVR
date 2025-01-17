@@ -21,6 +21,8 @@ package manager on Linux and MSYS2 on Windows. Please download and install MSYS2
 to use this build script and run the script from an MSYS2 shell.
 Alternatively, we recommend to use vcpkg if the users wants to compile the application with Microsoft Visual Studio.
 A build script using MSVC and vcpkg, `build-msvc.bat`, is available in the project root directory.
+Please note that the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows) needs to be installed beforehand if using
+Microsoft Visual Studio for compilation.
 
 Under `Data/CloudDataSets/datasets.json`, loadable data sets can be specified. Additionally, the user can also open
 arbitrary data sets using a file explorer via "File > Open Dataset..." (or using Ctrl+O).
@@ -49,6 +51,9 @@ Supported formats currently are:
 - MEDIT .mesh files (for more details see https://victorsndvg.github.io/FEconv/formats/gmshmsh.xhtml).
 
 ### Python module
+
+Please note that the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows) needs to be installed beforehand on
+Windows.
 
 To install the library as a Python module, the following command must be called in the repository directory.
 

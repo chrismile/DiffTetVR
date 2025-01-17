@@ -32,6 +32,7 @@ import shutil
 import subprocess
 import urllib
 import zipfile
+import tarfile
 from pathlib import Path
 from urllib.request import urlopen
 import setuptools
@@ -343,6 +344,12 @@ elif CUDA_HOME is not None and torch.cuda.is_available():
     source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCompute.cpp')
 
 
+if platform.machine() == 'x86_64' or platform.machine() == 'AMD64':
+    os_arch = 'x86_64'
+else:
+    os_arch = 'aarch64'
+
+
 tmp_path = 'tmp/fuchsia_radix_sort'
 Path(tmp_path).mkdir(parents=True, exist_ok=True)
 if IS_WINDOWS:
@@ -350,10 +357,72 @@ if IS_WINDOWS:
 else:
     radix_sort_lib_path = f'{tmp_path}/build/libvk-radix-sort.a'
 extra_objects.append(radix_sort_lib_path)
-#if IS_WINDOWS:
-#    libraries.append('vulkan-1')
-#else:
-#    libraries.append('vulkan')
+glslang_validator_path = shutil.which('glslangValidator')
+env_cmake = dict(os.environ)
+if glslang_validator_path is None:
+    # Vulkan SDK is missing!
+    if IS_WINDOWS:
+        # We should check in the future if automatic installation is also viable on desktop Windows...
+        if os.getenv('GITHUB_ACTIONS') == 'true':
+            vulkan_version = '1.4.304.0'
+            if not os.path.isdir('C:\\VulkanSDK'):
+                vulkan_installer_exe = f'VulkanSDK-{vulkan_version}-Installer.exe'
+                vulkan_sdk_url = f'https://sdk.lunarg.com/sdk/download/1.4.304.0/windows/{vulkan_installer_exe}'
+                opener = urllib.request.URLopener()
+                opener.addheader('User-Agent', 'Mozilla/5.0')
+                filename, headers = opener.retrieve(vulkan_sdk_url, f'third_party/{vulkan_installer_exe}')
+                f'third_party/{vulkan_installer_exe}'
+                subprocess.run([
+                    f'third_party/{vulkan_installer_exe}',
+                    '--accept-licenses', '--default-answer', '--confirm-command', 'install'], check=True)
+                os.remove(f'third_party/{vulkan_installer_exe}')
+        if 'PATH' in env_cmake:
+                env_cmake['PATH'] += f';C:\\VulkanSDK\\{vulkan_version}\\Bin'
+            else:
+                env_cmake['PATH'] = f'C:\\VulkanSDK\\{vulkan_version}\\Bin'
+            env_cmake['VULKAN_SDK'] = f'C:\\VulkanSDK\\{vulkan_version}'
+        else:
+            raise RuntimeError('Missing Vulkan SDK. Please install it from https://vulkan.lunarg.com/sdk/home#windows.')
+    if not IS_WINDOWS:
+        if not os.path.isdir('third_party/VulkanSDK'):
+            vulkan_sdk_url = 'https://sdk.lunarg.com/sdk/download/latest/linux/vulkan-sdk.tar.gz'
+            # Gets "HTTP Error 403: Forbidden".
+            # if not os.path.isdir(f'third_party/vulkan-sdk'):
+            #     urllib.request.urlretrieve(vulkan_sdk_url, f'third_party/vulkan-sdk.tar.gz')
+            # https://stackoverflow.com/questions/34957748/http-error-403-forbidden-with-urlretrieve
+            opener = urllib.request.URLopener()
+            opener.addheader('User-Agent', 'Mozilla/5.0')
+            filename, headers = opener.retrieve(vulkan_sdk_url, 'third_party/vulkan-sdk.tar.gz')
+            with tarfile.open('third_party/vulkan-sdk.tar.gz', 'r') as tar_ref:
+                tar_ref.extractall('third_party/VulkanSDK')
+            os.remove('third_party/vulkan-sdk.tar.gz')
+            vulkan_sdk_root = os.path.join('third_party', 'VulkanSDK', os.listdir('third_party/VulkanSDK')[0])
+            if os_arch != "x86_64":
+                subprocess.run([
+                    os.path.join(vulkan_sdk_root, 'vulkansdk'),
+                    '-j', f'{os.cpu_count()}', 'vulkan-loader', 'glslang', 'shaderc'], check=True)
+            # Fix pkgconfig file.
+            shaderc_pkgconfig_file = os.path.join(vulkan_sdk_root, os_arch, 'lib', 'pkgconfig', 'shaderc.pc')
+            prefix_path = os.path.realpath(os.path.join(vulkan_sdk_root, os_arch))
+            if os.path.isfile(shaderc_pkgconfig_file):
+                # subprocess.run([
+                #     'sed', '-i', f"'3s;.*;prefix=\"'{prefix_path}'\";'", shaderc_pkgconfig_file], check=True)
+                # subprocess.run([
+                #     'sed', '-i', "'5s;.*;libdir=${prefix}/lib;'", shaderc_pkgconfig_file], check=True)
+                with open(shaderc_pkgconfig_file, 'r') as pkgconf_file:
+                    pkgconf_lines = pkgconf_file.readlines()
+                    pkgconf_lines[3] = f'prefix="{prefix_path}"\n'
+                    pkgconf_lines[5] = 'libdir=${prefix}/lib\n'
+                with open(shaderc_pkgconfig_file, 'w') as pkgconf_file:
+                    pkgconf_file.writelines(pkgconf_lines)
+        else:
+            vulkan_sdk_root = os.path.join('third_party', 'VulkanSDK', os.listdir('third_party/VulkanSDK')[0])
+        vulkan_bin_path = os.path.join(vulkan_sdk_root, os_arch, 'bin')
+        if 'PATH' in env_cmake:
+            env_cmake['PATH'] += f':{vulkan_bin_path}'
+        else:
+            env_cmake['PATH'] = f'{vulkan_bin_path}'
+        glslang_validator_path = shutil.which('glslangValidator', path=vulkan_bin_path)
 if not os.path.isfile(radix_sort_lib_path):
     volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk'
     volk_header_path = os.path.abspath(volk_header_path)
@@ -366,7 +435,7 @@ if not os.path.isfile(radix_sort_lib_path):
         # '-DCMAKE_VERBOSE_MAKEFILE=ON',
         '-DCMAKE_BUILD_TYPE=Release',
         f'-DVOLK_INCLUDE_DIR={volk_header_path}',
-        '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'], check=True)
+        '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'], env=env_cmake, check=True)
     subprocess.run([cmake_exec, '--build', f'{tmp_path}/build', '--config', 'Release'], check=True)
 
 
@@ -416,11 +485,6 @@ def get_gmp_lib_found():
 
     return False, gmp_lib_name, None
 
-
-if platform.machine() == 'x86_64' or platform.machine() == 'AMD64':
-    os_arch = 'x86_64'
-else:
-    os_arch = 'aarch64'
 
 support_ftetwild, gmp_lib_name, gmp_path = get_gmp_lib_found()
 if support_ftetwild:

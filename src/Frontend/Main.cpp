@@ -41,6 +41,7 @@
 #ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
 #include <radix_sort/radix_sort_vk.h>
 #endif
+#include <Renderer/RadixSortHelper.hpp>
 
 #include "MainApp.hpp"
 
@@ -138,25 +139,26 @@ int main(int argc, char *argv[]) {
             targetRequirements.ext_names = new const char*[targetRequirements.ext_name_count];
         }
         if (!radix_sort_vk_target_get_requirements(target, &targetRequirements)) {
+            free(target);
             return false;
         }
 
         for (uint32_t i = 0; i < targetRequirements.ext_name_count; i++) {
-            requiredDeviceExtensions.push_back(targetRequirements.ext_names[i]);
+            optionalDeviceExtensions.push_back(targetRequirements.ext_names[i]);
         }
         if (targetRequirements.pdf) {
             sgl::vk::mergePhysicalDeviceFeatures(
-                    requestedDeviceFeatures.requestedPhysicalDeviceFeatures,
+                    requestedDeviceFeatures.optionalPhysicalDeviceFeatures,
                     *targetRequirements.pdf);
         }
         if (targetRequirements.pdf11) {
             sgl::vk::mergePhysicalDeviceFeatures11(
-                    requestedDeviceFeatures.requestedVulkan11Features,
+                    requestedDeviceFeatures.optionalVulkan11Features,
                     *targetRequirements.pdf11);
         }
         if (targetRequirements.pdf12) {
             sgl::vk::mergePhysicalDeviceFeatures12(
-                    requestedDeviceFeatures.requestedVulkan12Features,
+                    requestedDeviceFeatures.optionalVulkan12Features,
                     *targetRequirements.pdf12);
         }
 
@@ -185,6 +187,7 @@ int main(int argc, char *argv[]) {
     sgl::AppSettings::get()->setPrimaryDevice(device);
     sgl::AppSettings::get()->initializeSubsystems();
 
+    checkIsFuchsiaRadixSortSupported(device);
     //sgl::vk::ShaderManager->setShaderCompilerBackend(sgl::vk::ShaderCompilerBackend::GLSLANG);
     //sgl::vk::ShaderManager->setGenerateDebugInfo(true);
 

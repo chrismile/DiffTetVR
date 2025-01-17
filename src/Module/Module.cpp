@@ -76,6 +76,7 @@ DLL_OBJECT void freeHipDeviceApiFunctionTable();
 #include <Tet/TetMesh.hpp>
 #include <Tet/RegularGrid.hpp>
 #include <Tet/Writers/VtkWriter.hpp>
+#include <Renderer/RadixSortHelper.hpp>
 #include <Renderer/TetMeshVolumeRenderer.hpp>
 #include <Renderer/TetMeshRendererPPLL.hpp>
 #include <Renderer/TetMeshRendererProjection.hpp>
@@ -249,31 +250,36 @@ ApplicationState::ApplicationState() {
             targetRequirements.ext_names = new const char*[targetRequirements.ext_name_count];
         }
         if (!radix_sort_vk_target_get_requirements(target, &targetRequirements)) {
+            free(target);
             return false;
         }
 
         for (uint32_t i = 0; i < targetRequirements.ext_name_count; i++) {
-            requiredDeviceExtensions.push_back(targetRequirements.ext_names[i]);
+            optionalDeviceExtensions.push_back(targetRequirements.ext_names[i]);
         }
         if (targetRequirements.pdf) {
             sgl::vk::mergePhysicalDeviceFeatures(
-                    requestedDeviceFeatures.requestedPhysicalDeviceFeatures,
+                    requestedDeviceFeatures.optionalPhysicalDeviceFeatures,
                     *targetRequirements.pdf);
         }
         if (targetRequirements.pdf11) {
             sgl::vk::mergePhysicalDeviceFeatures11(
-                    requestedDeviceFeatures.requestedVulkan11Features,
+                    requestedDeviceFeatures.optionalVulkan11Features,
                     *targetRequirements.pdf11);
         }
         if (targetRequirements.pdf12) {
             sgl::vk::mergePhysicalDeviceFeatures12(
-                    requestedDeviceFeatures.requestedVulkan12Features,
+                    requestedDeviceFeatures.optionalVulkan12Features,
                     *targetRequirements.pdf12);
         }
 
         if (targetRequirements.ext_name_count > 0) {
             delete[] targetRequirements.ext_names;
         }
+
+        // target.c, radix_sort_vk_target_auto_detect:
+        // radix_sort_vk_target_t* target_ptr = MALLOC_MACRO(sizeof(radix_sort_vk_target_t));
+        free(target);
         return true;
     };
     device->setPhysicalDeviceCheckCallback(physicalDeviceCheckCallback);
@@ -287,6 +293,7 @@ ApplicationState::ApplicationState() {
     sgl::AppSettings::get()->setPrimaryDevice(device);
     sgl::AppSettings::get()->setUseMatrixBlock(false);
     sgl::AppSettings::get()->initializeSubsystems();
+    checkIsFuchsiaRadixSortSupported(device);
 
     if (globalDeviceTypeSetManually) {
         usedDeviceType = globalDeviceType;
