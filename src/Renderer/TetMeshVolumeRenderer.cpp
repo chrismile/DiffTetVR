@@ -39,7 +39,6 @@
 #if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_COMPUTE_INTEROP)
 #include <c10/cuda/CUDAStream.h>
 #endif
-#include <Graphics/Vulkan/Utils/InteropCuda.hpp>
 
 #include "Tet/TetMesh.hpp"
 #include "TetMeshVolumeRenderer.hpp"

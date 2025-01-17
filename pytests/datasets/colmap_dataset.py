@@ -55,7 +55,7 @@ def read_double_vec(file, vec_size):
     return np.array(struct.unpack('<' + ('d' * vec_size), file.read(8 * vec_size)))
 
 
-def visualize_outliers(point_cloud: o3d.geometry.PointCloud, inlier_indices):
+def visualize_outliers(point_cloud, inlier_indices):
     inlier_point_cloud = point_cloud.select_by_index(inlier_indices)
     outlier_point_cloud = point_cloud.select_by_index(inlier_indices, invert=True)
     inlier_point_cloud.paint_uniform_color([0.8, 0.8, 0.8])

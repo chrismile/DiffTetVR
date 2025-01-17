@@ -133,7 +133,7 @@ void RegularGridRendererDVR::recreateSwapchain(uint32_t width, uint32_t height) 
     //windowHeight = int(height);
 }
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#ifdef BUILD_PYTHON_MODULE
 void RegularGridRendererDVR::setUseComputeInterop(bool _useComputeInterop) {
     useComputeInterop = _useComputeInterop;
 }

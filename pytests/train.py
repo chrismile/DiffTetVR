@@ -170,6 +170,8 @@ def main():
     args = parser.parse_args()
     if args.random_seed is not None:
         random.seed(args.random_seed)
+    if args.out_dir is None:
+        raise RuntimeError('Missing output directory. Please specify it using \'--out_dir\'.')
     if not os.path.isdir(args.out_dir):
         pathlib.Path(args.out_dir).mkdir(parents=False, exist_ok=True)
 

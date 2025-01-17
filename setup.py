@@ -108,7 +108,9 @@ def get_cmake_exec():
         cmake_default_path = 'C:\\Program Files\\CMake\\bin\\cmake.exe'
         if cmake_exec is None and os.path.isfile(cmake_default_path):
             cmake_exec = cmake_default_path
-    return cmake_exec
+        return cmake_exec, cmake_exec is not None
+    else:
+        return cmake_exec, shutil.which('cmake') is not None
 
 
 #sgl_sources = [ 'third_party/sgl/src/Graphics/Vulkan/Utils/Device.cpp' ]
@@ -132,10 +134,7 @@ include_dirs = [
     'third_party/OpenVolumeMesh/src',
     'third_party/custom',
     'third_party/glslang',
-    # 'third_party/fuchsia_radix_sort',
-    # 'third_party/fuchsia_radix_sort/lib',
     'third_party/fuchsia_radix_sort/include',
-    # 'tmp/fuchsia_radix_sort',
 ]
 source_files = []
 source_files += find_all_sources_in_dir('src/Module')
@@ -249,56 +248,6 @@ else:
     source_files += find_all_sources_in_dir('third_party/glslang/glslang/OSDependent/Unix')
 
 
-# fuchsia_radix_sort
-#source_files += [
-#    'third_party/fuchsia_radix_sort/lib/radix_sort_vk.c',
-#    'third_party/fuchsia_radix_sort/lib/target.c',
-#    'third_party/fuchsia_radix_sort/lib/target_requirements.c',
-#    'third_party/fuchsia_radix_sort/common/vk/assert.c',
-#    'third_party/fuchsia_radix_sort/common/vk/barrier.c',
-#    'third_party/fuchsia_radix_sort/common/util.c',
-#]
-#source_files += find_all_sources_in_dir('third_party/fuchsia_radix_sort/lib/targets/amd')
-#source_files += find_all_sources_in_dir('third_party/fuchsia_radix_sort/lib/targets/intel')
-#source_files += find_all_sources_in_dir('third_party/fuchsia_radix_sort/lib/targets/nvidia')
-#source_files += find_all_sources_in_dir('third_party/fuchsia_radix_sort/lib/targets/arm')
-#
-#
-#def compile_shader(header_name, shader_path, out_dir, shader_defines):
-#    shader_var_name = Path(header_name).stem.replace('.', '_')
-#    out_file_path = os.path.join(out_dir, header_name)
-#    if os.path.isfile(out_file_path):
-#        return
-#    process_args = [
-#        'glslangValidator', '--target-env', 'vulkan1.2', '--vn', f'{shader_var_name}_shader_binary',
-#        shader_path, '-o', out_file_path
-#    ] + shader_defines
-#    subprocess.run(process_args, check=True)
-#
-#
-#tmp_shaders_path = 'tmp/fuchsia_radix_sort'
-#Path(tmp_shaders_path).mkdir(parents=True, exist_ok=True)
-#for support in ['noi64', 'i64']:
-#    for keyval in ['u32', 'u64']:
-#        a = f'{support}_{keyval}_'
-#        d = []
-#        if support == 'noi64':
-#            d.append('-DRS_DISABLE_SHADER_INT64')
-#        if keyval == 'u32':
-#            d.append('-DRS_KEYVAL_DWORDS=1')
-#        else:
-#            d.append('-DRS_KEYVAL_DWORDS=2')
-#        compile_shader(
-#            f'{a}init.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/init.comp', tmp_shaders_path, d)
-#        compile_shader(
-#            f'{a}fill.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/fill.comp', tmp_shaders_path, d)
-#        compile_shader(
-#            f'{a}histogram.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/histogram.comp', tmp_shaders_path, d)
-#        compile_shader(
-#            f'{a}prefix.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/prefix.comp', tmp_shaders_path, d)
-#        compile_shader(
-#            f'{a}scatter.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/scatter.comp', tmp_shaders_path, d)
-
 data_files_all = []
 data_files = ['src/Module/difftetvr.pyi']
 libraries = []
@@ -351,13 +300,6 @@ else:
     os_arch = 'aarch64'
 
 
-tmp_path = 'tmp/fuchsia_radix_sort'
-Path(tmp_path).mkdir(parents=True, exist_ok=True)
-if IS_WINDOWS:
-    radix_sort_lib_path = f'{tmp_path}/build/Release/vk-radix-sort.lib'
-else:
-    radix_sort_lib_path = f'{tmp_path}/build/libvk-radix-sort.a'
-extra_objects.append(radix_sort_lib_path)
 glslang_validator_path = shutil.which('glslangValidator')
 env_cmake = dict(os.environ)
 if glslang_validator_path is None:
@@ -386,6 +328,7 @@ if glslang_validator_path is None:
                 env_cmake['PATH'] = f'C:\\VulkanSDK\\{vulkan_version}\\Bin'
                 os.environ['PATH'] = f'C:\\VulkanSDK\\{vulkan_version}\\Bin'
             env_cmake['VULKAN_SDK'] = f'C:\\VulkanSDK\\{vulkan_version}'
+            glslang_validator_path = shutil.which('glslangValidator', path=f'C:\\VulkanSDK\\{vulkan_version}\\Bin')
         else:
             raise RuntimeError('Missing Vulkan SDK. Please install it from https://vulkan.lunarg.com/sdk/home#windows.')
     if not IS_WINDOWS:
@@ -435,20 +378,91 @@ if glslang_validator_path is None:
             env_cmake['LD_LIBRARY_PATH'] = vulkan_lib_path
         env_cmake['VULKAN_SDK'] = vulkan_sdk_root
         glslang_validator_path = shutil.which('glslangValidator', path=vulkan_bin_path)
-if not os.path.isfile(radix_sort_lib_path):
-    volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk'
-    volk_header_path = os.path.abspath(volk_header_path)
+
+
+def compile_shader(header_name, shader_path, out_dir, shader_defines, recompile=False):
+    shader_var_name = Path(header_name).stem.replace('.', '_')
+    out_file_path = os.path.join(out_dir, header_name)
+    if os.path.isfile(out_file_path) and not recompile:
+        return
+    process_args = [
+        glslang_validator_path, '--target-env', 'vulkan1.2', '--vn', f'{shader_var_name}_shader_binary',
+        shader_path, '-o', out_file_path
+    ] + shader_defines
+    subprocess.run(process_args, check=True)
+
+
+cmake_exec, cmake_found = get_cmake_exec()
+if cmake_found:
+    tmp_path = 'tmp/fuchsia_radix_sort'
+    Path(tmp_path).mkdir(parents=True, exist_ok=True)
     if IS_WINDOWS:
-        volk_header_path = volk_header_path.replace('\\', '/')
-    cmake_exec = get_cmake_exec()
-    subprocess.run([
-        cmake_exec, '-S', 'third_party/fuchsia_radix_sort', '-B', f'{tmp_path}/build',
-        # '-DCMAKE_BUILD_TYPE=DEBUG',  # For debugging purposes.
-        # '-DCMAKE_VERBOSE_MAKEFILE=ON',
-        '-DCMAKE_BUILD_TYPE=Release',
-        f'-DVOLK_INCLUDE_DIR={volk_header_path}',
-        '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'], env=env_cmake, check=True)
-    subprocess.run([cmake_exec, '--build', f'{tmp_path}/build', '--config', 'Release'], check=True)
+        radix_sort_lib_path = f'{tmp_path}/build/Release/vk-radix-sort.lib'
+    else:
+        radix_sort_lib_path = f'{tmp_path}/build/libvk-radix-sort.a'
+    extra_objects.append(radix_sort_lib_path)
+    if not os.path.isfile(radix_sort_lib_path):
+        volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk'
+        volk_header_path = os.path.abspath(volk_header_path)
+        if IS_WINDOWS:
+            volk_header_path = volk_header_path.replace('\\', '/')
+        subprocess.run([
+            cmake_exec, '-S', 'third_party/fuchsia_radix_sort', '-B', f'{tmp_path}/build',
+            # '-DCMAKE_BUILD_TYPE=DEBUG',  # For debugging purposes.
+            # '-DCMAKE_VERBOSE_MAKEFILE=ON',
+            '-DCMAKE_BUILD_TYPE=Release',
+            f'-DVOLK_INCLUDE_DIR={volk_header_path}',
+            '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'], env=env_cmake, check=True)
+        subprocess.run([cmake_exec, '--build', f'{tmp_path}/build', '--config', 'Release'], check=True)
+else:
+    # fuchsia_radix_sort
+    include_dirs += [
+        'third_party/sgl/src/Graphics/Vulkan/libs/volk',
+        'third_party/fuchsia_radix_sort',
+        'third_party/fuchsia_radix_sort/lib',
+        'tmp/fuchsia_radix_sort',
+    ]
+    source_files += [
+        'third_party/fuchsia_radix_sort/lib/radix_sort_vk.c',
+        'third_party/fuchsia_radix_sort/lib/target.c',
+        'third_party/fuchsia_radix_sort/lib/target_requirements.c',
+        'third_party/fuchsia_radix_sort/common/vk/assert.c',
+        'third_party/fuchsia_radix_sort/common/vk/barrier.c',
+        'third_party/fuchsia_radix_sort/common/util.c',
+    ]
+    source_files += find_all_sources_in_dir('third_party/fuchsia_radix_sort/lib/targets/amd')
+    source_files += find_all_sources_in_dir('third_party/fuchsia_radix_sort/lib/targets/intel')
+    source_files += find_all_sources_in_dir('third_party/fuchsia_radix_sort/lib/targets/nvidia')
+    source_files += find_all_sources_in_dir('third_party/fuchsia_radix_sort/lib/targets/arm')
+    defines += ['VK_NO_PROTOTYPES', 'VOLK_INCLUDE_DIR']
+
+    tmp_shaders_path = 'tmp/fuchsia_radix_sort'
+    Path(tmp_shaders_path).mkdir(parents=True, exist_ok=True)
+    for support in ['noi64', 'i64']:
+        for keyval in ['u32', 'u64']:
+            a = f'{support}_{keyval}_'
+            d = []
+            if support == 'noi64':
+                d.append('-DRS_DISABLE_SHADER_INT64')
+            if keyval == 'u32':
+                d.append('-DRS_KEYVAL_DWORDS=1')
+            else:
+                d.append('-DRS_KEYVAL_DWORDS=2')
+            compile_shader(
+                f'{a}init.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/init.comp',
+                tmp_shaders_path, d, recompile=False)
+            compile_shader(
+                f'{a}fill.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/fill.comp',
+                tmp_shaders_path, d, recompile=False)
+            compile_shader(
+                f'{a}histogram.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/histogram.comp',
+                tmp_shaders_path, d, recompile=False)
+            compile_shader(
+                f'{a}prefix.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/prefix.comp',
+                tmp_shaders_path, d, recompile=False)
+            compile_shader(
+                f'{a}scatter.comp.h', 'third_party/fuchsia_radix_sort/lib/shaders/scatter.comp',
+                tmp_shaders_path, d, recompile=False)
 
 
 # fTetWild, according to https://github.com/wildmeshing/fTetWild, relies on GMP or MPIR.
@@ -518,7 +532,6 @@ if support_ftetwild:
         ftetwild_build_options = []
         if not IS_WINDOWS:
             ftetwild_build_options.append('-DCMAKE_BUILD_TYPE=Release')
-        cmake_exec = get_cmake_exec()
         subprocess.run(
             [cmake_exec, '-S', 'third_party/fTetWild-src', '-B', 'third_party/fTetWild-src/build']
             + ftetwild_build_options, check=True)

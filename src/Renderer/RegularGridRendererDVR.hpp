@@ -103,7 +103,7 @@ public:
     void render();
 
     // PyTorch buffer interface.
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_CUDA_INTEROP)
+#ifdef BUILD_PYTHON_MODULE
     void setUseComputeInterop(bool _useComputeInterop);
     void setViewportSize(uint32_t viewportWidth, uint32_t viewportHeight);
     torch::Tensor getImageTensor();
