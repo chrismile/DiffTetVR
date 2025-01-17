@@ -376,7 +376,7 @@ if glslang_validator_path is None:
                     f'third_party/{vulkan_installer_exe}',
                     '--accept-licenses', '--default-answer', '--confirm-command', 'install'], check=True)
                 os.remove(f'third_party/{vulkan_installer_exe}')
-        if 'PATH' in env_cmake:
+            if 'PATH' in env_cmake:
                 env_cmake['PATH'] += f';C:\\VulkanSDK\\{vulkan_version}\\Bin'
             else:
                 env_cmake['PATH'] = f'C:\\VulkanSDK\\{vulkan_version}\\Bin'
