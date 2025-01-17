@@ -443,6 +443,9 @@ if not os.path.isfile(radix_sort_lib_path):
         f'-DVOLK_INCLUDE_DIR={volk_header_path}',
         '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'], env=env_cmake, check=True)
     subprocess.run([cmake_exec, '--build', f'{tmp_path}/build', '--config', 'Release'], check=True)
+cmake_exec = get_cmake_exec()
+subprocess.run([cmake_exec, '-E', 'environment'], env=env_cmake, check=True)
+sys.exit(1)
 
 
 # fTetWild, according to https://github.com/wildmeshing/fTetWild, relies on GMP or MPIR.
