@@ -3,9 +3,9 @@ name: Build Python module using pip
 # The CI pipeline build script is currently disabled due to issues with the CUDA installation.
 on:
   push:
-    branches: [ unused ]
+    branches: [ main ]
   pull_request:
-    branches: [ unused ]
+    branches: [ main ]
 
 env:
   BUILD_TYPE: Release
