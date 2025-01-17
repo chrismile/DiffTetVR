@@ -377,6 +377,7 @@ if glslang_validator_path is None:
                     '--accept-licenses', '--default-answer', '--confirm-command', 'install'], check=True)
                 os.remove(f'third_party/{vulkan_installer_exe}')
             # https://github.com/python/cpython/issues/105889
+            # https://docs.python.org/3/library/subprocess.html#popen-constructor
             if 'PATH' in env_cmake:
                 env_cmake['PATH'] += f';C:\\VulkanSDK\\{vulkan_version}\\Bin'
                 os.environ['PATH'] += f';C:\\VulkanSDK\\{vulkan_version}\\Bin'
@@ -399,7 +400,8 @@ if glslang_validator_path is None:
             with tarfile.open('third_party/vulkan-sdk.tar.gz', 'r') as tar_ref:
                 tar_ref.extractall('third_party/VulkanSDK')
             os.remove('third_party/vulkan-sdk.tar.gz')
-            vulkan_sdk_root = os.path.join('third_party', 'VulkanSDK', os.listdir('third_party/VulkanSDK')[0])
+            vulkan_sdk_root = os.path.abspath(os.path.join(
+                'third_party', 'VulkanSDK', os.listdir('third_party/VulkanSDK')[0]))
             if os_arch != "x86_64":
                 subprocess.run([
                     os.path.join(vulkan_sdk_root, 'vulkansdk'),
@@ -434,9 +436,6 @@ if glslang_validator_path is None:
         env_cmake['VULKAN_SDK'] = vulkan_sdk_root
         glslang_validator_path = shutil.which('glslangValidator', path=vulkan_bin_path)
 cmake_exec = get_cmake_exec()
-print('----------')
-print(env_cmake)
-print('----------')
 subprocess.run([cmake_exec, '-E', 'environment'], env=env_cmake, check=True)
 if not os.path.isfile(radix_sort_lib_path):
     volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk'
@@ -452,7 +451,6 @@ if not os.path.isfile(radix_sort_lib_path):
         f'-DVOLK_INCLUDE_DIR={volk_header_path}',
         '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'], env=env_cmake, check=True)
     subprocess.run([cmake_exec, '--build', f'{tmp_path}/build', '--config', 'Release'], check=True)
-sys.exit(1)
 
 
 # fTetWild, according to https://github.com/wildmeshing/fTetWild, relies on GMP or MPIR.
