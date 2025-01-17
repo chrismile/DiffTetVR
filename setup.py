@@ -418,10 +418,16 @@ if glslang_validator_path is None:
         else:
             vulkan_sdk_root = os.path.join('third_party', 'VulkanSDK', os.listdir('third_party/VulkanSDK')[0])
         vulkan_bin_path = os.path.join(vulkan_sdk_root, os_arch, 'bin')
+        vulkan_lib_path = os.path.join(vulkan_sdk_root, os_arch, 'lib')
         if 'PATH' in env_cmake:
             env_cmake['PATH'] += f':{vulkan_bin_path}'
         else:
-            env_cmake['PATH'] = f'{vulkan_bin_path}'
+            env_cmake['PATH'] = vulkan_bin_path
+        if 'LD_LIBRARY_PATH' in env_cmake:
+            env_cmake['LD_LIBRARY_PATH'] += f':{vulkan_lib_path}'
+        else:
+            env_cmake['LD_LIBRARY_PATH'] = vulkan_lib_path
+        env_cmake['VULKAN_SDK'] = vulkan_sdk_root
         glslang_validator_path = shutil.which('glslangValidator', path=vulkan_bin_path)
 if not os.path.isfile(radix_sort_lib_path):
     volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk'
