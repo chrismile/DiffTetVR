@@ -1414,10 +1414,14 @@ void TetMesh::splitByLargestGradientMagnitudes(
 #ifdef BUILD_PYTHON_MODULE
     if (useComputeInterop) {
 #endif
-        vertexPositionGradientBufferCpu->unmapMemory();
-        vertexColorGradientBufferCpu->unmapMemory();
-        vertexPositionGradientBufferCpuPtr = nullptr;
-        vertexColorGradientBufferCpuPtr = nullptr;
+        if (vertexPositionGradientBufferCpu) {
+            vertexPositionGradientBufferCpu->unmapMemory();
+            vertexPositionGradientBufferCpuPtr = nullptr;
+        }
+        if (vertexColorGradientBufferCpu) {
+            vertexColorGradientBufferCpu->unmapMemory();
+            vertexColorGradientBufferCpuPtr = nullptr;
+        }
 #ifdef BUILD_PYTHON_MODULE
     }
 #endif
