@@ -120,7 +120,7 @@ def main():
     parser.add_argument('--lr_col', type=float, default=0.04)
     parser.add_argument('--lr_pos', type=float, default=0.001)
     parser.add_argument('--fix_boundary', action='store_true', default=False)
-    parser.add_argument('--exp_decay', type=float, default=0.999)
+    parser.add_argument('--exp_decay', type=float, default=0.8)
     parser.add_argument('--random_seed', type=int, default=None)
 
     # Tetrahedral element regularizer.
@@ -290,7 +290,7 @@ def main():
         variables.append(
             {'params': [vertex_positions], 'lr': args.lr_pos, 'name': 'vertex_positions'})
     optimizer = torch.optim.Adam(variables)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.8)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.exp_decay)
 
     loss_name = args.loss.lower()
     if loss_name == 'l1':
