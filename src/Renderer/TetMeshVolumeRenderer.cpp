@@ -327,7 +327,6 @@ void TetMeshVolumeRenderer::copyAdjointBufferToImagePreCheck(void* devicePtr) {
                 stream.hipStream = at::hip::getCurrentHIPStream();
             }
 #endif
-            stream.stream = reinterpret_cast<void*>(at::cuda::getCurrentCUDAStream().stream());
             colorAdjointImageBufferCu->copyFromDevicePtrAsync(devicePtr, stream);
         }
     } else {
