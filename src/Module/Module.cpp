@@ -33,8 +33,17 @@
 #include <torch/types.h>
 #include <torch/extension.h>
 
-#if defined(SUPPORT_COMPUTE_INTEROP)
+#ifdef SUPPORT_CUDA_INTEROP
+#include <Graphics/Vulkan/Utils/InteropCuda.hpp>
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+#include <Graphics/Vulkan/Utils/InteropHIP.hpp>
+#endif
+#ifdef SUPPORT_CUDA_INTEROP
 #include <c10/cuda/CUDAStream.h>
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+#include <c10/hip/HIPStream.h>
 #endif
 
 #include <Utils/AppSettings.hpp>
@@ -442,15 +451,14 @@ void ApplicationState::vulkanBegin() {
 #ifdef SUPPORT_COMPUTE_INTEROP
     if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
         sgl::vk::StreamWrapper stream{};
-#ifdef SUPPORT_COMPUTE_INTEROP
+#ifdef SUPPORT_CUDA_INTEROP
         if (usedDeviceType == torch::DeviceType::CUDA) {
             stream.cuStream = at::cuda::getCurrentCUDAStream();
         }
 #endif
 #ifdef SUPPORT_HIP_INTEROP
         if (usedDeviceType == torch::DeviceType::HIP) {
-            //stream.hipStream = at::cuda::getCurrentCUDAStream(); // TODO: This doesn't work; check docs.
-            stream.stream = reinterpret_cast<void*>(at::cuda::getCurrentCUDAStream().stream());
+            stream.hipStream = at::hip::getCurrentHIPStream();
         }
 #endif
         renderReadySemaphore->signalSemaphoreComputeApi(stream, timelineValue);
@@ -474,15 +482,14 @@ void ApplicationState::vulkanFinished() {
 #ifdef SUPPORT_COMPUTE_INTEROP
     if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
         sgl::vk::StreamWrapper stream{};
-#ifdef SUPPORT_COMPUTE_INTEROP
+#ifdef SUPPORT_CUDA_INTEROP
         if (usedDeviceType == torch::DeviceType::CUDA) {
             stream.cuStream = at::cuda::getCurrentCUDAStream();
         }
 #endif
 #ifdef SUPPORT_HIP_INTEROP
         if (usedDeviceType == torch::DeviceType::HIP) {
-            //stream.hipStream = at::cuda::getCurrentCUDAStream(); // TODO: This doesn't work; check docs.
-            stream.stream = reinterpret_cast<void*>(at::cuda::getCurrentCUDAStream().stream());
+            stream.hipStream = at::hip::getCurrentHIPStream();
         }
 #endif
         renderFinishedSemaphore->waitSemaphoreComputeApi(stream, timelineValue);
@@ -733,6 +740,7 @@ PYBIND11_MODULE(difftetvr, m) {
 #ifdef SUPPORT_COMPUTE_INTEROP
                 if (volumeRenderer) {
                     volumeRenderer->setUseComputeInterop(sState->usedDeviceType != torch::DeviceType::CPU);
+                    volumeRenderer->setUsedDeviceType(sState->usedDeviceType);
                 }
 #endif
                 return std::shared_ptr<TetMeshVolumeRenderer>(volumeRenderer);

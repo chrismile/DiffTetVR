@@ -121,6 +121,7 @@ public:
     // PyTorch buffer interface.
 #ifdef BUILD_PYTHON_MODULE
     void setUseComputeInterop(bool _useComputeInterop);
+    void setUsedDeviceType(torch::DeviceType _usedDeviceType);
     void setViewportSize(uint32_t viewportWidth, uint32_t viewportHeight);
     torch::Tensor getImageTensor();
     void copyOutputImageToBuffer();
@@ -197,6 +198,7 @@ protected:
 
 #ifdef BUILD_PYTHON_MODULE
     bool useComputeInterop = false;
+    torch::DeviceType usedDeviceType = torch::DeviceType::CPU;
 #ifdef SUPPORT_COMPUTE_INTEROP
     sgl::vk::BufferPtr colorImageBuffer;
     sgl::vk::BufferPtr colorAdjointImageBuffer;

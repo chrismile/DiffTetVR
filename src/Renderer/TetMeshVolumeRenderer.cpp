@@ -36,8 +36,19 @@
 #include <ImGui/Widgets/NumberFormatting.hpp>
 #endif
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_COMPUTE_INTEROP)
+#ifdef BUILD_PYTHON_MODULE
+#ifdef SUPPORT_CUDA_INTEROP
+#include <Graphics/Vulkan/Utils/InteropCuda.hpp>
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+#include <Graphics/Vulkan/Utils/InteropHIP.hpp>
+#endif
+#ifdef SUPPORT_CUDA_INTEROP
 #include <c10/cuda/CUDAStream.h>
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+#include <c10/hip/HIPStream.h>
+#endif
 #endif
 
 #include "Tet/TetMesh.hpp"
@@ -150,6 +161,10 @@ void TetMeshVolumeRenderer::recreateSwapchainExternal(
 #ifdef BUILD_PYTHON_MODULE
 void TetMeshVolumeRenderer::setUseComputeInterop(bool _useComputeInterop) {
     useComputeInterop = _useComputeInterop;
+}
+
+void TetMeshVolumeRenderer::setUsedDeviceType(torch::DeviceType _usedDeviceType) {
+    usedDeviceType = _usedDeviceType;
 }
 
 void TetMeshVolumeRenderer::setViewportSize(uint32_t viewportWidth, uint32_t viewportHeight) {
@@ -302,6 +317,16 @@ void TetMeshVolumeRenderer::copyAdjointBufferToImagePreCheck(void* devicePtr) {
             //        colorAdjointImageBuffer->getSizeInBytes(), stream);
             //sgl::vk::checkCUresult(cuResult, "Error in cuMemcpyAsync: ");
             sgl::vk::StreamWrapper stream{};
+#ifdef SUPPORT_CUDA_INTEROP
+            if (usedDeviceType == torch::DeviceType::CUDA) {
+                stream.cuStream = at::cuda::getCurrentCUDAStream();
+            }
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+            if (usedDeviceType == torch::DeviceType::HIP) {
+                stream.hipStream = at::hip::getCurrentHIPStream();
+            }
+#endif
             stream.stream = reinterpret_cast<void*>(at::cuda::getCurrentCUDAStream().stream());
             colorAdjointImageBufferCu->copyFromDevicePtrAsync(devicePtr, stream);
         }

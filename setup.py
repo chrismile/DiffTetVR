@@ -119,7 +119,7 @@ def get_cmake_exec():
 #sgl_sources += find_all_sources_in_dir('third_party/sgl/src/Graphics/Vulkan/Render')
 #sgl_sources += find_all_sources_in_dir('third_party/sgl/src/Graphics/Vulkan/Shader')
 
-if not os.path.exists('third_party/sgl'):
+if not os.path.exists('third_party/sgl/src'):
     subprocess.run(['git', 'submodule', 'update', '--init', '--recursive'])
 
 include_dirs = [

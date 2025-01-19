@@ -40,10 +40,6 @@
 #include <utility>
 #endif
 
-#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_COMPUTE_INTEROP)
-#include <c10/cuda/CUDAStream.h>
-#endif
-
 #include "Tet/RegularGrid.hpp"
 #include "RegularGridRendererDVR.hpp"
 
