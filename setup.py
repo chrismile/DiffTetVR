@@ -26,6 +26,7 @@
 
 import sys
 import os
+import stat
 import platform
 import glob
 import shutil
@@ -103,6 +104,9 @@ def TorchExtension(name, sources, *args, **kwargs):
         libraries.append('torch_cuda')
     elif SYCL_HOME is not None:
         libraries.append('sycl')
+        libraries.append('c10_xpu')
+        libraries.append('torch_xpu')
+        include_dirs.append(os.path.join(SYCL_HOME, 'include', 'sycl'))
     kwargs['libraries'] = libraries
 
     return setuptools.Extension(name, sources, *args, **kwargs)
@@ -128,6 +132,19 @@ def get_cmake_exec():
         return cmake_exec, cmake_exec is not None
     else:
         return cmake_exec, shutil.which('cmake') is not None
+
+
+def rmtree_ex(dir_path):
+    if IS_WINDOWS:
+        # https://bugs.python.org/issue43657
+        def remove_readonly(func, path, exec_info):
+            if func not in (os.unlink, os.rmdir) or exec_info[1].winerror != 5:
+                raise exec_info[1]
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        shutil.rmtree(dir_path, onerror=remove_readonly)
+    else:
+        shutil.rmtree(dir_path)
 
 
 #sgl_sources = [ 'third_party/sgl/src/Graphics/Vulkan/Utils/Device.cpp' ]
@@ -549,20 +566,25 @@ if support_ftetwild:
             shutil.rmtree('third_party/fTetWild')
     if not os.path.isdir('third_party/fTetWild'):
         if os.path.isdir('third_party/fTetWild-src'):
-            shutil.rmtree('third_party/fTetWild-src')
+            rmtree_ex('third_party/fTetWild-src')
         subprocess.run(['git', 'clone', 'https://github.com/chrismile/fTetWild.git', 'third_party/fTetWild-src'])
         Path('third_party/fTetWild-src/build').mkdir(exist_ok=True)
         ftetwild_build_options = []
         if not IS_WINDOWS:
             ftetwild_build_options.append('-DCMAKE_BUILD_TYPE=Release')
+        env_cmake_ftetwild = dict(os.environ)
+        if IS_WINDOWS:
+            gmp_base_path = os.path.dirname(os.path.dirname(gmp_path))
+            env_cmake_ftetwild['GMP_INC'] = os.path.join(gmp_base_path, 'include')
+            env_cmake_ftetwild['GMP_LIB'] = os.path.join(gmp_base_path, 'lib')
         subprocess.run(
             [cmake_exec, '-S', 'third_party/fTetWild-src', '-B', 'third_party/fTetWild-src/build']
-            + ftetwild_build_options, check=True)
+            + ftetwild_build_options, env=env_cmake_ftetwild, check=True)
         subprocess.run([cmake_exec, '--build', f'third_party/fTetWild-src/build', '--config', 'Release'], check=True)
         Path('third_party/fTetWild').mkdir(exist_ok=True)
         if IS_WINDOWS:
             shutil.copy(
-                'third_party/fTetWild-src/build/FloatTetwild_bin.exe',
+                'third_party/fTetWild-src/build/Release/FloatTetwild_bin.exe',
                 'third_party/fTetWild/FloatTetwild_bin.exe')
         else:
             shutil.copy(

@@ -96,6 +96,55 @@ export LD_LIBRARY_PATH=/usr/local/cuda-12.4/targets/x86_64-linux/lib:$LD_LIBRARY
 export PATH=/usr/local/cuda-12.4/bin:$PATH
 ```
 
+### Intel GPU Support
+
+DiffTetVR has WIP support for Intel GPUs via the Python module. Please follow the steps below to install the Python
+module. Please note that on Windows, only the cmd.exe-based "Anaconda Prompt" works, but **NOT** the "Anaconda
+Powershell Prompt", as it does not seem to propagate the environment variables from the vars.bat scripts to Python.
+
+- Step 1: Install the drivers and the "Intel Deep Learning Essentials" by following the steps at
+  https://pytorch.org/docs/main/notes/get_start_xpu.html under the category "Software Prerequisite".
+- Step 2: Open the "Anaconda Prompt" (Windows) or a terminal and activate conda (Linux).
+- Step 3: Run the following commands (replace "2025.0" by the used oneAPI version).
+
+```sh
+# Windows:
+"C:\Program Files (x86)\Intel\oneAPI\compiler\2025.0\env\vars.bat"
+"C:\Program Files (x86)\Intel\oneAPI\ocloc\2025.0\env\vars.bat"
+set DISTUTILS_USE_SDK=1
+set VSLANG=1033
+set KMP_DUPLICATE_LIB_OK=TRUE
+# Linux:
+source /opt/intel/oneapi/compiler/2025.0/env/vars.sh
+source /opt/intel/oneapi/umf/0.9/env/vars.sh
+source /opt/intel/oneapi/pti/0.10/env/vars.sh
+# All:
+conda create -n diffdvr python=3.12
+conda activate diffdvr
+conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu
+cd <path-to-difftetvr>
+pip install .
+```
+
+**TODOs**:
+- It should be investigated why KMP_DUPLICATE_LIB_OK=TRUE is necessary on Windows.
+  On Windows, I get the following error message when using the PyTorch module with SYCL:
+  
+  "OMP: Error #15: Initializing libiomp5md.dll, but found libiomp5md.dll already initialized.
+  OMP: Hint This means that multiple copies of the OpenMP runtime have been linked into the program. That is
+  dangerous, since it can degrade performance or cause incorrect results. The best thing to do is to ensure that
+  only a single OpenMP runtime is linked into the process, e.g. by avoiding static linking of the OpenMP runtime
+  in any library. As an unsafe, unsupported, undocumented workaround you can set the environment variable
+  KMP_DUPLICATE_LIB_OK=TRUE to allow the program to continue to execute, but that may cause crashes or silently
+  produce incorrect results. For more information, please see http://www.intel.com/software/products/support/."
+  
+  While KMP_DUPLICATE_LIB_OK=TRUE seems to resolve the problem, it might cause some issues.
+  Turning off OpenMP support in setup.py doesn't seem to resolve it, so it is probably an oneAPI vs PyTorch problem?
+  Example of two files on my system:
+  - C:\Users\chris\miniconda3\pkgs\intel-openmp-2023.1.0-h59b6b97_46320\Library\bin\libiomp5md.dll
+  - C:\Program Files (x86)\Intel\oneAPI\compiler\2025.0\bin\libiomp5md.dll
+
 
 ## How to report bugs
 
