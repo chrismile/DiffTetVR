@@ -33,6 +33,7 @@ import subprocess
 import urllib
 import zipfile
 import tarfile
+import inspect
 from pathlib import Path
 from urllib.request import urlopen
 import setuptools
@@ -43,6 +44,10 @@ from setuptools.command import bdist_egg
 import torch
 from torch.utils.cpp_extension import include_paths, library_paths, BuildExtension, \
     IS_WINDOWS, IS_HIP_EXTENSION, ROCM_VERSION, ROCM_HOME, CUDA_HOME
+try:
+    from torch.utils.cpp_extension import SYCL_HOME
+except ImportError:
+    SYCL_HOME = None
 
 extra_compile_args = []
 if IS_WINDOWS:
@@ -63,13 +68,23 @@ class EggInfoInstallLicense(egg_info):
 
 
 def TorchExtension(name, sources, *args, **kwargs):
+    # The interface was changed between PyTorch versions.
+    include_paths_arg_name = inspect.getfullargspec(include_paths).args[0]
+    if include_paths_arg_name == 'cuda':
+        device_type = CUDA_HOME is not None or ROCM_HOME is not None
+    else:  # include_paths_arg_name == 'device_type'
+        if CUDA_HOME is not None or ROCM_HOME is not None:
+            device_type = 'cuda'
+        elif SYCL_HOME is not None:
+            device_type = 'xpu'
+        else:
+            device_type = 'cpu'
     include_dirs = kwargs.get('include_dirs', [])
-    use_cuda = CUDA_HOME is not None or ROCM_HOME is not None
-    include_dirs += include_paths(cuda=use_cuda)
+    include_dirs += include_paths(device_type)
     kwargs['include_dirs'] = include_dirs
 
     library_dirs = kwargs.get('library_dirs', [])
-    library_dirs += library_paths(cuda=use_cuda)
+    library_dirs += library_paths(device_type)
     kwargs['library_dirs'] = library_dirs
 
     libraries = kwargs.get('libraries', [])
@@ -86,6 +101,8 @@ def TorchExtension(name, sources, *args, **kwargs):
         libraries.append('cudart')
         libraries.append('c10_cuda')
         libraries.append('torch_cuda')
+    elif SYCL_HOME is not None:
+        libraries.append('sycl')
     kwargs['libraries'] = libraries
 
     return setuptools.Extension(name, sources, *args, **kwargs)
@@ -291,6 +308,12 @@ elif CUDA_HOME is not None and torch.cuda.is_available():
     defines.append(('SUPPORT_CUDA_INTEROP',))
     defines.append(('SUPPORT_COMPUTE_INTEROP',))
     source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCuda.cpp')
+    source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCompute.cpp')
+elif SYCL_HOME is not None:
+    defines.append(('SUPPORT_LEVEL_ZERO_INTEROP',))
+    defines.append(('SUPPORT_SYCL_INTEROP',))
+    defines.append(('SUPPORT_COMPUTE_INTEROP',))
+    source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropLevelZero.cpp')
     source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCompute.cpp')
 
 
