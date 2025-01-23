@@ -39,11 +39,18 @@
 #ifdef SUPPORT_HIP_INTEROP
 #include <Graphics/Vulkan/Utils/InteropHIP.hpp>
 #endif
+#ifdef SUPPORT_SYCL_INTEROP
+#include <Graphics/Vulkan/Utils/InteropLevelZero.hpp>
+#endif
 #ifdef SUPPORT_CUDA_INTEROP
 #include <c10/cuda/CUDAStream.h>
 #endif
 #ifdef SUPPORT_HIP_INTEROP
 #include <c10/hip/HIPStream.h>
+#endif
+#ifdef SUPPORT_SYCL_INTEROP
+#include <c10/xpu/XPUStream.h>
+#include <torch/csrc/api/include/torch/xpu.h>
 #endif
 
 #include <Utils/AppSettings.hpp>
@@ -79,6 +86,14 @@ namespace sgl { namespace vk {
 DLL_OBJECT bool initializeHipDeviceApiFunctionTable();
 DLL_OBJECT bool getIsHipDeviceApiFunctionTableInitialized();
 DLL_OBJECT void freeHipDeviceApiFunctionTable();
+}}
+#endif
+
+#ifdef SUPPORT_SYCL_INTEROP
+namespace sgl { namespace vk {
+DLL_OBJECT bool initializeLevelZeroFunctionTable();
+DLL_OBJECT bool getIsLevelZeroFunctionTableInitialized();
+DLL_OBJECT void freeLevelZeroFunctionTable();
 }}
 #endif
 
@@ -219,12 +234,132 @@ ApplicationState::ApplicationState() {
     requestedDeviceFeatures.optionalVulkan12Features.runtimeDescriptorArray = VK_TRUE;
     requestedDeviceFeatures.optionalVulkan12Features.shaderStorageBufferArrayNonUniformIndexing = VK_TRUE;
 
+
+    uint8_t* deviceUuid = nullptr;
+    if (globalDeviceTypeSetManually) {
+        usedDeviceType = globalDeviceType;
+    } else {
+        usedDeviceType = torch::DeviceType::CPU;
+#ifdef SUPPORT_SYCL_INTEROP
+        if (torch::xpu::is_available()) {
+            usedDeviceType = torch::DeviceType::XPU;
+        }
+#endif
+#if defined(SUPPORT_CUDA_INTEROP) || defined(SUPPORT_HIP_INTEROP)
+        if (torch::cuda::is_available()) {
+#ifdef SUPPORT_CUDA_INTEROP
+            usedDeviceType = torch::DeviceType::CUDA;
+#elif defined(SUPPORT_HIP_INTEROP)
+            usedDeviceType = torch::DeviceType::HIP;
+#endif
+        }
+#endif
+    }
+
+    bool isBuildConfigurationSupported = false;
+    if (usedDeviceType == torch::DeviceType::CPU)
+        isBuildConfigurationSupported = true;
+#ifdef SUPPORT_CUDA_INTEROP
+    if (usedDeviceType == torch::DeviceType::CUDA)
+        isBuildConfigurationSupported = true;
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+    if (usedDeviceType == torch::DeviceType::HIP)
+        isBuildConfigurationSupported = true;
+#endif
+#ifdef SUPPORT_SYCL_INTEROP
+    if (usedDeviceType == torch::DeviceType::XPU)
+        isBuildConfigurationSupported = true;
+#endif
+    if (!isBuildConfigurationSupported) {
+        sgl::Logfile::get()->throwError("Error in ApplicationState::ApplicationState: Unsupported device type.");
+    }
+
+    // Synchronize needs to be called to make sure cuInit has been called.
+#if defined(SUPPORT_CUDA_INTEROP) || defined(SUPPORT_HIP_INTEROP)
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+        torch::cuda::synchronize();
+    }
+#endif
+#ifdef SUPPORT_SYCL_INTEROP
+    if (usedDeviceType == torch::DeviceType::XPU) {
+        //torch::xpu::synchronize(); //< Needs device index, which we might not have yet?
+    }
+#endif
+    if (usedDeviceType == torch::DeviceType::CUDA) {
+#ifdef SUPPORT_CUDA_INTEROP
+        if (!sgl::vk::getIsCudaDeviceApiFunctionTableInitialized()) {
+            bool success = sgl::vk::initializeCudaDeviceApiFunctionTable();
+            if (!success) {
+                usedDeviceType = torch::DeviceType::CPU;
+                sgl::Logfile::get()->writeError(
+                        "Error in ApplicationState::ApplicationState: "
+                        "sgl::vk::initializeCudaDeviceApiFunctionTable() failed. Switching to CPU.", false);
+            } else {
+                deviceUuid = new uint8_t[VK_UUID_SIZE];
+                CUuuid cudaDeviceUuid = {};
+                sgl::vk::checkCUresult(sgl::vk::g_cudaDeviceApiFunctionTable.cuDeviceGetUuid(
+                        &cudaDeviceUuid, at::cuda::getCurrentCUDAStream().device_index()), "Error in cuDeviceGetUuid: ");
+                memcpy(deviceUuid, cudaDeviceUuid.bytes, VK_UUID_SIZE);
+            }
+        }
+#else
+        sgl::Logfile::get()->throwError(
+                        "Error in ApplicationState::ApplicationState: DeviceType::CUDA is not supported.", false);
+#endif
+    }
+    if (usedDeviceType == torch::DeviceType::HIP) {
+#ifdef SUPPORT_HIP_INTEROP
+        if (!sgl::vk::getIsHipDeviceApiFunctionTableInitialized()) {
+            bool success = sgl::vk::initializeHipDeviceApiFunctionTable();
+            if (!success) {
+                usedDeviceType = torch::DeviceType::CPU;
+                sgl::Logfile::get()->writeError(
+                        "Error in ApplicationState::ApplicationState: "
+                        "sgl::vk::initializeHipDeviceApiFunctionTable() failed. Switching to CPU.", false);
+            } else {
+                deviceUuid = new uint8_t[VK_UUID_SIZE];
+                hipUUID hipDeviceUuid = {};
+                sgl::vk::checkHipResult(sgl::vk::g_hipDeviceApiFunctionTable.hipDeviceGetUuid(
+                        &hipDeviceUuid, at::hip::getCurrentHIPStream().device_index()), "Error in hipDeviceGetUuid: ");
+                memcpy(deviceUuid, hipDeviceUuid.bytes, VK_UUID_SIZE);
+            }
+        }
+#else
+        sgl::Logfile::get()->throwError(
+                "Error in ApplicationState::ApplicationState: DeviceType::HIP is not supported.", false);
+#endif
+    }
+    if (usedDeviceType == torch::DeviceType::XPU) {
+#ifdef SUPPORT_SYCL_INTEROP
+        if (!sgl::vk::getIsLevelZeroFunctionTableInitialized()) {
+            bool success = sgl::vk::initializeLevelZeroFunctionTable();
+            if (!success) {
+                usedDeviceType = torch::DeviceType::CPU;
+                sgl::Logfile::get()->writeError(
+                        "Error in ApplicationState::ApplicationState: "
+                        "sgl::vk::initializeLevelZeroFunctionTable() failed. Switching to CPU.", false);
+            } else {
+                auto& syclQueue = at::xpu::getCurrentXPUStream().queue();
+                sgl::vk::setLevelZeroGlobalStateFromSyclQueue(syclQueue);
+                auto zeDeviceProperties = sgl::vk::retrieveZeDevicePropertiesFromSyclQueue(syclQueue);
+                deviceUuid = new uint8_t[VK_UUID_SIZE];
+                memcpy(deviceUuid, zeDeviceProperties.uuid.id, VK_UUID_SIZE);
+            }
+        }
+#else
+        sgl::Logfile::get()->throwError(
+                "Error in ApplicationState::ApplicationState: DeviceType::XPU is not supported.", false);
+#endif
+    }
+
+
     sgl::vk::Instance* instance = sgl::AppSettings::get()->getVulkanInstance();
     sgl::AppSettings::get()->getVulkanInstance()->setDebugCallback(&vulkanErrorCallbackHeadless);
     device = new sgl::vk::Device;
 
 #ifdef USE_FUCHSIA_RADIX_SORT_CMAKE
-    auto physicalDeviceCheckCallback = [](
+    auto physicalDeviceCheckCallback = [&](
             VkPhysicalDevice physicalDevice,
             VkPhysicalDeviceProperties physicalDeviceProperties,
             std::vector<const char*>& requiredDeviceExtensions,
@@ -236,10 +371,26 @@ ApplicationState::ApplicationState() {
 
         VkPhysicalDeviceSubgroupProperties subgroupProperties{};
         subgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+        VkPhysicalDeviceIDProperties physicalDeviceIdProperties{};
+        physicalDeviceIdProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+        physicalDeviceIdProperties.pNext = &subgroupProperties;
         VkPhysicalDeviceProperties2 deviceProperties2 = {};
         deviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-        deviceProperties2.pNext = &subgroupProperties;
+        deviceProperties2.pNext = &physicalDeviceIdProperties;
         sgl::vk::getPhysicalDeviceProperties2(physicalDevice, deviceProperties2);
+
+        if (deviceUuid) {
+            bool isSameUuid = true;
+            for (int i = 0; i < int(VK_UUID_SIZE); i++) {
+                if (physicalDeviceIdProperties.deviceUUID[i] != deviceUuid[i]) {
+                    isSameUuid = false;
+                    break;
+                }
+            }
+            if (!isSameUuid) {
+                return false;
+            }
+        }
 
         auto* target = radix_sort_vk_target_auto_detect(&physicalDeviceProperties, &subgroupProperties, 2u);
         if (!target) {
@@ -303,74 +454,9 @@ ApplicationState::ApplicationState() {
     sgl::AppSettings::get()->setUseMatrixBlock(false);
     sgl::AppSettings::get()->initializeSubsystems();
     checkIsFuchsiaRadixSortSupported(device);
-
-    if (globalDeviceTypeSetManually) {
-        usedDeviceType = globalDeviceType;
-    } else {
-        usedDeviceType = torch::DeviceType::CPU;
-#ifdef SUPPORT_COMPUTE_INTEROP
-        if (torch::cuda::is_available()) {
-#ifdef SUPPORT_CUDA_INTEROP
-            usedDeviceType = torch::DeviceType::CUDA;
-#elif defined(SUPPORT_HIP_INTEROP)
-            usedDeviceType = torch::DeviceType::HIP;
-#endif
-        }
-#endif
-    }
-
-    bool isBuildConfigurationSupported = false;
-    if (usedDeviceType == torch::DeviceType::CPU)
-        isBuildConfigurationSupported = true;
-#ifdef SUPPORT_CUDA_INTEROP
-    if (usedDeviceType == torch::DeviceType::CUDA)
-        isBuildConfigurationSupported = true;
-#endif
-#ifdef SUPPORT_HIP_INTEROP
-    if (usedDeviceType == torch::DeviceType::HIP)
-        isBuildConfigurationSupported = true;
-#endif
-    if (!isBuildConfigurationSupported) {
-        sgl::Logfile::get()->throwError("Error in ApplicationState::ApplicationState: Unsupported device type.");
-    }
-
-    // Synchronize needs to be called to make sure cuInit has been called.
-#ifdef SUPPORT_COMPUTE_INTEROP
-    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
-        torch::cuda::synchronize();
-    }
-#endif
-    if (usedDeviceType == torch::DeviceType::CUDA) {
-#ifdef SUPPORT_CUDA_INTEROP
-        if (!sgl::vk::getIsCudaDeviceApiFunctionTableInitialized()) {
-            bool success = sgl::vk::initializeCudaDeviceApiFunctionTable();
-            if (!success) {
-                usedDeviceType = torch::DeviceType::CPU;
-                sgl::Logfile::get()->writeError(
-                        "Error in ApplicationState::ApplicationState: "
-                        "sgl::vk::initializeCudaDeviceApiFunctionTable() failed. Switching to CPU.", false);
-            }
-        }
-#else
-        sgl::Logfile::get()->throwError(
-                        "Error in ApplicationState::ApplicationState: DeviceType::CUDA is not supported.", false);
-#endif
-    }
-    if (usedDeviceType == torch::DeviceType::HIP) {
-#ifdef SUPPORT_HIP_INTEROP
-        if (!sgl::vk::getIsHipDeviceApiFunctionTableInitialized()) {
-            bool success = sgl::vk::initializeHipDeviceApiFunctionTable();
-            if (!success) {
-                usedDeviceType = torch::DeviceType::CPU;
-                sgl::Logfile::get()->writeError(
-                        "Error in ApplicationState::ApplicationState: "
-                        "sgl::vk::initializeHipDeviceApiFunctionTable() failed. Switching to CPU.", false);
-            }
-        }
-#else
-        sgl::Logfile::get()->throwError(
-                "Error in ApplicationState::ApplicationState: DeviceType::HIP is not supported.", false);
-#endif
+    if (deviceUuid) {
+        delete[] deviceUuid;
+        deviceUuid = nullptr;
     }
 
     renderer = new sgl::vk::Renderer(sgl::AppSettings::get()->getPrimaryDevice());
@@ -435,6 +521,11 @@ ApplicationState::~ApplicationState() {
         sgl::vk::freeHipDeviceApiFunctionTable();
     }
 #endif
+#ifdef SUPPORT_SYCL_INTEROP
+    if (sgl::vk::getIsLevelZeroFunctionTableInitialized()) {
+        sgl::vk::freeLevelZeroFunctionTable();
+    }
+#endif
     sgl::AppSettings::get()->release();
 }
 
@@ -459,6 +550,13 @@ void ApplicationState::vulkanBegin() {
 #ifdef SUPPORT_HIP_INTEROP
         if (usedDeviceType == torch::DeviceType::HIP) {
             stream.hipStream = at::hip::getCurrentHIPStream();
+        }
+#endif
+#ifdef SUPPORT_SYCL_INTEROP
+        if (usedDeviceType == torch::DeviceType::XPU) {
+            auto& syclQueue = at::xpu::getCurrentXPUStream().queue();
+            sgl::vk::setLevelZeroGlobalStateFromSyclQueue(syclQueue);
+            stream.zeCommandList = sgl::vk::syclStreamToZeCommandList(syclQueue);
         }
 #endif
         renderReadySemaphore->signalSemaphoreComputeApi(stream, timelineValue);
@@ -490,6 +588,13 @@ void ApplicationState::vulkanFinished() {
 #ifdef SUPPORT_HIP_INTEROP
         if (usedDeviceType == torch::DeviceType::HIP) {
             stream.hipStream = at::hip::getCurrentHIPStream();
+        }
+#endif
+#ifdef SUPPORT_SYCL_INTEROP
+        if (usedDeviceType == torch::DeviceType::XPU) {
+            auto& syclQueue = at::xpu::getCurrentXPUStream().queue();
+            sgl::vk::setLevelZeroGlobalStateFromSyclQueue(syclQueue);
+            stream.zeCommandList = sgl::vk::syclStreamToZeCommandList(syclQueue);
         }
 #endif
         renderFinishedSemaphore->waitSemaphoreComputeApi(stream, timelineValue);
@@ -530,6 +635,8 @@ void setUsedDeviceType(const std::string& deviceTypeName /* torch::DeviceType de
 #endif
     } else if (deviceTypeNameLower == torch::DeviceTypeName(torch::DeviceType::HIP, true)) {
         deviceType = torch::DeviceType::HIP;
+    } else if (deviceTypeNameLower == torch::DeviceTypeName(torch::DeviceType::XPU, true)) {
+        deviceType = torch::DeviceType::XPU;
     } else {
         sgl::Logfile::get()->throwError(
                 "Error in setUsedDeviceType: Unsupported device type '" + deviceTypeName + "'.");
@@ -1029,7 +1136,8 @@ PYBIND11_MODULE(difftetvr, m) {
             .value("ORT", torch::DeviceType::ORT)
             .value("XLA", torch::DeviceType::XLA)
             .value("VULKAN", torch::DeviceType::Vulkan)
-            .value("METAL", torch::DeviceType::Metal);*/
+            .value("METAL", torch::DeviceType::Metal)
+            .value("XPU", torch::DeviceType::XPU);*/
     m.def("set_device_type", setUsedDeviceType,
         "Sets the used device type. May only be called at the beginning of the program.",
         py::arg("device_type"));
