@@ -303,15 +303,15 @@ if IS_WINDOWS:
     defines.append(('DLL_OBJECT', ''))
     defines.append(('DISABLE_SINGLETON_BOOST_INTERPROCESS',))
     # According to https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-pathremovefilespecw,
-    # shlwapi.lib and shlwapi.dll both exist. Maybe this should rather be a extra_objects file?
+    # shlwapi.lib and shlwapi.dll both exist. Maybe this should rather be an extra_objects file?
     libraries.append('shlwapi')
     libraries.append('shell32')
     libraries.append('user32')
     defines.append(('GLSLANG_OSINCLUDE_WIN32', ''))
 else:
     defines.append(('DLL_OBJECT', ''))
-    #extra_compile_args.append('-O0')  # For debugging tests.
-    #extra_compile_args.append('-ggdb')  # For debugging tests.
+    # extra_compile_args.append('-O0')  # For debugging tests.
+    # extra_compile_args.append('-ggdb')  # For debugging tests.
     libraries.append('dl')
     defines.append(('GLSLANG_OSINCLUDE_UNIX', ''))
 
@@ -682,16 +682,17 @@ for define in defines:
 uses_pip = \
     ('_' in os.environ and (os.environ['_'].endswith('pip') or os.environ['_'].endswith('pip3'))) \
     or 'PIP_BUILD_TRACKER' in os.environ
+if os.path.exists('difftetvr'):
+    shutil.rmtree('difftetvr')
 if uses_pip:
-    if os.path.exists('difftetvr'):
-        shutil.rmtree('difftetvr')
     Path('difftetvr/Data').mkdir(parents=True, exist_ok=True)
     shutil.copy('src/Module/difftetvr.pyi', 'difftetvr/__init__.pyi')
     shutil.copy('src/Module/pyutils.py', 'difftetvr/pyutils.py')
+    shutil.copy('LICENSE', 'difftetvr/LICENSE')
     shutil.copytree('docs', 'difftetvr/docs')
     shutil.copytree('Data/Shaders', 'difftetvr/Data/Shaders')
     shutil.copytree('Data/TransferFunctions', 'difftetvr/Data/TransferFunctions')
-    pkg_data = []
+    pkg_data = ['**/LICENSE']
     if IS_WINDOWS:
         if support_ftetwild or support_tetgen:
             pkg_data.append('**/*.exe')
