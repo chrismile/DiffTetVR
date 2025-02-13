@@ -338,9 +338,37 @@ void TetMeshRendererPPLL::recreateSwapchain(uint32_t width, uint32_t height) {
 
     size_t startOffsetBufferSizeBytes = sizeof(uint32_t) * paddedWindowWidth * paddedWindowHeight;
     startOffsetBuffer = {}; // Delete old data first (-> refcount 0)
+#ifdef BUILD_PYTHON_MODULE
+#ifdef SUPPORT_COMPUTE_INTEROP
+    startOffsetBufferCu = {};
+#endif
+    startOffsetBufferCpu = {};
+    startOffsetBufferCpuPtr = {};
+#endif
     startOffsetBuffer = std::make_shared<sgl::vk::Buffer>(
             renderer->getDevice(), startOffsetBufferSizeBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
+            VMA_MEMORY_USAGE_GPU_ONLY
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_COMPUTE_INTEROP)
+            , true, useComputeInterop && exportLinkedListData
+#endif
+    );
+
+#ifdef BUILD_PYTHON_MODULE
+    if (exportLinkedListData) {
+#ifdef SUPPORT_COMPUTE_INTEROP
+        if (useComputeInterop) {
+            startOffsetBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(startOffsetBuffer);
+        } else {
+#endif
+            startOffsetBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                    renderer->getDevice(), startOffsetBufferSizeBytes,
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+            startOffsetBufferCpuPtr = startOffsetBufferCpu->mapMemory();
+#ifdef SUPPORT_COMPUTE_INTEROP
+        }
+#endif
+    }
+#endif
 
     fragmentCounterBuffer = {}; // Delete old data first (-> refcount 0)
     fragmentCounterBuffer = std::make_shared<sgl::vk::Buffer>(
@@ -493,6 +521,14 @@ void TetMeshRendererPPLL::reallocateFragmentBuffer() {
         adjointRasterPass->clearFragmentBuffer();
     }
 
+#ifdef BUILD_PYTHON_MODULE
+#ifdef SUPPORT_COMPUTE_INTEROP
+    fragmentBufferCu = {};
+#endif
+    fragmentBufferCpu = {};
+    fragmentBufferCpuPtr = {};
+#endif
+
     // We only need buffer arrays when the maximum allocation is larger than our budget.
     if (maxDeviceMemoryBudget < maxStorageBufferSize) {
         fragmentBufferMode = FragmentBufferMode::BUFFER;
@@ -523,7 +559,29 @@ void TetMeshRendererPPLL::reallocateFragmentBuffer() {
         cachedNumFragmentBuffers = 1;
         fragmentBuffer = std::make_shared<sgl::vk::Buffer>(
                 renderer->getDevice(), fragmentBufferSizeBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                VMA_MEMORY_USAGE_GPU_ONLY);
+                VMA_MEMORY_USAGE_GPU_ONLY
+#if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_COMPUTE_INTEROP)
+                , true, useComputeInterop && exportLinkedListData
+#endif
+        );
+
+#ifdef BUILD_PYTHON_MODULE
+        if (exportLinkedListData) {
+#ifdef SUPPORT_COMPUTE_INTEROP
+            if (useComputeInterop) {
+                fragmentBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(fragmentBuffer);
+            } else {
+#endif
+                fragmentBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                        renderer->getDevice(), fragmentBufferSizeBytes,
+                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                        VMA_MEMORY_USAGE_GPU_TO_CPU);
+                fragmentBufferCpuPtr = fragmentBufferCpu->mapMemory();
+#ifdef SUPPORT_COMPUTE_INTEROP
+            }
+#endif
+        }
+#endif
     } else {
         if (fragmentBufferSizeBytes > maxDeviceMemoryBudget) {
             sgl::Logfile::get()->writeError(
@@ -637,6 +695,9 @@ void TetMeshRendererPPLL::render() {
 
     clear();
     gather();
+#ifdef BUILD_PYTHON_MODULE
+    if (!tetMesh->getHasTriangleMeshData())
+#endif
     resolve();
 }
 
@@ -726,5 +787,60 @@ void TetMeshRendererPPLL::renderGuiMemory(sgl::PropertyEditor& propertyEditor) {
             "Memory",
             sgl::getNiceMemoryString(totalNumFragments * 12ull, 2) + " / "
             + sgl::getNiceMemoryString(fragmentBufferSize * 12ull, 2));
+}
+#endif
+
+#ifdef BUILD_PYTHON_MODULE
+void TetMeshRendererPPLL::setExportLinkedListData(bool _exportData) {
+    exportLinkedListData = _exportData;
+    tilingModeIndex = 0;
+    tileWidth = 1;
+    tileHeight = 1;
+}
+
+torch::Tensor TetMeshRendererPPLL::getFragmentBufferTensor() {
+    if (!exportLinkedListData) {
+        sgl::Logfile::get()->throwError(
+                "Error in getFragmentBufferTensor: exportLinkedListData is set to false.", false);
+    }
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        return torch::from_blob(
+                fragmentBufferCu->getDevicePtr<float>(),
+                { int(fragmentBufferSize / 12ull), int(3) },
+                torch::TensorOptions().dtype(torch::kFloat32).device(usedDeviceType));
+    } else {
+#endif
+        // TODO: Implement copy operation.
+        return torch::from_blob(
+                fragmentBufferCpuPtr,
+                { int(fragmentBufferSize / 12ull), int(3) },
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
+#ifdef SUPPORT_COMPUTE_INTEROP
+    }
+#endif
+}
+
+torch::Tensor TetMeshRendererPPLL::getStartOffsetBufferTensor() {
+    if (!exportLinkedListData) {
+        sgl::Logfile::get()->throwError(
+                "Error in getStartOffsetBufferTensor: exportLinkedListData is set to false.", false);
+    }
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        return torch::from_blob(
+                startOffsetBufferCu->getDevicePtr<float>(),
+                { int(paddedWindowHeight), int(paddedWindowWidth) },
+                torch::TensorOptions().dtype(torch::kInt32).device(usedDeviceType));
+    } else {
+#endif
+        // TODO: Implement copy operation.
+        return torch::from_blob(
+                startOffsetBufferCpuPtr,
+                { int(paddedWindowHeight), int(paddedWindowWidth) },
+                torch::TensorOptions().dtype(torch::kInt32).device(torch::kCPU));
+#ifdef SUPPORT_COMPUTE_INTEROP
+    }
+#endif
 }
 #endif

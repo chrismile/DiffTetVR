@@ -80,7 +80,6 @@ def main():
         camera_right=[0.0, 0.0, -1.0],
         camera_up=[0.0, 1.0, 0.0],
         camera_forward=[1.0, 0.0, 0.0],
-
     )
     renderer.set_view_matrix(view_matrix_array)
 

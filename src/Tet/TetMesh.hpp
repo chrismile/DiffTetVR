@@ -142,10 +142,17 @@ public:
     // PyTorch buffer interface.
 #ifdef BUILD_PYTHON_MODULE
     void setUseComputeInterop(bool _useComputeInterop);
+    void setUsedDeviceType(torch::DeviceType _usedDeviceType);
     void copyGradientsToCpu(sgl::vk::Renderer* renderer);
     torch::Tensor getVertexPositionTensor();
     torch::Tensor getVertexColorTensor();
     torch::Tensor getVertexBoundaryBitTensor();
+    // Experimental triangle mesh support.
+    void setTriangleMeshData(
+            torch::Tensor triangleIndicesTensor,
+            torch::Tensor vertexPositionsTensor,
+            torch::Tensor vertexColorsTensor);
+    bool getHasTriangleMeshData();
 #endif
 
     // Get mesh information.
@@ -239,6 +246,7 @@ private:
 
 #ifdef BUILD_PYTHON_MODULE
     bool useComputeInterop = false;
+    torch::DeviceType usedDeviceType = torch::DeviceType::CPU;
 #ifdef SUPPORT_COMPUTE_INTEROP
     sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexPositionBufferCu;
     sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexColorBufferCu;
@@ -246,6 +254,7 @@ private:
     sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexPositionGradientBufferCu;
     sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexColorGradientBufferCu;
 #endif
+    bool hasTriangleMeshData = false;
 #endif
 };
 

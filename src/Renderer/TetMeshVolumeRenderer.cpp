@@ -43,11 +43,18 @@
 #ifdef SUPPORT_HIP_INTEROP
 #include <Graphics/Vulkan/Utils/InteropHIP.hpp>
 #endif
+#ifdef SUPPORT_SYCL_INTEROP
+#include <Graphics/Vulkan/Utils/InteropLevelZero.hpp>
+#endif
 #ifdef SUPPORT_CUDA_INTEROP
 #include <c10/cuda/CUDAStream.h>
 #endif
 #ifdef SUPPORT_HIP_INTEROP
 #include <c10/hip/HIPStream.h>
+#endif
+#ifdef SUPPORT_SYCL_INTEROP
+#include <c10/xpu/XPUStream.h>
+#include <torch/csrc/api/include/torch/xpu.h>
 #endif
 #endif
 
@@ -262,12 +269,12 @@ torch::Tensor TetMeshVolumeRenderer::getImageTensor() {
         torch::Tensor imageTensor = torch::from_blob(
                 colorImageBufferCu->getDevicePtr<float>(),
                 { int(imageHeight), int(imageWidth), int(4) },
-                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(useGradients));
+                torch::TensorOptions().dtype(torch::kFloat32).device(usedDeviceType).requires_grad(useGradients));
         if (useGradients) {
             torch::Tensor imageAdjointTensor = torch::from_blob(
                     colorAdjointImageBufferCu->getDevicePtr<float>(),
                     { int(imageHeight), int(imageWidth), int(4) },
-                    torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
+                    torch::TensorOptions().dtype(torch::kFloat32).device(usedDeviceType));
             imageTensor.mutable_grad() = imageAdjointTensor;
         }
         return imageTensor;
@@ -325,6 +332,13 @@ void TetMeshVolumeRenderer::copyAdjointBufferToImagePreCheck(void* devicePtr) {
 #ifdef SUPPORT_HIP_INTEROP
             if (usedDeviceType == torch::DeviceType::HIP) {
                 stream.hipStream = at::hip::getCurrentHIPStream();
+            }
+#endif
+#ifdef SUPPORT_SYCL_INTEROP
+            if (usedDeviceType == torch::DeviceType::XPU) {
+                auto& syclQueue = at::xpu::getCurrentXPUStream().queue();
+                sgl::vk::setLevelZeroGlobalStateFromSyclQueue(syclQueue);
+                stream.zeCommandList = sgl::vk::syclStreamToZeCommandList(syclQueue);
             }
 #endif
             colorAdjointImageBufferCu->copyFromDevicePtrAsync(devicePtr, stream);

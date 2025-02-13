@@ -127,6 +127,10 @@ public:
     void copyOutputImageToBuffer();
     void copyAdjointBufferToImagePreCheck(void* devicePtr);
     void copyAdjointBufferToImage();
+    // Only implemented in PPLL renderer.
+    virtual void setExportLinkedListData(bool _exportData) {}
+    virtual torch::Tensor getFragmentBufferTensor() { return {}; }
+    virtual torch::Tensor getStartOffsetBufferTensor() { return {}; }
 #endif
 
     [[nodiscard]] inline sgl::vk::Renderer* getRenderer() const { return renderer; }

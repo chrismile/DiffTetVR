@@ -132,6 +132,10 @@ class TetMesh:
         pass
     def save_to_file(self, file_path: str) -> bool:
         pass
+    def set_triangle_mesh_data(
+            self, triangle_indices: torch.Tensor, vertex_positions: torch.Tensor, vertex_colors: torch.Tensor) -> None:
+        """ An experimental function for testing purposes. """
+        pass
     def get_bounding_box(self) -> AABB3:
         pass
     def set_vertices_changed(self, vertices_changed: bool = True) -> None:
@@ -240,6 +244,18 @@ class Renderer:
     def render(self) -> torch.Tensor:
         pass
     def render_adjoint(self, image_adjoint: torch.Tensor) -> None:
+        pass
+    def set_export_linked_list_data(self) -> None:
+        """ Must be called before using get_fragment_buffer or get_start_offset_buffer (and before calling render). """
+        pass
+    def get_fragment_buffer(self) -> torch.Tensor:
+        """
+        The start offset buffer is of size (max_num_frags, 3) and has entries for color (u32), depth (f32) and pointer
+        to next (u32).
+        """
+        pass
+    def get_start_offset_buffer(self) -> torch.Tensor:
+        """ The start offset buffer is of size (height, width) and has uint32 entries. """
         pass
 
 

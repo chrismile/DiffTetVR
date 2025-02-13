@@ -68,6 +68,11 @@ public:
     // Public interface.
     void recreateSwapchain(uint32_t width, uint32_t height) override;
     void setTetMeshData(const TetMeshPtr& _tetMesh) override;
+#ifdef BUILD_PYTHON_MODULE
+    void setExportLinkedListData(bool _exportData) override; //< For access of per-pixel linked list data in CUDA/PyTorch.
+    torch::Tensor getFragmentBufferTensor() override;
+    torch::Tensor getStartOffsetBufferTensor() override;
+#endif
 
     // Public interface, only for backward pass.
     void setAdjointPassData(
@@ -116,6 +121,19 @@ private:
     size_t maxDeviceMemoryBudget = 0;
     size_t numFragmentBuffers = 1;
     size_t cachedNumFragmentBuffers = 1;
+
+#ifdef BUILD_PYTHON_MODULE
+    bool exportLinkedListData = false;
+#ifdef SUPPORT_COMPUTE_INTEROP
+    sgl::vk::BufferComputeApiExternalMemoryVkPtr fragmentBufferCu;
+    sgl::vk::BufferComputeApiExternalMemoryVkPtr startOffsetBufferCu;
+#endif
+    // CPU interop.
+    sgl::vk::BufferPtr fragmentBufferCpu;
+    sgl::vk::BufferPtr startOffsetBufferCpu;
+    void* fragmentBufferCpuPtr = nullptr;
+    void* startOffsetBufferCpuPtr = nullptr;
+#endif
 
     // Uniform data buffer shared by all shaders.
     struct UniformData {

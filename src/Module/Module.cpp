@@ -779,12 +779,14 @@ PYBIND11_MODULE(difftetvr, m) {
 #ifdef SUPPORT_COMPUTE_INTEROP
                 tetMesh->setUseComputeInterop(sState->usedDeviceType != torch::DeviceType::CPU);
 #endif
+                tetMesh->setUsedDeviceType(sState->usedDeviceType);
                 return tetMesh;
             }))
             .def("set_use_gradients", &TetMesh::setUseGradients, py::arg("use_gradients") = true)
             .def("load_test_data", &TetMesh::loadTestData, py::arg("test_case"))
             .def("load_from_file", &TetMesh::loadFromFile, py::arg("file_path"))
             .def("save_to_file", &TetMesh::saveToFile, py::arg("file_path"))
+            .def("set_triangle_mesh_data", &TetMesh::setTriangleMeshData, py::arg("triangle_indices"), py::arg("vertex_positions"), py::arg("vertex_colors"))
             .def("get_bounding_box", &TetMesh::getBoundingBox)
             .def("set_vertices_changed", &TetMesh::setVerticesChangedOnDevice, py::arg("vertices_changed") = true)
             .def("on_zero_grad", &TetMesh::onZeroGrad,
@@ -844,12 +846,12 @@ PYBIND11_MODULE(difftetvr, m) {
                 } else {
                     return std::shared_ptr<TetMeshVolumeRenderer>();
                 }
-#ifdef SUPPORT_COMPUTE_INTEROP
                 if (volumeRenderer) {
+#ifdef SUPPORT_COMPUTE_INTEROP
                     volumeRenderer->setUseComputeInterop(sState->usedDeviceType != torch::DeviceType::CPU);
+#endif
                     volumeRenderer->setUsedDeviceType(sState->usedDeviceType);
                 }
-#endif
                 return std::shared_ptr<TetMeshVolumeRenderer>(volumeRenderer);
             }), py::arg("renderer_type") = RendererType::PPLL)
             .def("get_renderer_type", &TetMeshVolumeRenderer::getRendererType)
@@ -949,7 +951,29 @@ PYBIND11_MODULE(difftetvr, m) {
                 }
                 sState->vulkanFinished();
                 self->setUseAbsGrad(false);
-            }, py::arg("image_adjoint"), py::arg("use_abs_grad"));
+            }, py::arg("image_adjoint"), py::arg("use_abs_grad"))
+            .def("set_export_linked_list_data", [](const std::shared_ptr<TetMeshVolumeRenderer>& self) {
+                if (self->getRendererType() != RendererType::PPLL) {
+                    sgl::Logfile::get()->throwError(
+                            "Error in set_export_linked_list_data: The renderer must be of type RendererType.PPLL.",
+                            false);
+                }
+                return self->setExportLinkedListData(true);
+            })
+            .def("get_fragment_buffer", [](const std::shared_ptr<TetMeshVolumeRenderer>& self) {
+                if (self->getRendererType() != RendererType::PPLL) {
+                    sgl::Logfile::get()->throwError(
+                            "Error in get_fragment_buffer: The renderer must be of type RendererType.PPLL.", false);
+                }
+                return self->getFragmentBufferTensor();
+            })
+            .def("get_start_offset_buffer", [](const std::shared_ptr<TetMeshVolumeRenderer>& self) {
+                if (self->getRendererType() != RendererType::PPLL) {
+                    sgl::Logfile::get()->throwError(
+                            "Error in get_start_offset_buffer: The renderer must be of type RendererType.PPLL.", false);
+                }
+                return self->getStartOffsetBufferTensor();
+            });
 
     py::class_<TetRegularizer, std::shared_ptr<TetRegularizer>>(m, "TetRegularizer")
             .def(py::init([](const TetMeshPtr& tetMesh, float lambda, float softplusBeta) {
@@ -997,11 +1021,12 @@ PYBIND11_MODULE(difftetvr, m) {
                 ensureStateExists();
                 auto regularGridRenderer = std::make_shared<RegularGridRendererDVR>(
                         sState->renderer, &sState->camera, sState->transferFunctionWindow);
-#ifdef SUPPORT_COMPUTE_INTEROP
                 if (regularGridRenderer) {
+#ifdef SUPPORT_COMPUTE_INTEROP
                     regularGridRenderer->setUseComputeInterop(sState->usedDeviceType != torch::DeviceType::CPU);
-                }
 #endif
+                    regularGridRenderer->setUsedDeviceType(sState->usedDeviceType);
+                }
                 return regularGridRenderer;
             }))
             .def("set_regular_grid", &RegularGridRendererDVR::setRegularGridData, py::arg("regular_grid"))

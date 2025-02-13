@@ -217,6 +217,10 @@ void TetMesh::setUseComputeInterop(bool _useComputeInterop) {
     useComputeInterop = _useComputeInterop;
 }
 
+void TetMesh::setUsedDeviceType(torch::DeviceType _usedDeviceType) {
+    usedDeviceType = _usedDeviceType;
+}
+
 void TetMesh::copyGradientsToCpu(sgl::vk::Renderer* renderer) {
     vertexPositionGradientBuffer->copyDataTo(vertexPositionGradientBufferCpu, renderer->getVkCommandBuffer());
     vertexColorGradientBuffer->copyDataTo(vertexColorGradientBufferCpu, renderer->getVkCommandBuffer());
@@ -228,12 +232,12 @@ torch::Tensor TetMesh::getVertexPositionTensor() {
         torch::Tensor vertexPositionTensor = torch::from_blob(
                 vertexPositionBufferCu->getDevicePtr<float>(),
                 { int(vertexPositions.size()), int(3) },
-                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(useGradients));
+                torch::TensorOptions().dtype(torch::kFloat32).device(usedDeviceType).requires_grad(useGradients));
         if (useGradients) {
             torch::Tensor vertexPositionGradientTensor = torch::from_blob(
                     vertexPositionGradientBufferCu->getDevicePtr<float>(),
                     { int(vertexPositions.size()), int(3) },
-                    torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
+                    torch::TensorOptions().dtype(torch::kFloat32).device(usedDeviceType));
             vertexPositionTensor.mutable_grad() = vertexPositionGradientTensor;
         }
         return vertexPositionTensor;
@@ -263,12 +267,12 @@ torch::Tensor TetMesh::getVertexColorTensor() {
         torch::Tensor vertexColorTensor = torch::from_blob(
                 vertexColorBufferCu->getDevicePtr<float>(),
                 { int(vertexColors.size()), int(4) },
-                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(useGradients));
+                torch::TensorOptions().dtype(torch::kFloat32).device(usedDeviceType).requires_grad(useGradients));
         if (useGradients) {
             torch::Tensor vertexColorGradientTensor = torch::from_blob(
                     vertexColorGradientBufferCu->getDevicePtr<float>(),
                     { int(vertexColors.size()), int(4) },
-                    torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
+                    torch::TensorOptions().dtype(torch::kFloat32).device(usedDeviceType));
             vertexColorTensor.mutable_grad() = vertexColorGradientTensor;
         }
         return vertexColorTensor;
@@ -298,7 +302,7 @@ torch::Tensor TetMesh::getVertexBoundaryBitTensor() {
         torch::Tensor vertexBoundaryBitTensor = torch::from_blob(
                 vertexBoundaryBitBufferCu->getDevicePtr<uint32_t>(),
                 { int(vertexPositions.size()), int(1) },
-                torch::TensorOptions().dtype(torch::kInt32).device(torch::kCUDA));
+                torch::TensorOptions().dtype(torch::kInt32).device(usedDeviceType));
         return vertexBoundaryBitTensor;
     } else {
 #endif
@@ -310,6 +314,121 @@ torch::Tensor TetMesh::getVertexBoundaryBitTensor() {
 #ifdef SUPPORT_COMPUTE_INTEROP
     }
 #endif
+}
+
+void TetMesh::setTriangleMeshData(
+        torch::Tensor triangleIndicesTensor,
+        torch::Tensor vertexPositionsTensor,
+        torch::Tensor vertexColorsTensor) {
+    if (!triangleIndicesTensor.is_cpu()) {
+        triangleIndicesTensor = triangleIndicesTensor.cpu();
+    }
+    if (!vertexPositionsTensor.is_cpu()) {
+        vertexPositionsTensor = vertexPositionsTensor.cpu();
+    }
+    if (!vertexColorsTensor.is_cpu()) {
+        vertexColorsTensor = vertexColorsTensor.cpu();
+    }
+    if (triangleIndicesTensor.dtype() != torch::kInt32) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::setTriangleMeshData: triangleIndicesTensor.dtype() != torch::kInt32.", false);
+    }
+    if (vertexPositionsTensor.dtype() != torch::kFloat32) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::setTriangleMeshData: vertexPositionsTensor.dtype() != torch::kFloat32.", false);
+    }
+    if (vertexColorsTensor.dtype() != torch::kFloat32) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::setTriangleMeshData: vertexColorsTensor.dtype() != torch::kFloat32.", false);
+    }
+    if (triangleIndicesTensor.sizes().size() != 2) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::setTriangleMeshData: triangleIndicesTensor.sizes().size() != 2.", false);
+    }
+    if (vertexPositionsTensor.sizes().size() != 2) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::setTriangleMeshData: vertexPositionsTensor.sizes().size() != 2.", false);
+    }
+    if (vertexColorsTensor.sizes().size() != 2) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::setTriangleMeshData: vertexColorsTensor.sizes().size() != 2.", false);
+    }
+    if (vertexPositionsTensor.size(0) != vertexColorsTensor.size(0)) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::setTriangleMeshData: vertexPositionsTensor.size(0) != vertexColorsTensor.size(0).",
+                false);
+    }
+    if (triangleIndicesTensor.size(1) != 3) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::setTriangleMeshData: triangleIndicesTensor.size(1) != 3.",
+                false);
+    }
+    if (vertexPositionsTensor.size(1) != 3) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::setTriangleMeshData: vertexPositionsTensor.size(1) != 3.",
+                false);
+    }
+    if (vertexColorsTensor.size(1) != 4) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::setTriangleMeshData: vertexColorsTensor.size(1) != 3.",
+                false);
+    }
+    auto numTriangles = size_t(triangleIndicesTensor.size(0));
+    auto numVertices = size_t(vertexPositionsTensor.size(0));
+    auto triangleIndicesAccessor = triangleIndicesTensor.accessor<int32_t, 2>();
+    auto vertexPositionsAccessor = vertexPositionsTensor.accessor<float, 2>();
+    auto vertexColorsAccessor = vertexColorsTensor.accessor<float, 2>();
+    cellIndices.resize(numTriangles * 3u);
+    vertexPositions.resize(numVertices);
+    vertexColors.resize(numVertices);
+    facesSlim.resize(numTriangles);
+    facesBoundarySlim.resize(numTriangles, true);
+    verticesBoundarySlim.resize(numVertices, true);
+    for (size_t i = 0; i < numTriangles; i++) {
+        auto& faceSlim = facesSlim.at(i);
+        for (size_t j = 0; j < 3; j++) {
+            auto vertexIndex = uint32_t(triangleIndicesAccessor[long(i)][long(j)]);
+            cellIndices.at(i * 3 + j) = vertexIndex;
+            faceSlim.vs[j] = vertexIndex;
+        }
+        faceSlim.tetId0 = uint32_t(i);
+        faceSlim.tetId1 = uint32_t(i);
+    }
+    for (size_t i = 0; i < numVertices; i++) {
+        for (size_t j = 0; j < 3; j++) {
+            vertexPositions.at(i)[int(j)] = vertexPositionsAccessor[long(i)][long(j)];
+        }
+    }
+    for (size_t i = 0; i < numVertices; i++) {
+        for (size_t j = 0; j < 4; j++) {
+            vertexColors.at(i)[int(j)] = vertexColorsAccessor[long(i)][long(j)];
+        }
+    }
+
+    meshNumCells = numTriangles;
+    meshNumVertices = numVertices;
+#ifdef USE_OPEN_VOLUME_MESH
+    if (ovmRepresentationData) {
+        delete ovmRepresentationData;
+    }
+    useOvmRepresentation = false;
+    newData = true;
+    verticesDirty = false;
+    facesDirty = false;
+    cellsDirty = false;
+#endif
+    hasTriangleMeshData = true;
+    isVisualRepresentationDirty = true;
+    uploadDataToDevice();
+
+    boundingBox = {};
+    for (const glm::vec3& pt : vertexPositions) {
+        boundingBox.combine(pt);
+    }
+}
+
+bool TetMesh::getHasTriangleMeshData() {
+    return hasTriangleMeshData;
 }
 #endif
 

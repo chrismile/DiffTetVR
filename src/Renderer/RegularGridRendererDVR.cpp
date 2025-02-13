@@ -134,6 +134,10 @@ void RegularGridRendererDVR::setUseComputeInterop(bool _useComputeInterop) {
     useComputeInterop = _useComputeInterop;
 }
 
+void RegularGridRendererDVR::setUsedDeviceType(torch::DeviceType _usedDeviceType) {
+    usedDeviceType = _usedDeviceType;
+}
+
 void RegularGridRendererDVR::setViewportSize(uint32_t viewportWidth, uint32_t viewportHeight) {
     outputImageView = {};
 #ifdef SUPPORT_COMPUTE_INTEROP
@@ -183,7 +187,7 @@ torch::Tensor RegularGridRendererDVR::getImageTensor() {
         torch::Tensor imageTensor = torch::from_blob(
                 colorImageBufferCu->getDevicePtr<float>(),
                 { int(imageHeight), int(imageWidth), int(4) },
-                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
+                torch::TensorOptions().dtype(torch::kFloat32).device(usedDeviceType));
         return imageTensor;
     } else {
 #endif
