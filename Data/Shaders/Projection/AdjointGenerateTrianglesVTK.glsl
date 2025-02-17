@@ -168,13 +168,17 @@ void main() {
     // Read the tet vertex positions and colors from the global buffer.
     // tets have 4 points, 5th point here is used to insert a point in case of intersections
     vec3 tetVertexPosition[4];
+#ifdef PER_VERTEX_COLORS
     vec4 tetVertexColors[5];
+#endif
     vec4 tetVertexPositionNdc[5];
     float tetDepths[5];
     [[unroll]] for (uint tetVertIdx = 0; tetVertIdx < 4; tetVertIdx++) {
         uint tetGlobalVertIdx = tetsIndices[tetIdx * 4 + tetVertIdx];
         tetVertexPosition[tetVertIdx] = tetsVertexPositions[tetGlobalVertIdx];
+#ifdef PER_VERTEX_COLORS
         tetVertexColors[tetVertIdx] = tetsVertexColors[tetGlobalVertIdx];
+#endif
         vec4 vertexPosNdc = viewProjMat * vec4(tetsVertexPositions[tetGlobalVertIdx], 1.0);
         vertexPosNdc.xyz /= vertexPosNdc.w;
         vertexPosNdc.w = 1.0;
@@ -230,10 +234,12 @@ void main() {
     vec3 P2 = tetVertexPositionNdc[segment1[1]].xyz;
     vec3 P3 = tetVertexPositionNdc[segment2[0]].xyz;
     vec3 P4 = tetVertexPositionNdc[segment2[1]].xyz;
+#ifdef PER_VERTEX_COLORS
     vec4 C1 = tetVertexColors[segment1[0]];
     vec4 C2 = tetVertexColors[segment1[1]];
     vec4 C3 = tetVertexColors[segment2[0]];
     vec4 C4 = tetVertexColors[segment2[1]];
+#endif
 
     // Find the intersection of the projection of the two segments in the XY plane.
     // This algorithm is based on that given in Graphics Gems III, pg. 199-202.
@@ -282,8 +288,10 @@ void main() {
         float depth = GetCorrectedDepth(
                 tetVertexPositionNdc[4].x, tetVertexPositionNdc[4].y, tetVertexPositionNdc[4].z, P3.z + beta * B.z);
 
+#ifdef PER_VERTEX_COLORS
         // Find color and opacity at intersection.
         tetVertexColors[4] = (0.5 * (C1 + alpha * (C2 - C1) + C3 + beta * (C4 - C3)));
+#endif
 
         // Record the depth at the intersection.
         tetDepths[4] = depth * attenuationCoefficient;
@@ -313,10 +321,12 @@ void main() {
             tmpVec3 = P1;
             P1 = P2;
             P2 = tmpVec3;
+#ifdef PER_VERTEX_COLORS
             vec4 tmpVec4;
             tmpVec4 = C1;
             C1 = C2;
             C2 = tmpVec4;
+#endif
         }
         // From here on, we can assume P2 is the "thick" point.
 
@@ -327,11 +337,13 @@ void main() {
         float facez = (edgez + (alpha - 1.0) * pointz) / alpha;
         float depth = GetCorrectedDepth(P2.x, P2.y, P2.z, facez);
 
+#ifdef PER_VERTEX_COLORS
         // Fix color and opacity at thick point. Average color/opacity with color/opacity of opposite face.
         vec4 edgec = C3 + beta * (C4 - C3);
         vec4 pointc = C1;
         vec4 facec = (edgec + (alpha - 1.0) * pointc) / alpha;
         tetVertexColors[segment1[1]] = (0.5 * (facec + C2));
+#endif
 
         // Record thickness at thick point.
         tetDepths[segment1[1]] = depth * attenuationCoefficient;
@@ -410,10 +422,14 @@ void main() {
     vec3 dOut_dP2 = dOut_dTriP[segment1[1]];
     vec3 dOut_dP3 = dOut_dTriP[segment2[0]];
     vec3 dOut_dP4 = dOut_dTriP[segment2[1]];
+#ifdef PER_VERTEX_COLORS
     vec4 dOut_dC1 = dOut_dTriC[segment1[0]];
     vec4 dOut_dC2 = dOut_dTriC[segment1[1]];
     vec4 dOut_dC3 = dOut_dTriC[segment2[0]];
     vec4 dOut_dC4 = dOut_dTriC[segment2[1]];
+#else
+    
+#endif
     vec3 dOut_dA = vec3(0.0);
     vec3 dOut_dB = vec3(0.0);
     vec3 dOut_dC = vec3(0.0);
@@ -434,12 +450,14 @@ void main() {
         // tmp: float dTriC4_dC2 = 0.5 * alpha;
         // tmp: float dTriC4_dC3 = 0.5 * (1.0 - beta);
         // tmp: float dTriC4_dC4 = 0.5 * beta;
+#ifdef PER_VERTEX_COLORS
         dOut_dalpha += dot(dOut_dTriC[4], 0.5 * (C2 - C1));
         dOut_dbeta += dot(dOut_dTriC[4], 0.5 * (C4 - C3));
         dOut_dC1 += dOut_dTriC[4] * (0.5 * (1.0 - alpha));
         dOut_dC2 += dOut_dTriC[4] * (0.5 * alpha);
         dOut_dC3 += dOut_dTriC[4] * (0.5 * (1.0 - beta));
         dOut_dC4 += dOut_dTriC[4] * (0.5 * beta);
+#endif
 
         // Find depth at intersection.
         //float depth = GetCorrectedDepth(
@@ -474,6 +492,7 @@ void main() {
         //vec4 facec = (edgec + (alpha - 1.0) * pointc) / alpha;
         // tmp: vec4 dfacec_dalpha = (-edgec - pointc) / (alpha * alpha);
         // tmp: float dfacec_dC1 = 1.0 - 1.0 / alpha; // pointc == C1
+#ifdef PER_VERTEX_COLORS
         vec4 edgec = C3 + beta * (C4 - C3);
         dOut_dalpha += dot(dOut_dfacec, (-edgec - C1) / (alpha * alpha));
         dOut_dC1 += dOut_dfacec * (1.0 - 1.0 / alpha); // pointc == C1
@@ -486,6 +505,7 @@ void main() {
         dOut_dC3 += dOut_dfacec * dfacec_dedgec * (1.0 - beta);
         dOut_dbeta += dfacec_dedgec * dot(dOut_dfacec, C4 - C3);
         dOut_dC4 += dOut_dfacec * (dfacec_dedgec * beta);
+#endif
 
         //float depth = GetCorrectedDepth(P2.x, P2.y, P2.z, facez);
         float edgez = P3.z + beta * B.z;
@@ -541,6 +561,7 @@ void main() {
             tmpVec3 = dOut_dP1;
             dOut_dP1 = dOut_dP2;
             dOut_dP2 = tmpVec3;
+#ifdef PER_VERTEX_COLORS
             vec4 tmpVec4;
             tmpVec4 = C1;
             C1 = C2;
@@ -548,6 +569,7 @@ void main() {
             tmpVec4 = dOut_dC1;
             dOut_dC1 = dOut_dC2;
             dOut_dC2 = tmpVec4;
+#endif
         }
     }
 

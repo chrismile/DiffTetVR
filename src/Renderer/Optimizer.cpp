@@ -571,12 +571,18 @@ void TetMeshOptimizer::startRequest() {
 
 void TetMeshOptimizer::onVertexBuffersRecreated() {
     auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
-    auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
     auto vertexBoundaryBitBuffer = tetMeshOpt->getVertexBoundaryBitBuffer();
-    auto vertexColorGradientBuffer = tetMeshOpt->getVertexColorGradientBuffer();
     auto vertexPositionGradientBuffer = tetMeshOpt->getVertexPositionGradientBuffer();
     optimizerPassPositions->setBuffers(vertexPositionBuffer, vertexPositionGradientBuffer, vertexBoundaryBitBuffer);
-    optimizerPassColors->setBuffers(vertexColorBuffer, vertexColorGradientBuffer, vertexBoundaryBitBuffer);
+    if (tetMeshOpt->getUseVertexColors()) {
+        auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
+        auto vertexColorGradientBuffer = tetMeshOpt->getVertexColorGradientBuffer();
+        optimizerPassColors->setBuffers(vertexColorBuffer, vertexColorGradientBuffer, vertexBoundaryBitBuffer);
+    } else {
+        auto cellColorBuffer = tetMeshOpt->getCellColorBuffer();
+        auto cellColorGradientBuffer = tetMeshOpt->getCellColorGradientBuffer();
+        optimizerPassColors->setBuffers(cellColorBuffer, cellColorGradientBuffer, {});
+    }
     auto cellIndicesBuffer = tetMeshOpt->getCellIndicesBuffer();
     tetRegularizerPass->setBuffers(cellIndicesBuffer, vertexPositionBuffer, vertexPositionGradientBuffer);
     tetMeshVolumeRendererOpt->setAdjointPassData(colorAdjointTexture->getImageView(), adjointPassBackbuffer);
@@ -718,7 +724,14 @@ void TetMeshOptimizer::updateRequest() {
 
     // Clear the gradients.
     auto vertexPositionGradientBuffer = tetMeshOpt->getVertexPositionGradientBuffer();
-    auto vertexColorGradientBuffer = tetMeshOpt->getVertexColorGradientBuffer();
+    sgl::vk::BufferPtr vertexColorGradientBuffer, cellColorGradientBuffer, colorGradientBuffer;
+    if (tetMeshOpt->getUseVertexColors()) {
+        vertexColorGradientBuffer = tetMeshOpt->getVertexColorGradientBuffer();
+        colorGradientBuffer = vertexColorGradientBuffer;
+    } else {
+        cellColorGradientBuffer = tetMeshOpt->getCellColorGradientBuffer();
+        colorGradientBuffer = cellColorGradientBuffer;
+    }
     if (settings.optimizePositions && clearGrads) {
         vertexPositionGradientBuffer->fill(0, renderer->getVkCommandBuffer());
         VkPipelineStageFlags destStage =
@@ -731,11 +744,11 @@ void TetMeshOptimizer::updateRequest() {
                 vertexPositionGradientBuffer);
     }
     if (settings.optimizeColors && clearGrads) {
-        vertexColorGradientBuffer->fill(0, renderer->getVkCommandBuffer());
+        colorGradientBuffer->fill(0, renderer->getVkCommandBuffer());
         renderer->insertBufferMemoryBarrier(
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                vertexColorGradientBuffer);
+                colorGradientBuffer);
     }
 
     // Compute the tet regularizer loss/gradients.
@@ -766,7 +779,7 @@ void TetMeshOptimizer::updateRequest() {
         renderer->insertBufferMemoryBarrier(
                 VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                vertexColorGradientBuffer);
+                colorGradientBuffer);
     }
 
     // TODO
@@ -777,18 +790,28 @@ void TetMeshOptimizer::updateRequest() {
     if (settings.exportPositionGradients && writeNow) {
         const auto& cellIndices = tetMeshOpt->getCellIndices();
         auto vertexPositionBuffer = tetMeshOpt->getVertexPositionBuffer();
-        auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
         if (!vertexPositionStagingBuffer
                 || vertexPositionStagingBuffer->getSizeInBytes() != vertexPositionBuffer->getSizeInBytes()) {
             vertexPositionStagingBuffer = std::make_shared<sgl::vk::Buffer>(
                     renderer->getDevice(), vertexPositionBuffer->getSizeInBytes(),
                     VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
         }
-        if (!vertexColorStagingBuffer
-                || vertexColorStagingBuffer->getSizeInBytes() != vertexColorBuffer->getSizeInBytes()) {
-            vertexColorStagingBuffer = std::make_shared<sgl::vk::Buffer>(
-                    renderer->getDevice(), vertexColorBuffer->getSizeInBytes(),
-                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        if (tetMeshOpt->getUseVertexColors()) {
+            auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
+            if (!vertexColorStagingBuffer
+                    || vertexColorStagingBuffer->getSizeInBytes() != vertexColorBuffer->getSizeInBytes()) {
+                vertexColorStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                        renderer->getDevice(), vertexColorBuffer->getSizeInBytes(),
+                        VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+            }
+        } else {
+            auto cellColorBuffer = tetMeshOpt->getCellColorBuffer();
+            if (!cellColorStagingBuffer
+                    || cellColorStagingBuffer->getSizeInBytes() != cellColorBuffer->getSizeInBytes()) {
+                cellColorStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                        renderer->getDevice(), cellColorBuffer->getSizeInBytes(),
+                        VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+            }
         }
         if (!vertexPositionGradientStagingBuffer
                 || vertexPositionGradientStagingBuffer->getSizeInBytes() != vertexPositionGradientBuffer->getSizeInBytes()) {
@@ -796,41 +819,82 @@ void TetMeshOptimizer::updateRequest() {
                     renderer->getDevice(), vertexPositionGradientBuffer->getSizeInBytes(),
                     VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
         }
-        if (!vertexColorGradientStagingBuffer
-                || vertexColorGradientStagingBuffer->getSizeInBytes() != vertexColorGradientBuffer->getSizeInBytes()) {
-            vertexColorGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
-                    renderer->getDevice(), vertexColorGradientBuffer->getSizeInBytes(),
-                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        if (tetMeshOpt->getUseVertexColors()) {
+            if (!vertexColorGradientStagingBuffer
+                    || vertexColorGradientStagingBuffer->getSizeInBytes() != vertexColorGradientBuffer->getSizeInBytes()) {
+                vertexColorGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                        renderer->getDevice(), vertexColorGradientBuffer->getSizeInBytes(),
+                        VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+            }
+        } else {
+            if (!cellColorGradientStagingBuffer
+                    || cellColorGradientStagingBuffer->getSizeInBytes() != cellColorGradientBuffer->getSizeInBytes()) {
+                cellColorGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                        renderer->getDevice(), cellColorGradientBuffer->getSizeInBytes(),
+                        VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+            }
         }
+
         renderer->insertMemoryBarrier(
                 VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
         vertexPositionBuffer->copyDataTo(
                 vertexPositionStagingBuffer, 0, 0, vertexPositionStagingBuffer->getSizeInBytes(),
                 renderer->getVkCommandBuffer());
-        vertexColorBuffer->copyDataTo(
-                vertexColorStagingBuffer, 0, 0, vertexColorStagingBuffer->getSizeInBytes(),
-                renderer->getVkCommandBuffer());
+        if (tetMeshOpt->getUseVertexColors()) {
+            auto vertexColorBuffer = tetMeshOpt->getVertexColorBuffer();
+            vertexColorBuffer->copyDataTo(
+                    vertexColorStagingBuffer, 0, 0, vertexColorStagingBuffer->getSizeInBytes(),
+                    renderer->getVkCommandBuffer());
+        } else {
+            auto cellColorBuffer = tetMeshOpt->getCellColorBuffer();
+            cellColorBuffer->copyDataTo(
+                    cellColorStagingBuffer, 0, 0, cellColorStagingBuffer->getSizeInBytes(),
+                    renderer->getVkCommandBuffer());
+        }
         vertexPositionGradientBuffer->copyDataTo(
                 vertexPositionGradientStagingBuffer, 0, 0, vertexPositionGradientBuffer->getSizeInBytes(),
                 renderer->getVkCommandBuffer());
-        vertexColorGradientBuffer->copyDataTo(
-                vertexColorGradientStagingBuffer, 0, 0, vertexColorGradientBuffer->getSizeInBytes(),
-                renderer->getVkCommandBuffer());
+        if (tetMeshOpt->getUseVertexColors()) {
+            vertexColorGradientBuffer->copyDataTo(
+                    vertexColorGradientStagingBuffer, 0, 0, vertexColorGradientBuffer->getSizeInBytes(),
+                    renderer->getVkCommandBuffer());
+        } else {
+            cellColorGradientBuffer->copyDataTo(
+                    cellColorGradientStagingBuffer, 0, 0, cellColorGradientBuffer->getSizeInBytes(),
+                    renderer->getVkCommandBuffer());
+        }
         renderer->syncWithCpu();
 
         auto* vertexPositions = reinterpret_cast<glm::vec3*>(vertexPositionStagingBuffer->mapMemory());
-        auto* vertexColors = reinterpret_cast<glm::vec4*>(vertexColorStagingBuffer->mapMemory());
+        glm::vec4* vertexColors = nullptr;
+        glm::vec4* cellColors = nullptr;
+        if (tetMeshOpt->getUseVertexColors()) {
+            vertexColors = reinterpret_cast<glm::vec4*>(vertexColorStagingBuffer->mapMemory());
+        } else {
+            cellColors = reinterpret_cast<glm::vec4*>(cellColorStagingBuffer->mapMemory());
+        }
         auto* vertexPositionGradients = reinterpret_cast<glm::vec3*>(vertexPositionGradientStagingBuffer->mapMemory());
-        auto* vertexColorGradients = reinterpret_cast<glm::vec4*>(vertexColorGradientStagingBuffer->mapMemory());
+        glm::vec4* vertexColorGradients = nullptr;
+        glm::vec4* cellColorGradients = nullptr;
+        if (tetMeshOpt->getUseVertexColors()) {
+            vertexColorGradients = reinterpret_cast<glm::vec4*>(vertexColorGradientStagingBuffer->mapMemory());
+        } else {
+            cellColorGradients = reinterpret_cast<glm::vec4*>(cellColorGradientStagingBuffer->mapMemory());
+        }
         const auto numVertices = int(vertexPositionBuffer->getSizeInBytes() / sizeof(glm::vec3));
         vtkWriter->writeNextTimeStep(
-                cellIndices, vertexPositions, vertexColors,
-                vertexPositionGradients, vertexColorGradients, numVertices);
+                cellIndices, vertexPositions, vertexColors, cellColors,
+                vertexPositionGradients, vertexColorGradients, cellColorGradients, numVertices);
         vertexPositionStagingBuffer->unmapMemory();
-        vertexColorStagingBuffer->unmapMemory();
+        if (tetMeshOpt->getUseVertexColors()) {
+            vertexColorStagingBuffer->unmapMemory();
+            vertexColorGradientStagingBuffer->unmapMemory();
+        } else {
+            cellColorStagingBuffer->unmapMemory();
+            cellColorGradientStagingBuffer->unmapMemory();
+        }
         vertexPositionGradientStagingBuffer->unmapMemory();
-        vertexColorGradientStagingBuffer->unmapMemory();
     }
 
     /*bool debugOutput = true;

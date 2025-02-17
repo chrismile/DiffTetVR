@@ -138,8 +138,10 @@ private:
     std::shared_ptr<VtkWriter> vtkWriter;
     sgl::vk::BufferPtr vertexPositionStagingBuffer;
     sgl::vk::BufferPtr vertexColorStagingBuffer;
+    sgl::vk::BufferPtr cellColorStagingBuffer;
     sgl::vk::BufferPtr vertexPositionGradientStagingBuffer;
     sgl::vk::BufferPtr vertexColorGradientStagingBuffer;
+    sgl::vk::BufferPtr cellColorGradientStagingBuffer;
 
     // For Adam.
     sgl::vk::BufferPtr firstMomentEstimateBuffer;

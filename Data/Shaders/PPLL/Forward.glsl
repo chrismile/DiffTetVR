@@ -235,7 +235,7 @@ vec4 frontToBackPQ(uint fragsCount) {
         openTetId = eqA ? fragmentTetIds.y : fragmentTetIds.x;
         lastFragmentDepth = fragmentDepth;
     }
-    
+
 #endif // SHOW_TET_QUALITY
 
 #ifdef ALPHA_MODE_STRAIGHT

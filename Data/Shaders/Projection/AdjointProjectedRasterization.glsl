@@ -134,9 +134,11 @@ void main() {
     vec3 p0 = vertexPositions[vertexIdx0].xyz;
     vec3 p1 = vertexPositions[vertexIdx1].xyz;
     vec3 p2 = vertexPositions[vertexIdx2].xyz;
+#ifdef PER_VERTEX_COLORS
     vec4 c0 = vertexColors[vertexIdx0];
     vec4 c1 = vertexColors[vertexIdx1];
     vec4 c2 = vertexColors[vertexIdx2];
+#endif
     float d0 = vertexDepths[vertexIdx0];
     float d1 = vertexDepths[vertexIdx1];
     float d2 = vertexDepths[vertexIdx2];
@@ -178,17 +180,33 @@ void main() {
 
     float dOut_du = 0.0, dOut_dv = 0.0;
     vec3 dOut_dp0 = vec3(0.0), dOut_dp1 = vec3(0.0), dOut_dp2 = vec3(0.0);
+#ifdef PER_VERTEX_COLORS
     vec4 dOut_dc0 = vec4(0.0), dOut_dc1 = vec4(0.0), dOut_dc2 = vec4(0.0);
+#endif
     float dOut_dd0 = 0.0, dOut_dd1 = 0.0, dOut_dd2 = 0.0;
     baryAdjoint(
-            p.xyz, p0, p1, p2, c0, c1, c2, d0, d1, d2, baryCoords.x, baryCoords.y,
-            dOut_dc, dOut_dd, dOut_du, dOut_dv,
-            dOut_dp0, dOut_dp1, dOut_dp2, dOut_dc0, dOut_dc1, dOut_dc2,
+            p.xyz, p0, p1, p2,
+#ifdef PER_VERTEX_COLORS
+            c0, c1, c2,
+#endif
+            d0, d1, d2, baryCoords.x, baryCoords.y,
+#ifdef PER_VERTEX_COLORS
+            dOut_dc,
+#endif
+            dOut_dd, dOut_du, dOut_dv,
+            dOut_dp0, dOut_dp1, dOut_dp2,
+#ifdef PER_VERTEX_COLORS
+            dOut_dc0, dOut_dc1, dOut_dc2,
+#endif
             dOut_dd0, dOut_dd1, dOut_dd2);
 
+#ifdef PER_VERTEX_COLORS
     atomicAddGradCol(vertexIdx0, dOut_dc0);
     atomicAddGradCol(vertexIdx1, dOut_dc1);
     atomicAddGradCol(vertexIdx2, dOut_dc2);
+#else
+    // Barycentric color gradient should be 0 in this case.
+#endif
 
     atomicAddGradPos(vertexIdx0, dOut_dp0);
     atomicAddGradPos(vertexIdx1, dOut_dp1);

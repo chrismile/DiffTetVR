@@ -66,6 +66,13 @@ layout(binding = 6, scalar) readonly buffer CellColorBuffer {
 };
 #endif
 
+#if !defined(PER_VERTEX_COLORS)
+#define INVALID_TET 0xFFFFFFFFu
+layout(binding = 7, scalar) readonly buffer FaceToTetMapBuffer {
+    uvec2 faceToTetMap[];
+};
+#endif
+
 #define BACKWARD_PASS
 #include "LinkedListSort.glsl"
 

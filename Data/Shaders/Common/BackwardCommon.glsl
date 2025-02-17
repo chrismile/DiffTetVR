@@ -34,7 +34,7 @@ layout(binding = 8, scalar) coherent buffer VertexPositionGradientBuffer {
 #endif
 };
 
-#ifdef PER_VERTEX_COLORS
+#if defined(PER_VERTEX_COLORS) || defined(PROJECTION_TRIANGLE_GRADIENTS)
 layout(binding = 9, scalar) coherent buffer VertexColorGradientBuffer {
 #ifdef SUPPORT_BUFFER_FLOAT_ATOMIC_ADD
     float vertexColorGradients[]; // stride: vec4
@@ -90,6 +90,18 @@ void atomicAddGradPos(uint idx, vec3 value) {
         } while (oldValue != expectedValue);
     }
 #endif
+}
+
+vec4 accumulateConst(float t, vec3 c, float a, out float A) {
+    A = exp(-a * t);
+    return vec4((1.0 - A) * c, 1.0 - A);
+}
+
+void accumulateConstAdjoint(
+        float t, vec3 c, float a, float A, vec4 dOut_dC,
+        inout float dOut_dt, out vec4 dOut_dc) {
+    dOut_dt += (a * A) * (dot(dOut_dC.rgb, c) + dOut_dC.a);
+    dOut_dc = vec4((1.0 - A) * dOut_dC.rgb, (t * A) * (dot(dOut_dC.rgb, c) + dOut_dC.a));
 }
 
 vec4 accumulateLinearConst(float t, vec3 c0, vec3 c1, float a, out float A) {
@@ -169,18 +181,25 @@ void segmentLengthAdjoint(
 }
 
 void baryAdjoint(
-        vec3 p, vec3 p0, vec3 p1, vec3 p2, vec4 c0, vec4 c1, vec4 c2,
+        vec3 p, vec3 p0, vec3 p1, vec3 p2,
+#ifdef PER_VERTEX_COLORS
+        vec4 c0, vec4 c1, vec4 c2,
+#endif
 #ifdef PROJECTED_RASTER
         float d0, float d1, float d2,
 #endif
         float u, float v,
+#ifdef PER_VERTEX_COLORS
         vec4 dOut_dc,
+#endif
 #ifdef PROJECTED_RASTER
         float dOut_dd,
 #endif
         float dOut_du, float dOut_dv, // forwarded from segmentLengthAdjoint
-        inout vec3 dOut_dp0, inout vec3 dOut_dp1, inout vec3 dOut_dp2,
-        out vec4 dOut_dc0, out vec4 dOut_dc1, out vec4 dOut_dc2
+        inout vec3 dOut_dp0, inout vec3 dOut_dp1, inout vec3 dOut_dp2
+#ifdef PER_VERTEX_COLORS
+        , out vec4 dOut_dc0, out vec4 dOut_dc1, out vec4 dOut_dc2
+#endif
 #ifdef PROJECTED_RASTER
         , float dOut_dd0, float dOut_dd1, float dOut_dd2
 #endif
@@ -210,13 +229,15 @@ void baryAdjoint(
     float dv_dp2y = ((-(p.x - p0.x)*((p.x - p0.x)*(p0.y - p2.y) - (p.y - p0.y)*(p0.x - p2.x)) + (p.z - p0.z)*((p.y - p0.y)*(p0.z - p2.z) - (p.z - p0.z)*(p0.y - p2.y)))*f0 + ((p0.x - p1.x)*((p0.x - p2.x)*(p1.y - p2.y) - (p0.y - p2.y)*(p1.x - p2.x)) - (p0.z - p1.z)*((p0.y - p2.y)*(p1.z - p2.z) - (p0.z - p2.z)*(p1.y - p2.y)))*(f2))/(denom2*denom0);
     float dv_dp2z = (-((p.x - p0.x)*((p.x - p0.x)*(p0.z - p2.z) - (p.z - p0.z)*(p0.x - p2.x)) + (p.y - p0.y)*((p.y - p0.y)*(p0.z - p2.z) - (p.z - p0.z)*(p0.y - p2.y)))*f0 + ((p0.x - p1.x)*((p0.x - p2.x)*(p1.z - p2.z) - (p0.z - p2.z)*(p1.x - p2.x)) + (p0.y - p1.y)*((p0.y - p2.y)*(p1.z - p2.z) - (p0.z - p2.z)*(p1.y - p2.y)))*(f2))/(denom2*denom0);
 
-    // c = u * c0 + v * c1 + (1 - u - v) * c2;
     // p = u * p0 + v * p1 + (1 - u - v) * p2;
+#ifdef PER_VERTEX_COLORS
+    // c = u * c0 + v * c1 + (1 - u - v) * c2;
     dOut_du += dot(dOut_dc, c0 - c2 /* dc_du */);
     dOut_dv += dot(dOut_dc, c1 - c2 /* dc_dv */);
     dOut_dc0 = dOut_dc * u /* dc_c0 */;
     dOut_dc1 = dOut_dc * v /* dc_c1 */;
     dOut_dc2 = dOut_dc * (1.0 - u - v) /* dc_c2 */;
+#endif
 #ifdef PROJECTED_RASTER
     dOut_du += dot(dOut_dd, d0 - d2 /* dd_du */);
     dOut_dv += dot(dOut_dd, d1 - d2 /* dd_dv */);

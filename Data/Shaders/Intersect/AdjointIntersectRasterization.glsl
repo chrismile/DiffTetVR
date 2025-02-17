@@ -182,8 +182,12 @@ void main() {
 
     vec4 colorAcc; // temp from loop
     float A; // temp from loop
+#ifdef PER_VERTEX_COLORS
     vec4 dOut_dcf0 = vec4(0.0);
     vec4 dOut_dcf1 = vec4(0.0);
+#else
+    vec4 dOut_dc = vec4(0.0);
+#endif
     float dOut_dt = 0.0;
     float t = t1 - t0;
     float tSeg = t / float(NUM_SUBDIVS);
@@ -237,7 +241,29 @@ void main() {
         dOut_dcf1 += vec4(fbegin * dOut_dc0 + fend * dOut_dc1, fmid * dOut_da);
     }
 #else // !defined(PER_VERTEX_COLORS)
-    // TODO
+    vec4 c = tetsCellColors[tetIdx];
+    colorAcc = accumulateConst(tSeg, c.rgb, c.a * attenuationCoefficient, A);
+
+    // Inversion trick from "Differentiable Direct Volume Rendering", Weiß et al. 2021.
+    float alphaRayIn = (colorAcc.a - colorRayOut.a) / (colorAcc.a - 1.0);
+    vec3 colorRayIn = colorRayOut.rgb - (1.0 - alphaRayIn) * colorAcc.rgb;
+    //colorRayOut.a = colorRayIn.a + (1.0 - colorRayIn.a) * colorAcc.a;
+    //colorRayOut.rgb = colorRayIn.rgb + (1.0 - colorRayIn.a) * colorAcc.rgb;
+
+    // Compute adjoint for accumulated color/opacity.
+    vec4 dOut_dColorAcc;
+    dOut_dColorAcc.rgb = (1.0 - alphaRayIn) * dOut_dColorRayOut.rgb;
+    dOut_dColorAcc.a = (1.0 - alphaRayIn) * dOut_dColorRayOut.a;
+
+    // Backpropagation for the accumulated color.
+    // colorCurrAdjoint.rgb stays the same (see paper cited above, Chat^(i) = Chat^(i+1)).
+    float alphaNewAdjoint = dOut_dColorRayOut.a * (1.0 - colorAcc.a) - dot(dOut_dColorRayOut.rgb, colorAcc.rgb);
+    dOut_dColorRayOut.a = alphaNewAdjoint;
+    colorRayOut = vec4(colorRayIn, alphaRayIn);
+
+    // Compute adjoint for the pre-accumulation colors and opacity.
+    accumulateConstAdjoint(tSeg, c.rgb, c.a * attenuationCoefficient, A, dOut_dColorAcc, dOut_dt, dOut_dc);
+    dOut_dc.a *= attenuationCoefficient;
 #endif // PER_VERTEX_COLORS
 
     vec3 dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12;
@@ -251,13 +277,35 @@ void main() {
     //vec4 dOut_dcf00, dOut_dcf01, dOut_dcf02, dOut_dcf10, dOut_dcf11, dOut_dcf12;
     //float dOut_duf0 = 0.0, dOut_dvf0 = 0.0, dOut_duf1 = 0.0, dOut_dvf1 = 0.0;
     baryAdjoint(
-            pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0,
-            dOut_dcf0, dOut_duf0, dOut_dvf0,
-            dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dcf00, dOut_dcf01, dOut_dcf02);
+            pf0, pf00, pf01, pf02,
+#ifdef PER_VERTEX_COLORS
+            cf00, cf01, cf02,
+#endif
+            uf0, vf0,
+#ifdef PER_VERTEX_COLORS
+            dOut_dcf0,
+#endif
+            dOut_duf0, dOut_dvf0,
+            dOut_dpf00, dOut_dpf01, dOut_dpf02
+#ifdef PER_VERTEX_COLORS
+            , dOut_dcf00, dOut_dcf01, dOut_dcf02
+#endif
+    );
     baryAdjoint(
-            pf1, pf10, pf11, pf12, cf10, cf11, cf12, uf1, vf1,
-            dOut_dcf1, dOut_duf1, dOut_dvf1,
-            dOut_dpf10, dOut_dpf11, dOut_dpf12, dOut_dcf10, dOut_dcf11, dOut_dcf12);
+            pf1, pf10, pf11, pf12,
+#ifdef PER_VERTEX_COLORS
+            cf10, cf11, cf12,
+#endif
+            uf1, vf1,
+#ifdef PER_VERTEX_COLORS
+            dOut_dcf1,
+#endif
+            dOut_duf1, dOut_dvf1,
+            dOut_dpf10, dOut_dpf11, dOut_dpf12
+#ifdef PER_VERTEX_COLORS
+            , dOut_dcf10, dOut_dcf11, dOut_dcf12
+#endif
+    );
 
     // Update intermediate color and gradients and release pixel lock.
     imageStore(colorImageOpt, workIdx, colorRayOut);
@@ -277,7 +325,6 @@ void main() {
         dOut_dcf10 = abs(dOut_dcf10);
         dOut_dcf11 = abs(dOut_dcf11);
         dOut_dcf12 = abs(dOut_dcf12);
-        
 #else
         dOut_dc = abs(dOut_dc);
 #endif

@@ -55,8 +55,10 @@ void VtkWriter::writeNextTimeStep(
         const std::vector<uint32_t>& cellIndices,
         const glm::vec3* vertexPositions,
         const glm::vec4* vertexColors,
+        const glm::vec4* cellColors,
         const glm::vec3* vertexPositionGradients,
         const glm::vec4* vertexColorGradients,
+        const glm::vec4* cellColorGradients,
         int numPoints) {
     std::string vtkFilename = filename + "." + std::to_string(timeStepNumber) + ".vtk";
     FILE* file;
@@ -69,32 +71,67 @@ void VtkWriter::writeNextTimeStep(
         sgl::Logfile::get()->throwError("Error: Couldn't open file \"" + vtkFilename + "\" for writing.");
     }
 
-    auto* vertexColorGradientsMagnitude = new float[numPoints];
-    auto* vertexAlphaGradients = new float[numPoints];
+    float* vertexColorGradientsMagnitude = nullptr;
+    float* vertexAlphaGradients = nullptr;
+    if (vertexColors) {
+        vertexColorGradientsMagnitude = new float[numPoints];
+        vertexAlphaGradients = new float[numPoints];
 #ifdef USE_TBB
-    tbb::parallel_for(tbb::blocked_range<int>(0, numPoints), [&](auto const& r) {
-        for (auto i = r.begin(); i != r.end(); i++) {
+        tbb::parallel_for(tbb::blocked_range<int>(0, numPoints), [&](auto const& r) {
+            for (auto i = r.begin(); i != r.end(); i++) {
 #else
-    #pragma omp parallel for default(none) \
-    shared(numPoints, vertexColorGradients, vertexColorGradientsMagnitude, vertexAlphaGradients)
-    for (int i = 0; i < numPoints; i++) {
+        #pragma omp parallel for default(none) \
+        shared(numPoints, vertexColorGradients, vertexColorGradientsMagnitude, vertexAlphaGradients)
+        for (int i = 0; i < numPoints; i++) {
 #endif
-        const glm::vec4& v = vertexColorGradients[i];
-        vertexColorGradientsMagnitude[i] = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-        vertexAlphaGradients[i] = v.a;
-    }
+            const glm::vec4& v = vertexColorGradients[i];
+            vertexColorGradientsMagnitude[i] = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+            vertexAlphaGradients[i] = v.a;
+        }
 #ifdef USE_TBB
-    });
+        });
 #endif
+    }
+
+    float* cellColorGradientsMagnitude = nullptr;
+    float* cellAlphaGradients = nullptr;
+    auto numCells = int(cellIndices.size() / 4);
+    if (cellColors) {
+        cellColorGradientsMagnitude = new float[numCells];
+        cellAlphaGradients = new float[numCells];
+#ifdef USE_TBB
+        tbb::parallel_for(tbb::blocked_range<int>(0, numCells), [&](auto const& r) {
+            for (auto i = r.begin(); i != r.end(); i++) {
+#else
+#pragma omp parallel for default(none) \
+        shared(numCells, cellColorGradients, cellColorGradientsMagnitude, cellAlphaGradients)
+        for (int i = 0; i < numCells; i++) {
+#endif
+            const glm::vec4& v = cellColorGradients[i];
+            cellColorGradientsMagnitude[i] = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+            cellAlphaGradients[i] = v.a;
+        }
+#ifdef USE_TBB
+        });
+#endif
+    }
 
     writeVtkHeader(file);
     writePointCoordinates(file, vertexPositions, numPoints);
     writeCells(file, cellIndices);
     fprintf(file, "POINT_DATA %i\n", numPoints);
-    writePointDataVector(file, vertexPositionGradients, numPoints, "PositionGrad");
-    writePointDataScalar(file, vertexColorGradientsMagnitude, numPoints, "RGBGradMag");
-    writePointDataScalar(file, vertexAlphaGradients, numPoints, "AlphaGrad");
-    writePointDataColor(file, vertexColors, numPoints, "VertexColor");
+    writeDataVector(file, vertexPositionGradients, numPoints, "PositionGrad");
+    if (vertexColors) {
+        writeDataScalar(file, vertexColorGradientsMagnitude, numPoints, "RGBGradMag");
+        writeDataScalar(file, vertexAlphaGradients, numPoints, "AlphaGrad");
+        writeDataColor(file, vertexColors, numPoints, "VertexColor");
+    }
+    if (cellColors) {
+        fprintf(file, "CELL_DATA %i\n", numCells);
+        writeDataScalar(file, vertexColorGradientsMagnitude, numCells, "CellRGBGradMag");
+        writeDataScalar(file, vertexAlphaGradients, numCells, "CellAlphaGrad");
+        writeDataColor(file, cellColors, numCells, "CellColor");
+    }
 
     delete[] vertexColorGradientsMagnitude;
     delete[] vertexAlphaGradients;
@@ -108,24 +145,42 @@ void VtkWriter::writeNextTimeStep(sgl::vk::Renderer* renderer, const TetMeshPtr&
     //        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
     sgl::vk::BufferPtr vertexPositionStagingBuffer;
     sgl::vk::BufferPtr vertexColorStagingBuffer;
+    sgl::vk::BufferPtr cellColorStagingBuffer;
     sgl::vk::BufferPtr vertexPositionGradientStagingBuffer;
     sgl::vk::BufferPtr vertexColorGradientStagingBuffer;
+    sgl::vk::BufferPtr cellColorGradientStagingBuffer;
     const auto& cellIndices = tetMesh->getCellIndices();
     auto vertexPositionBuffer = tetMesh->getVertexPositionBuffer();
-    auto vertexColorBuffer = tetMesh->getVertexColorBuffer();
+    sgl::vk::BufferPtr vertexColorBuffer, cellColorBuffer;
+    sgl::vk::BufferPtr vertexColorGradientBuffer, cellColorGradientBuffer;
+    if (tetMesh->getUseVertexColors()) {
+        vertexColorBuffer = tetMesh->getVertexColorBuffer();
+        vertexColorGradientBuffer = tetMesh->getVertexColorGradientBuffer();
+    } else {
+        cellColorBuffer = tetMesh->getCellColorBuffer();
+        cellColorGradientBuffer = tetMesh->getCellColorGradientBuffer();
+    }
     auto vertexPositionGradientBuffer = tetMesh->getVertexPositionGradientBuffer();
-    auto vertexColorGradientBuffer = tetMesh->getVertexColorGradientBuffer();
     if (!vertexPositionStagingBuffer
             || vertexPositionStagingBuffer->getSizeInBytes() != vertexPositionBuffer->getSizeInBytes()) {
         vertexPositionStagingBuffer = std::make_shared<sgl::vk::Buffer>(
                 renderer->getDevice(), vertexPositionBuffer->getSizeInBytes(),
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
     }
-    if (!vertexColorStagingBuffer
-            || vertexColorStagingBuffer->getSizeInBytes() != vertexColorBuffer->getSizeInBytes()) {
-        vertexColorStagingBuffer = std::make_shared<sgl::vk::Buffer>(
-                renderer->getDevice(), vertexColorBuffer->getSizeInBytes(),
-                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+    if (tetMesh->getUseVertexColors()) {
+        if (!vertexColorStagingBuffer
+                || vertexColorStagingBuffer->getSizeInBytes() != vertexColorBuffer->getSizeInBytes()) {
+            vertexColorStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                    renderer->getDevice(), vertexColorBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        }
+    } else {
+        if (!cellColorStagingBuffer
+                || cellColorStagingBuffer->getSizeInBytes() != cellColorBuffer->getSizeInBytes()) {
+            cellColorStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                    renderer->getDevice(), cellColorBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        }
     }
     if (!vertexPositionGradientStagingBuffer
             || vertexPositionGradientStagingBuffer->getSizeInBytes() != vertexPositionGradientBuffer->getSizeInBytes()) {
@@ -133,38 +188,70 @@ void VtkWriter::writeNextTimeStep(sgl::vk::Renderer* renderer, const TetMeshPtr&
                 renderer->getDevice(), vertexPositionGradientBuffer->getSizeInBytes(),
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
     }
-    if (!vertexColorGradientStagingBuffer
-            || vertexColorGradientStagingBuffer->getSizeInBytes() != vertexColorGradientBuffer->getSizeInBytes()) {
-        vertexColorGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
-                renderer->getDevice(), vertexColorGradientBuffer->getSizeInBytes(),
-                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+    if (tetMesh->getUseVertexColors()) {
+        if (!vertexColorGradientStagingBuffer
+                || vertexColorGradientStagingBuffer->getSizeInBytes() != vertexColorGradientBuffer->getSizeInBytes()) {
+            vertexColorGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                    renderer->getDevice(), vertexColorGradientBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        }
+    } else {
+        if (!cellColorGradientStagingBuffer
+                || cellColorGradientStagingBuffer->getSizeInBytes() != cellColorGradientBuffer->getSizeInBytes()) {
+            cellColorGradientStagingBuffer = std::make_shared<sgl::vk::Buffer>(
+                    renderer->getDevice(), cellColorGradientBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        }
     }
     vertexPositionBuffer->copyDataTo(
             vertexPositionStagingBuffer, 0, 0, vertexPositionStagingBuffer->getSizeInBytes(),
             renderer->getVkCommandBuffer());
-    vertexColorBuffer->copyDataTo(
-            vertexColorStagingBuffer, 0, 0, vertexColorStagingBuffer->getSizeInBytes(),
-            renderer->getVkCommandBuffer());
     vertexPositionGradientBuffer->copyDataTo(
             vertexPositionGradientStagingBuffer, 0, 0, vertexPositionGradientBuffer->getSizeInBytes(),
             renderer->getVkCommandBuffer());
-    vertexColorGradientBuffer->copyDataTo(
-            vertexColorGradientStagingBuffer, 0, 0, vertexColorGradientBuffer->getSizeInBytes(),
-            renderer->getVkCommandBuffer());
+    if (tetMesh->getUseVertexColors()) {
+        vertexColorBuffer->copyDataTo(
+                vertexColorStagingBuffer, 0, 0, vertexColorStagingBuffer->getSizeInBytes(),
+                renderer->getVkCommandBuffer());
+        vertexColorGradientBuffer->copyDataTo(
+                vertexColorGradientStagingBuffer, 0, 0, vertexColorGradientBuffer->getSizeInBytes(),
+                renderer->getVkCommandBuffer());
+    } else {
+        cellColorBuffer->copyDataTo(
+                cellColorStagingBuffer, 0, 0, cellColorStagingBuffer->getSizeInBytes(),
+                renderer->getVkCommandBuffer());
+        cellColorGradientBuffer->copyDataTo(
+                cellColorGradientStagingBuffer, 0, 0, cellColorGradientBuffer->getSizeInBytes(),
+                renderer->getVkCommandBuffer());
+    }
     renderer->syncWithCpu();
 
     auto* vertexPositions = reinterpret_cast<glm::vec3*>(vertexPositionStagingBuffer->mapMemory());
-    auto* vertexColors = reinterpret_cast<glm::vec4*>(vertexColorStagingBuffer->mapMemory());
     auto* vertexPositionGradients = reinterpret_cast<glm::vec3*>(vertexPositionGradientStagingBuffer->mapMemory());
-    auto* vertexColorGradients = reinterpret_cast<glm::vec4*>(vertexColorGradientStagingBuffer->mapMemory());
+    glm::vec4* vertexColors = nullptr;
+    glm::vec4* cellColors = nullptr;
+    glm::vec4* vertexColorGradients = nullptr;
+    glm::vec4* cellColorGradients = nullptr;
+    if (tetMesh->getUseVertexColors()) {
+        vertexColors = reinterpret_cast<glm::vec4*>(vertexColorStagingBuffer->mapMemory());
+        vertexColorGradients = reinterpret_cast<glm::vec4*>(vertexColorGradientStagingBuffer->mapMemory());
+    } else {
+        cellColors = reinterpret_cast<glm::vec4*>(cellColorStagingBuffer->mapMemory());
+        cellColorGradients = reinterpret_cast<glm::vec4*>(cellColorGradientStagingBuffer->mapMemory());
+    }
     const auto numVertices = int(vertexPositionBuffer->getSizeInBytes() / sizeof(glm::vec3));
     writeNextTimeStep(
-            cellIndices, vertexPositions, vertexColors,
-            vertexPositionGradients, vertexColorGradients, numVertices);
+            cellIndices, vertexPositions, vertexColors, cellColors,
+            vertexPositionGradients, vertexColorGradients, cellColorGradients, numVertices);
     vertexPositionStagingBuffer->unmapMemory();
-    vertexColorStagingBuffer->unmapMemory();
     vertexPositionGradientStagingBuffer->unmapMemory();
-    vertexColorGradientStagingBuffer->unmapMemory();
+    if (tetMesh->getUseVertexColors()) {
+        vertexColorStagingBuffer->unmapMemory();
+        vertexColorGradientStagingBuffer->unmapMemory();
+    } else {
+        cellColorStagingBuffer->unmapMemory();
+        cellColorGradientStagingBuffer->unmapMemory();
+    }
 }
 
 void VtkWriter::writeVtkHeader(FILE* file) const {
@@ -235,7 +322,7 @@ void VtkWriter::writeCells(FILE* file, const std::vector<uint32_t>& cellIndices)
     }
 }
 
-void VtkWriter::writePointDataVector(
+void VtkWriter::writeDataVector(
         FILE* file, const glm::vec3* vectorData, int numPoints, const std::string& vectorName) const {
     std::string header = "VECTORS " + vectorName + " float\n";
     fwrite(header.c_str(), sizeof(char), header.size(), file);
@@ -254,7 +341,7 @@ void VtkWriter::writePointDataVector(
     }
 }
 
-void VtkWriter::writePointDataScalar(
+void VtkWriter::writeDataScalar(
         FILE* file, const float* scalarData, int numPoints, const std::string& scalarName) const {
     std::string header = "SCALARS " + scalarName + " float 1\n";
     fwrite(header.c_str(), sizeof(char), header.size(), file);
@@ -274,7 +361,7 @@ void VtkWriter::writePointDataScalar(
     }
 }
 
-void VtkWriter::writePointDataColor(
+void VtkWriter::writeDataColor(
         FILE* file, const glm::vec4* colorDataVec4, int numPoints, const std::string& scalarName) const {
     std::string header = "COLOR_SCALARS " + scalarName + " 4\n";
     fwrite(header.c_str(), sizeof(char), header.size(), file);

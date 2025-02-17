@@ -62,8 +62,10 @@ public:
             const std::vector<uint32_t>& cellIndices,
             const glm::vec3* vertexPositions,
             const glm::vec4* vertexColors,
+            const glm::vec4* cellColors,
             const glm::vec3* vertexPositionGradients,
             const glm::vec4* vertexColorGradients,
+            const glm::vec4* cellColorGradients,
             int numPoints);
 
     /// Writes the time step using the data from a TetMesh object.
@@ -73,11 +75,11 @@ private:
     void writeVtkHeader(FILE* file) const;
     void writePointCoordinates(FILE* file, const glm::vec3* vertexPositions, int numPoints) const;
     void writeCells(FILE* file, const std::vector<uint32_t>& cellIndices) const;
-    void writePointDataVector(
+    void writeDataVector(
             FILE* file, const glm::vec3* vectorData, int numPoints, const std::string& vectorName) const;
-    void writePointDataScalar(
+    void writeDataScalar(
             FILE* file, const float* scalarData, int numPoints, const std::string& scalarName) const;
-    void writePointDataColor(
+    void writeDataColor(
             FILE* file, const glm::vec4* colorDataVec4, int numPoints, const std::string& scalarName) const;
 
     std::string filename;

@@ -35,9 +35,18 @@ layout(push_constant) uniform PushConstants {
 };
 
 void getNextFragment(
-        in uint i, in uint fragsCount, out vec4 color, out float depthLinear, out bool boundary, out bool frontFace,
+        in uint i, in uint fragsCount,
+#ifndef PER_VERTEX_COLORS
+        out uvec2 tetIds,
+#else
+        out vec4 color,
+#endif
+        out float depthLinear, out bool boundary, out bool frontFace,
         out uint i0, out uint i1, out uint i2, out vec3 p, out vec3 p0, out vec3 p1, out vec3 p2,
-        out vec4 c0, out vec4 c1, out vec4 c2, out float u, out float v
+#ifdef PER_VERTEX_COLORS
+        out vec4 c0, out vec4 c1, out vec4 c2,
+#endif
+        out float u, out float v
 #ifdef USE_TERMINATION_INDEX
         , bool skipLayer
 #endif
@@ -58,6 +67,11 @@ void getNextFragment(
     boundary = ((faceBits >> 1u) & 1u) == 1u ? true : false;
     uint faceIndex = (faceBits >> 2u) * 3u;
 
+#ifndef PER_VERTEX_COLORS
+    uint faceIndexTri = faceBits >> 2u;
+    tetIds = faceToTetMap[faceIndexTri];
+#endif
+
     // Compute world space position from depth.
 #ifndef COMPUTE_SHADER // TODO
     vec2 fragCoord = gl_FragCoord.xy;
@@ -72,9 +86,11 @@ void getNextFragment(
     p0 = vertexPositions[i0];
     p1 = vertexPositions[i1];
     p2 = vertexPositions[i2];
+#ifdef PER_VERTEX_COLORS
     c0 = vertexColors[i0];
     c1 = vertexColors[i1];
     c2 = vertexColors[i2];
+#endif
 
     // Barycentric interpolation.
     vec3 d20 = p2 - p0;
@@ -83,7 +99,9 @@ void getNextFragment(
     u = length(cross(d21, p - p1)) / totalArea;
     v = length(cross(p - p0, d20)) / totalArea;
     const vec3 barycentricCoordinates = vec3(u, v, 1.0 - u - v);
+#ifdef PER_VERTEX_COLORS
     color = c0 * barycentricCoordinates.x + c1 * barycentricCoordinates.y + c2 * barycentricCoordinates.z;
+#endif
 }
 
 vec4 frontToBackPQ(uint fragsCount) {
@@ -97,17 +115,23 @@ vec4 frontToBackPQ(uint fragsCount) {
 
     ivec2 workIdx = ivec2(gl_FragCoord.xy);
 
+#ifdef USE_TERMINATION_INDEX
+    uint terminationIndex = fragsCount - imageLoad(terminationIndexImage, workIdx).x;
+#endif
+    vec4 colorRayOut = imageLoad(colorImageOpt, workIdx);
+    vec4 dOut_dColorRayOut = imageLoad(adjointColors, workIdx);
+
+    uint if00, if01, if02, if10, if11, if12;
+    vec3 pf0, pf00, pf01, pf02, pf1, pf10, pf11, pf12;
+    float uf0, vf0, uf1, vf1;
+
+#ifdef PER_VERTEX_COLORS
+
     vec4 fragment0Color, fragment1Color;
     float fragment0Depth, fragment1Depth;
     bool fragment0Boundary, fragment1Boundary;
     bool fragment0FrontFace, fragment1FrontFace;
-    uint if00, if01, if02, if10, if11, if12;
-    vec3 pf0, pf00, pf01, pf02, pf1, pf10, pf11, pf12;
     vec4 cf00, cf01, cf02, cf10, cf11, cf12;
-    float uf0, vf0, uf1, vf1;
-#ifdef USE_TERMINATION_INDEX
-    uint terminationIndex = fragsCount - imageLoad(terminationIndexImage, workIdx).x;
-#endif
     getNextFragment(
             0, fragsCount, fragment0Color, fragment0Depth, fragment0Boundary, fragment0FrontFace,
             if00, if01, if02, pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0
@@ -116,8 +140,15 @@ vec4 frontToBackPQ(uint fragsCount) {
 #endif
     );
 
-    vec4 colorRayOut = imageLoad(colorImageOpt, workIdx);
-    vec4 dOut_dColorRayOut = imageLoad(adjointColors, workIdx);
+#else // !defined(PER_VERTEX_COLORS)
+
+    uvec2 fragmentTetIds;
+    float fragmentDepth, lastFragmentDepth;
+    bool fragmentBoundary;
+    bool fragmentFrontFace;
+    uint openTetId = INVALID_TET;
+
+#endif // PER_VERTEX_COLORS
 
     /*if (isnan(dOut_dColorRayOut.x) || isnan(dOut_dColorRayOut.y) || isnan(dOut_dColorRayOut.z) || isnan(dOut_dColorRayOut.w)
             //|| dOut_dColorRayOut.x != 0.0 || dOut_dColorRayOut.y != 0.0 || dOut_dColorRayOut.z != 0.0 || dOut_dColorRayOut.w != 0.0
@@ -130,8 +161,14 @@ vec4 frontToBackPQ(uint fragsCount) {
     vec4 colorAcc;
     float A;
     float t, tSeg;
-    for (i = 1; i < fragsCount; i++) {
+#ifdef PER_VERTEX_COLORS
+    for (i = 1; i < fragsCount; i++)
+#else
+    for (i = 0; i < fragsCount; i++)
+#endif
+    {
         // Load the new fragment.
+#ifdef PER_VERTEX_COLORS
 #ifdef USE_TERMINATION_INDEX
         if (i > terminationIndex) {
 #endif
@@ -242,6 +279,47 @@ vec4 frontToBackPQ(uint fragsCount) {
             }*/
         }
 
+#else // !defined(PER_VERTEX_COLORS)
+
+        getNextFragment(
+                i, fragsCount, fragmentTetIds, fragmentDepth, fragmentBoundary, fragmentFrontFace,
+                if00, if01, if02, pf0, pf00, pf01, pf02, uf0, vf0
+#ifdef USE_TERMINATION_INDEX
+                , terminationIndex != 0u
+#endif
+);
+        bool eqA = fragmentTetIds.x != INVALID_TET && fragmentTetIds.x == openTetId;
+        bool eqB = fragmentTetIds.y != INVALID_TET && fragmentTetIds.y == openTetId;
+        if (eqA || eqB) {
+            float t = fragmentDepth - lastFragmentDepth;
+            vec4 c = cellColors[openTetId];
+            colorAcc = accumulateConst(t, c.rgb, c.a * attenuationCoefficient, A);
+
+            // Inversion trick from "Differentiable Direct Volume Rendering", Weiß et al. 2021.
+            float alphaRayIn = (colorAcc.a - colorRayOut.a) / (colorAcc.a - 1.0);
+            vec3 colorRayIn = colorRayOut.rgb - (1.0 - alphaRayIn) * colorAcc.rgb;
+            //colorRayOut.a = colorRayIn.a + (1.0 - colorRayIn.a) * colorAcc.a;
+            //colorRayOut.rgb = colorRayIn.rgb + (1.0 - colorRayIn.a) * colorAcc.rgb;
+
+            // Compute adjoint for accumulated color/opacity.
+            vec4 dOut_dColorAcc;
+            dOut_dColorAcc.rgb = (1.0 - alphaRayIn) * dOut_dColorRayOut.rgb;
+            dOut_dColorAcc.a = (1.0 - alphaRayIn) * dOut_dColorRayOut.a;
+
+            // Backpropagation for the accumulated color.
+            // colorCurrAdjoint.rgb stays the same (see paper cited above, Chat^(i) = Chat^(i+1)).
+            float alphaNewAdjoint = dOut_dColorRayOut.a * (1.0 - colorAcc.a) - dot(dOut_dColorRayOut.rgb, colorAcc.rgb);
+            dOut_dColorRayOut.a = alphaNewAdjoint;
+            colorRayOut = vec4(colorRayIn, alphaRayIn);
+
+            // Compute adjoint for the pre-accumulation colors and opacity.
+            float dOut_dt = 0.0;
+            vec4 dOut_dc = vec4(0.0);
+            accumulateConstAdjoint(tSeg, c.rgb, c.a * attenuationCoefficient, A, dOut_dColorAcc, dOut_dt, dOut_dc);
+            dOut_dc.a *= attenuationCoefficient;
+
+#endif // PER_VERTEX_COLORS
+
         vec3 dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12;
         vec4 dOut_dcf00, dOut_dcf01, dOut_dcf02, dOut_dcf10, dOut_dcf11, dOut_dcf12;
         float dOut_duf0, dOut_dvf0, dOut_duf1, dOut_dvf1;
@@ -253,13 +331,35 @@ vec4 frontToBackPQ(uint fragsCount) {
         //vec4 dOut_dcf00, dOut_dcf01, dOut_dcf02, dOut_dcf10, dOut_dcf11, dOut_dcf12;
         //float dOut_duf0 = 0.0, dOut_dvf0 = 0.0, dOut_duf1 = 0.0, dOut_dvf1 = 0.0;
         baryAdjoint(
-                pf0, pf00, pf01, pf02, cf00, cf01, cf02, uf0, vf0,
-                dOut_dcf0, dOut_duf0, dOut_dvf0,
-                dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dcf00, dOut_dcf01, dOut_dcf02);
+                pf0, pf00, pf01, pf02,
+#ifdef PER_VERTEX_COLORS
+                cf00, cf01, cf02,
+#endif
+                uf0, vf0,
+#ifdef PER_VERTEX_COLORS
+                dOut_dcf0,
+#endif
+                dOut_duf0, dOut_dvf0,
+                dOut_dpf00, dOut_dpf01, dOut_dpf02
+#ifdef PER_VERTEX_COLORS
+                , dOut_dcf00, dOut_dcf01, dOut_dcf02
+#endif
+        );
         baryAdjoint(
-                pf1, pf10, pf11, pf12, cf10, cf11, cf12, uf1, vf1,
-                dOut_dcf1, dOut_duf1, dOut_dvf1,
-                dOut_dpf10, dOut_dpf11, dOut_dpf12, dOut_dcf10, dOut_dcf11, dOut_dcf12);
+                pf1, pf10, pf11, pf12,
+#ifdef PER_VERTEX_COLORS
+                cf10, cf11, cf12,
+#endif
+                uf1, vf1,
+#ifdef PER_VERTEX_COLORS
+                dOut_dcf1,
+#endif
+                dOut_duf1, dOut_dvf1,
+                dOut_dpf10, dOut_dpf11, dOut_dpf12
+#ifdef PER_VERTEX_COLORS
+                , dOut_dcf10, dOut_dcf11, dOut_dcf12
+#endif
+        );
 
         /*if (isnan(dOut_dcf00.x) || isnan(dOut_dcf00.y) || isnan(dOut_dcf00.z) || isnan(dOut_dcf00.w)
                 //|| dOut_dcf00.x != 0.0 || dOut_dcf00.y != 0.0 || dOut_dcf00.z != 0.0 || dOut_dcf00.w != 0.0
@@ -341,12 +441,16 @@ vec4 frontToBackPQ(uint fragsCount) {
          * Zongxin Ye, Wenyu Li, Sidun Liu, Peng Qiao, Yong Dou.
          */
         if (useAbsGrad != 0u) {
+#ifdef PER_VERTEX_COLORS
             dOut_dcf00 = abs(dOut_dcf00);
             dOut_dcf01 = abs(dOut_dcf01);
             dOut_dcf02 = abs(dOut_dcf02);
             dOut_dcf10 = abs(dOut_dcf10);
             dOut_dcf11 = abs(dOut_dcf11);
             dOut_dcf12 = abs(dOut_dcf12);
+#else
+            dOut_dc = abs(dOut_dc);
+#endif
             dOut_dpf00 = abs(dOut_dpf00);
             dOut_dpf01 = abs(dOut_dpf01);
             dOut_dpf02 = abs(dOut_dpf02);
@@ -356,6 +460,7 @@ vec4 frontToBackPQ(uint fragsCount) {
         }
 
         // Accumulate gradients wrt. tet properties.
+#ifdef PER_VERTEX_COLORS
         atomicAddGradCol(if00, dOut_dcf00);
         atomicAddGradCol(if01, dOut_dcf01);
         atomicAddGradCol(if02, dOut_dcf02);
@@ -363,6 +468,9 @@ vec4 frontToBackPQ(uint fragsCount) {
         atomicAddGradCol(if10, dOut_dcf10);
         atomicAddGradCol(if11, dOut_dcf11);
         atomicAddGradCol(if12, dOut_dcf12);
+#else
+        atomicAddGradCol(openTetId, dOut_dc);
+#endif
 
         atomicAddGradPos(if00, dOut_dpf00);
         atomicAddGradPos(if01, dOut_dpf01);
@@ -371,6 +479,23 @@ vec4 frontToBackPQ(uint fragsCount) {
         atomicAddGradPos(if10, dOut_dpf10);
         atomicAddGradPos(if11, dOut_dpf11);
         atomicAddGradPos(if12, dOut_dpf12);
+
+#ifndef PER_VERTEX_COLORS
+        } else {
+            eqA = fragmentTetIds.y != INVALID_TET;
+        }
+        openTetId = eqA ? fragmentTetIds.y : fragmentTetIds.x;
+        lastFragmentDepth = fragmentDepth;
+        if10 = if00;
+        if11 = if01;
+        if12 = if02;
+        pf1 = pf0;
+        pf10 = pf00;
+        pf11 = pf01;
+        pf12 = pf02;
+        uf1 = uf0;
+        vf1 = vf0;
+#endif
     }
 
     return vec4(0.0);

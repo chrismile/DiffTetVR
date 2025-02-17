@@ -241,6 +241,9 @@ protected:
         } else {
             rasterData->setStaticBuffer(tetMesh->getCellColorBuffer(), "CellColorBuffer");
         }
+        if (tetMesh->getUseCellColors()) {
+            rasterData->setStaticBuffer(tetMesh->getFaceToTetMapBuffer(), "FaceToTetMapBuffer");
+        }
         volumeRenderer->setRenderDataBindings(rasterData);
     }
 
