@@ -36,7 +36,8 @@
 
 bool BinTetLoader::loadFromFile(
         const std::string& filePath, std::vector<uint32_t>& cellIndices,
-        std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors) {
+        std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors,
+        std::vector<glm::vec4>& cellColors) {
     uint8_t* buffer = nullptr; //< BinaryReadStream does deallocation.
     size_t length = 0;
     bool loaded = sgl::loadFileFromSource(filePath, buffer, length, true);
@@ -48,7 +49,7 @@ bool BinTetLoader::loadFromFile(
     sgl::BinaryReadStream stream(buffer, length);
     uint32_t versionNumber;
     stream.read(versionNumber);
-    if (versionNumber != 1u) {
+    if (versionNumber != 1u && versionNumber != 2u) {
         sgl::Logfile::get()->writeError(
                 std::string() + "Error in BinTetLoader::loadFromFile: Invalid version number in file \""
                 + filePath + "\".");
@@ -58,6 +59,9 @@ bool BinTetLoader::loadFromFile(
     stream.readArray(cellIndices);
     stream.readArray(vertexPositions);
     stream.readArray(vertexColors);
+    if (versionNumber == 2u) {
+        stream.readArray(cellColors);
+    }
 
     return true;
 }
@@ -88,7 +92,8 @@ bool BinTetLoader::peekSizes(const std::string& filePath, size_t& numCells, size
 
 bool BinTetWriter::saveToFile(
         const std::string& filePath, const std::vector<uint32_t>& cellIndices,
-        const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors) {
+        const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors,
+        const std::vector<glm::vec4>& cellColors) {
 #ifndef __MINGW32__
     std::ofstream file(filePath.c_str(), std::ofstream::binary);
     if (!file.is_open()) {
@@ -99,7 +104,7 @@ bool BinTetWriter::saveToFile(
     }
 #else
     FILE* fileptr = fopen(filePath.c_str(), "wb");
-    if (fileptr == NULL) {
+    if (fileptr == nullptr) {
         sgl::Logfile::get()->writeError(
                 std::string() + "Error in BinTetWriter::saveToFile: File \""
                 + filePath + "\" could not be opened for writing.");
@@ -108,11 +113,18 @@ bool BinTetWriter::saveToFile(
 #endif
 
     sgl::BinaryWriteStream stream;
-    stream.write(1u); //< Version number.
-
-    stream.writeArray(cellIndices);
-    stream.writeArray(vertexPositions);
-    stream.writeArray(vertexColors);
+    if (cellColors.empty()) {
+        stream.write(1u); //< Version number.
+        stream.writeArray(cellIndices);
+        stream.writeArray(vertexPositions);
+        stream.writeArray(vertexColors);
+    } else {
+        stream.write(2u); //< Version number.
+        stream.writeArray(cellIndices);
+        stream.writeArray(vertexPositions);
+        stream.writeArray(vertexColors);
+        stream.writeArray(cellColors);
+    }
 
 #ifndef __MINGW32__
     file.write((const char*)stream.getBuffer(), stream.getSize());

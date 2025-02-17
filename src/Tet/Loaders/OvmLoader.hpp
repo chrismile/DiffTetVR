@@ -38,7 +38,8 @@ public:
     bool getNeedsOpenVolumeMeshSupport() override { return true; }
     bool loadFromFile(
             const std::string& filePath, std::vector<uint32_t>& cellIndices,
-            std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors) override { return false; }
+            std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors,
+            std::vector<glm::vec4>& cellColors) override { return false; }
     bool loadFromFileOvm(
             const std::string& filePath, OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh) override;
 };
@@ -50,7 +51,8 @@ public:
     bool getNeedsOpenVolumeMeshSupport() override { return true; }
     bool saveToFile(
             const std::string& filePath, const std::vector<uint32_t>& cellIndices,
-            const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors) override { return false; }
+            const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors,
+            const std::vector<glm::vec4>& cellColors) override { return false; }
     bool saveToFileOvm(
             const std::string& filePath, const OpenVolumeMesh::GeometricTetrahedralMeshV3f& ovmMesh) override;
 };

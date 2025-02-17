@@ -1,7 +1,7 @@
 /*
  * BSD 2-Clause License
  *
- * Copyright (c) 2023, Christoph Neuhauser
+ * Copyright (c) 2025, Christoph Neuhauser
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,30 +26,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DIFFTETVR_BINTETLOADER_HPP
-#define DIFFTETVR_BINTETLOADER_HPP
+#ifndef DIFFTETVR_COLORSTORAGE_HPP
+#define DIFFTETVR_COLORSTORAGE_HPP
 
-#include "TetMeshLoader.hpp"
-
-class BinTetLoader : public TetMeshLoader {
-public:
-    static std::vector<std::string> getSupportedExtensions() { return { "bintet" }; }
-    ~BinTetLoader() override = default;
-    bool loadFromFile(
-            const std::string& filePath, std::vector<uint32_t>& cellIndices,
-            std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors,
-            std::vector<glm::vec4>& cellColors) override;
-    bool peekSizes(const std::string& filePath, size_t& numCells, size_t& numVertices) override;
+enum class ColorStorage {
+    PER_VERTEX, PER_CELL
+};
+const char* const COLOR_DATA_NAMES[] = {
+        "Per-Vertex", "Per-Cell"
 };
 
-class BinTetWriter : public TetMeshWriter {
-public:
-    static std::vector<std::string> getSupportedExtensions() { return { "bintet" }; }
-    ~BinTetWriter() override = default;
-    bool saveToFile(
-            const std::string& filePath, const std::vector<uint32_t>& cellIndices,
-            const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors,
-            const std::vector<glm::vec4>& cellColors) override;
-};
-
-#endif //DIFFTETVR_BINTETLOADER_HPP
+#endif //DIFFTETVR_COLORSTORAGE_HPP

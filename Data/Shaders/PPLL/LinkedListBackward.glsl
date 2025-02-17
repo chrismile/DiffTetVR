@@ -56,9 +56,15 @@ layout(binding = 4, scalar) readonly buffer TriangleIndicesBuffer {
 layout(binding = 5, scalar) readonly buffer VertexPositionBuffer {
     vec3 vertexPositions[];
 };
+#ifdef PER_VERTEX_COLORS
 layout(binding = 6, scalar) readonly buffer VertexColorBuffer {
     vec4 vertexColors[];
 };
+#else
+layout(binding = 6, scalar) readonly buffer CellColorBuffer {
+    vec4 cellColors[];
+};
+#endif
 
 #define BACKWARD_PASS
 #include "LinkedListSort.glsl"

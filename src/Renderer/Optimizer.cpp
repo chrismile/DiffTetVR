@@ -262,6 +262,8 @@ void TetMeshOptimizer::renderGuiDialog() {
                     "Init Grid Type", (int*)&settings.initGridType,
                     INIT_GRID_TYPE_NAMES, IM_ARRAYSIZE(INIT_GRID_TYPE_NAMES));
             ImGui::SliderInt3("Init Grid Size", (int*)&settings.initGridResolution.x, 1, 128);
+            ImGui::ColorEdit4("Init Color", &settings.initColor.x);
+            ImGui::Combo("Color Storage", (int*)&settings.colorStorage, COLOR_DATA_NAMES, IM_ARRAYSIZE(COLOR_DATA_NAMES));
             if (settings.initGridType == InitGridType::MESHING_FTETWILD) {
                 ImGui::SliderDouble("Ideal Edge Length", &settings.fTetWildParams.relativeIdealEdgeLength, 0.01, 0.5);
                 ImGui::SliderDouble("Epsilon", &settings.fTetWildParams.epsilon, 1e-4, 1e-2);
@@ -502,17 +504,17 @@ void TetMeshOptimizer::startRequest() {
             tetMeshOpt->setHexMeshConst(
                     tetMeshGT->getBoundingBox(), settings.initGridResolution.x,
                     settings.initGridResolution.y, settings.initGridResolution.z,
-                    glm::vec4(0.5f, 0.5f, 0.5f, 0.1f));
+                    settings.initColor, settings.colorStorage);
         } else if (settings.initGridType == InitGridType::MESHING_FTETWILD) {
             dataLoadedOpt = tetMeshOpt->setTetrahedralizedGridFTetWild(
                     tetMeshGT->getBoundingBox(), settings.initGridResolution.x,
                     settings.initGridResolution.y, settings.initGridResolution.z,
-                    glm::vec4(0.5f, 0.5f, 0.5f, 0.1f), settings.fTetWildParams);
+                    settings.initColor, settings.colorStorage, settings.fTetWildParams);
         } else { // settings.initGridType == InitGridType::TETGEN
             dataLoadedOpt = tetMeshOpt->setTetrahedralizedGridTetGen(
                     tetMeshGT->getBoundingBox(), settings.initGridResolution.x,
                     settings.initGridResolution.y, settings.initGridResolution.z,
-                    glm::vec4(0.5f, 0.5f, 0.5f, 0.1f), settings.tetGenParams);
+                    settings.initColor, settings.colorStorage, settings.tetGenParams);
         }
     } else {
         dataLoadedOpt = tetMeshOpt->loadFromFile(settings.dataSetFileNameOpt);

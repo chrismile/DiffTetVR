@@ -58,22 +58,33 @@ layout(binding = 5, scalar) readonly buffer VertexPositionBuffer {
 };
 
 #ifndef SHOW_TET_QUALITY
+#ifdef PER_VERTEX_COLORS
 layout(binding = 6, scalar) readonly buffer VertexColorBuffer {
     vec4 vertexColors[];
 };
 #else
+layout(binding = 6, scalar) readonly buffer CellColorBuffer {
+    vec4 cellColors[];
+};
+#endif
+#endif
+
+#if defined(SHOW_TET_QUALITY) || !defined(PER_VERTEX_COLORS)
 #define INVALID_TET 0xFFFFFFFFu
-layout(binding = 6, scalar) readonly buffer FaceToTetMapBuffer {
+layout(binding = 7, scalar) readonly buffer FaceToTetMapBuffer {
     uvec2 faceToTetMap[];
 };
-layout(binding = 7, scalar) readonly buffer TetQualityBuffer {
+#endif
+
+#ifdef SHOW_TET_QUALITY
+layout(binding = 8, scalar) readonly buffer TetQualityBuffer {
     float tetQualityArray[];
 };
-layout (binding = 8) uniform MinMaxUniformBuffer {
+layout (binding = 9) uniform MinMaxUniformBuffer {
     float minAttributeValue;
     float maxAttributeValue;
 };
-layout(binding = 9) uniform sampler1D transferFunctionTexture;
+layout(binding = 10) uniform sampler1D transferFunctionTexture;
 vec4 transferFunction(float attr) {
     // Transfer to range [0, 1].
     float posFloat = clamp((attr - minAttributeValue) / (maxAttributeValue - minAttributeValue), 0.0, 1.0);

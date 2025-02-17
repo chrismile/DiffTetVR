@@ -121,6 +121,10 @@ class SplitGradientType(enum.Enum):
     ABS_POSITION = enum.auto() # (= 2)
     ABS_COLOR = enum.auto()    # (= 3)
 
+class ColorStorage(enum.Enum):
+    PER_VERTEX = enum.auto() # (= 0)
+    PER_CELL = enum.auto()   # (= 1)
+
 class TetMesh:
     def __init__(self) -> None:
         pass
@@ -153,7 +157,8 @@ class TetMesh:
             xs: int,
             ys: int,
             zs: int,
-            const_color: vec4
+            const_color: vec4,
+            color_storage: ColorStorage = ColorStorage.PER_VERTEX
     ) -> None:
         """ Initialize with tetrahedralized hex mesh with constant color. """
         pass
@@ -164,6 +169,7 @@ class TetMesh:
             ys: int,
             zs: int,
             const_color: vec4,
+            color_storage: ColorStorage,
             params: FTetWildParams
     ) -> bool:
         """ Initialize with constant color tet mesh tetrahedralized from a grid using fTetWild. """
@@ -175,6 +181,7 @@ class TetMesh:
             ys: int,
             zs: int,
             const_color: vec4,
+            color_storage: ColorStorage,
             params: TetGenParams
     ) -> bool:
         """ Initialize with constant color tet mesh tetrahedralized from a grid using TetGen. """

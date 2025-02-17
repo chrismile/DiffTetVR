@@ -83,6 +83,10 @@ void TetMeshVolumeRenderer::setTetMeshData(const TetMeshPtr& _tetMesh) {
     if (showTetQuality) {
         tetMesh->setTetQualityMetric(tetQualityMetric);
     }
+    if (useVertexColorsCached != tetMesh->getUseVertexColors()) {
+        useVertexColorsCached = tetMesh->getUseVertexColors();
+        setShadersDirty(VolumeRendererPassType::ALL);
+    }
 
     statisticsUpToDate = false;
     counterPrintFrags = 0.0f;
@@ -414,6 +418,14 @@ void TetMeshVolumeRenderer::getVulkanShaderPreprocessorDefines(
         preprocessorDefines.insert(std::make_pair("USE_TERMINATION_INDEX", ""));
     }
 
+    if (tetMesh) {
+        if (tetMesh->getUseVertexColors()) {
+            preprocessorDefines.insert(std::make_pair("PER_VERTEX_COLORS", ""));
+        } else {
+            preprocessorDefines.insert(std::make_pair("PER_CELL_COLORS", ""));
+        }
+    }
+
     if (tileWidth == 1 && tileHeight == 1) {
         // No tiling
         tilingModeIndex = 0;
@@ -454,7 +466,11 @@ void TetMeshVolumeRenderer::setRenderDataBindings(const sgl::vk::RenderDataPtr& 
     if (!renderData->getShaderStages()->hasDescriptorBinding(0, "VertexDepthGradientBuffer")) {
         // For the adjoint projected rasterization pass, we instead want to bind triangle gradient buffers.
         renderData->setStaticBufferOptional(tetMesh->getVertexPositionGradientBuffer(), "VertexPositionGradientBuffer");
-        renderData->setStaticBufferOptional(tetMesh->getVertexColorGradientBuffer(), "VertexColorGradientBuffer");
+        if (tetMesh->getUseVertexColors()) {
+            renderData->setStaticBufferOptional(tetMesh->getVertexColorGradientBuffer(), "VertexColorGradientBuffer");
+        } else {
+            renderData->setStaticBufferOptional(tetMesh->getCellColorGradientBuffer(), "CellColorGradientBuffer");
+        }
     }
     renderData->setStaticImageViewOptional(outputImageView, "colorImageOpt");
     renderData->setStaticImageViewOptional(colorAdjointImage, "adjointColors");

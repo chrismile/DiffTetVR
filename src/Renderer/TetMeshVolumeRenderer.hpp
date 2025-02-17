@@ -261,6 +261,9 @@ protected:
     ClipPlaneData clipPlaneData{};
     sgl::vk::BufferPtr clipPlaneDataBuffer;
 
+    // Other data.
+    bool useVertexColorsCached = true;
+
     // Tiling mode.
     int tilingModeIndex = 2;
     int tileWidth = 2;

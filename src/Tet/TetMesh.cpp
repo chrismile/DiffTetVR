@@ -67,6 +67,7 @@ struct OvmRepresentationData {
     // The constructor is overloaded, but one of them is protected. If we don't use std::optional, then MSVC complains
     // about "ambiguous call to overloaded function".
     std::optional<OpenVolumeMesh::VertexPropertyPtr<OpenVolumeMesh::Vec4f>> vertexColorProp{};
+    std::optional<OpenVolumeMesh::CellPropertyPtr<OpenVolumeMesh::Vec4f>> cellColorProp{};
 };
 #endif
 
@@ -209,6 +210,7 @@ void TetMesh::setUseGradients(bool _useGradient) {
     if (!useGradients) {
         vertexPositionGradientBuffer = {};
         vertexColorGradientBuffer = {};
+        cellColorGradientBuffer = {};
     }
 }
 
@@ -223,7 +225,12 @@ void TetMesh::setUsedDeviceType(torch::DeviceType _usedDeviceType) {
 
 void TetMesh::copyGradientsToCpu(sgl::vk::Renderer* renderer) {
     vertexPositionGradientBuffer->copyDataTo(vertexPositionGradientBufferCpu, renderer->getVkCommandBuffer());
-    vertexColorGradientBuffer->copyDataTo(vertexColorGradientBufferCpu, renderer->getVkCommandBuffer());
+    if (getUseVertexColors()) {
+        vertexColorGradientBuffer->copyDataTo(vertexColorGradientBufferCpu, renderer->getVkCommandBuffer());
+    }
+    if (getUseCellColors()) {
+        cellColorGradientBuffer->copyDataTo(cellColorGradientBufferCpu, renderer->getVkCommandBuffer());
+    }
 }
 
 torch::Tensor TetMesh::getVertexPositionTensor() {
@@ -291,6 +298,41 @@ torch::Tensor TetMesh::getVertexColorTensor() {
             vertexColorTensor.mutable_grad() = vertexColorGradientTensor;
         }
         return vertexColorTensor;
+#ifdef SUPPORT_COMPUTE_INTEROP
+    }
+#endif
+}
+
+torch::Tensor TetMesh::getCellColorTensor() {
+#ifdef SUPPORT_COMPUTE_INTEROP
+    if (useComputeInterop) {
+        torch::Tensor cellColorTensor = torch::from_blob(
+                cellColorBufferCu->getDevicePtr<float>(),
+                { int(cellColors.size()), int(4) },
+                torch::TensorOptions().dtype(torch::kFloat32).device(usedDeviceType).requires_grad(useGradients));
+        if (useGradients) {
+            torch::Tensor cellColorGradientTensor = torch::from_blob(
+                    cellColorGradientBufferCu->getDevicePtr<float>(),
+                    { int(cellColors.size()), int(4) },
+                    torch::TensorOptions().dtype(torch::kFloat32).device(usedDeviceType));
+            cellColorTensor.mutable_grad() = cellColorGradientTensor;
+        }
+        return cellColorTensor;
+    } else {
+#endif
+        fetchVertexDataFromDeviceIfNecessary();
+        torch::Tensor cellColorTensor = torch::from_blob(
+                cellColors.data(),
+                { int(cellColors.size()), int(4) },
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU).requires_grad(useGradients));
+        if (useGradients) {
+            torch::Tensor cellColorGradientTensor = torch::from_blob(
+                    cellColorGradientBufferCpuPtr,
+                    { int(cellColors.size()), int(4) },
+                    torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
+            cellColorTensor.mutable_grad() = cellColorGradientTensor;
+        }
+        return cellColorTensor;
 #ifdef SUPPORT_COMPUTE_INTEROP
     }
 #endif
@@ -438,14 +480,21 @@ void TetMesh::setTetMeshData(
     cellIndices = _cellIndices;
     vertexPositions = _vertexPositions;
     vertexColors = _vertexColors;
+    cellColors.clear();
+    setTetMeshDataInternal();
+}
+
+void TetMesh::setTetMeshDataCell(
+        const std::vector<uint32_t>& _cellIndices, const std::vector<glm::vec3>& _vertexPositions,
+        const std::vector<glm::vec4>& _cellColors) {
+    cellIndices = _cellIndices;
+    vertexPositions = _vertexPositions;
+    cellColors = _cellColors;
+    vertexColors.clear();
     setTetMeshDataInternal();
 }
 
 void TetMesh::setTetMeshDataInternal() {
-    //for (auto& color : vertexColors) {
-    //    color.a = std::max(color.a, 1e-3f);
-    //}
-
     meshNumCells = cellIndices.size() / 4;
     meshNumVertices = vertexPositions.size();
 #ifdef USE_OPEN_VOLUME_MESH
@@ -523,27 +572,35 @@ void TetMesh::uploadDataToDevice() {
     triangleIndexBuffer = {};
     vertexPositionBuffer = {};
     vertexColorBuffer = {};
+    cellColorBuffer = {};
     faceBoundaryBitBuffer = {};
     vertexBoundaryBitBuffer = {};
     faceToTetMapBuffer = {};
     tetQualityBuffer = {};
     vertexPositionGradientBuffer = {};
     vertexColorGradientBuffer = {};
+    cellColorGradientBuffer = {};
 #if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_COMPUTE_INTEROP)
     vertexPositionBufferCu = {};
     vertexColorBufferCu = {};
+    cellColorBufferCu = {};
     vertexBoundaryBitBufferCu = {};
     vertexPositionGradientBufferCu = {};
     vertexColorGradientBufferCu = {};
+    cellColorGradientBufferCu = {};
 #endif
     vertexPositionBufferCpu = {};
     vertexColorBufferCpu = {};
+    cellColorBufferCpu = {};
     vertexPositionGradientBufferCpu = {};
     vertexColorGradientBufferCpu = {};
+    cellColorGradientBufferCpu = {};
     vertexPositionBufferCpuPtr = nullptr;
     vertexColorBufferCpuPtr = nullptr;
+    cellColorBufferCpuPtr = nullptr;
     vertexPositionGradientBufferCpuPtr = nullptr;
     vertexColorGradientBufferCpuPtr = nullptr;
+    cellColorGradientBufferCpuPtr = nullptr;
 
     cellIndicesBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(uint32_t) * cellIndices.size(), cellIndices.data(),
@@ -568,28 +625,54 @@ void TetMesh::uploadDataToDevice() {
                 device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                 VMA_MEMORY_USAGE_GPU_ONLY, true, true);
-        vertexColorBuffer = std::make_shared<sgl::vk::Buffer>(
-                device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
-                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+        if (getUseVertexColors()) {
+            vertexColorBuffer = std::make_shared<sgl::vk::Buffer>(
+                    device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+        }
+        if (getUseCellColors()) {
+            cellColorBuffer = std::make_shared<sgl::vk::Buffer>(
+                    device, sizeof(glm::vec4) * cellColors.size(), cellColors.data(),
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+        }
         vertexBoundaryBitBuffer = std::make_shared<sgl::vk::Buffer>(
                 device, sizeof(uint32_t) * verticesBoundarySlim.size(), verticesBoundarySlim.data(),
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                 VMA_MEMORY_USAGE_GPU_ONLY, true, true);
         vertexPositionBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexPositionBuffer);
-        vertexColorBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexColorBuffer);
+        if (getUseVertexColors()) {
+            vertexColorBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexColorBuffer);
+        }
+        if (getUseCellColors()) {
+            cellColorBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(cellColorBuffer);
+        }
         vertexBoundaryBitBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexBoundaryBitBuffer);
         if (useGradients) {
             vertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(
                     device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                     VMA_MEMORY_USAGE_GPU_ONLY, true, true);
-            vertexColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(
-                    device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
-                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                    VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+            if (getUseVertexColors()) {
+                vertexColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(
+                        device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
+                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                        VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+            }
+            if (getUseCellColors()) {
+                cellColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(
+                        device, sizeof(glm::vec4) * cellColors.size(), cellColors.data(),
+                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                        VMA_MEMORY_USAGE_GPU_ONLY, true, true);
+            }
             vertexPositionGradientBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexPositionGradientBuffer);
-            vertexColorGradientBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexColorGradientBuffer);
+            if (getUseVertexColors()) {
+                vertexColorGradientBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexColorGradientBuffer);
+            }
+            if (getUseCellColors()) {
+                cellColorGradientBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(cellColorGradientBuffer);
+            }
         }
     } else {
 #endif
@@ -597,10 +680,18 @@ void TetMesh::uploadDataToDevice() {
             device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY);
-    vertexColorBuffer = std::make_shared<sgl::vk::Buffer>(
-            device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
+    if (getUseVertexColors()) {
+        vertexColorBuffer = std::make_shared<sgl::vk::Buffer>(
+                device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                VMA_MEMORY_USAGE_GPU_ONLY);
+    }
+    if (getUseCellColors()) {
+        cellColorBuffer = std::make_shared<sgl::vk::Buffer>(
+                device, sizeof(glm::vec4) * cellColors.size(), cellColors.data(),
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                VMA_MEMORY_USAGE_GPU_ONLY);
+    }
     vertexBoundaryBitBuffer = std::make_shared<sgl::vk::Buffer>(
             device, sizeof(uint32_t) * verticesBoundarySlim.size(), verticesBoundarySlim.data(),
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
@@ -610,10 +701,18 @@ void TetMesh::uploadDataToDevice() {
                 device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                 VMA_MEMORY_USAGE_GPU_ONLY);
-        vertexColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(
-                device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
-                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                VMA_MEMORY_USAGE_GPU_ONLY);
+        if (getUseVertexColors()) {
+            vertexColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(
+                    device, sizeof(glm::vec4) * vertexColors.size(), vertexColors.data(),
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VMA_MEMORY_USAGE_GPU_ONLY);
+        }
+        if (getUseCellColors()) {
+            cellColorGradientBuffer = std::make_shared<sgl::vk::Buffer>(
+                    device, sizeof(glm::vec4) * cellColors.size(), cellColors.data(),
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VMA_MEMORY_USAGE_GPU_ONLY);
+        }
     }
 #if defined(BUILD_PYTHON_MODULE) && defined(SUPPORT_COMPUTE_INTEROP)
     }
@@ -624,23 +723,47 @@ void TetMesh::uploadDataToDevice() {
         vertexPositionBufferCpu = std::make_shared<sgl::vk::Buffer>(
                 device, vertexPositionBuffer->getSizeInBytes(),
                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-        vertexColorBufferCpu = std::make_shared<sgl::vk::Buffer>(
-                device, vertexColorBuffer->getSizeInBytes(),
-                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+        if (getUseVertexColors()) {
+            vertexColorBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                    device, vertexColorBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+        }
+        if (getUseCellColors()) {
+            cellColorBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                    device, cellColorBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+        }
         if (useGradients) {
             vertexPositionGradientBufferCpu = std::make_shared<sgl::vk::Buffer>(
                     device, vertexPositionGradientBuffer->getSizeInBytes(),
                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-            vertexColorGradientBufferCpu = std::make_shared<sgl::vk::Buffer>(
-                    device, vertexColorGradientBuffer->getSizeInBytes(),
-                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+            if (getUseVertexColors()) {
+                vertexColorGradientBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                        device, vertexColorGradientBuffer->getSizeInBytes(),
+                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+            }
+            if (getUseCellColors()) {
+                cellColorGradientBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                        device, cellColorGradientBuffer->getSizeInBytes(),
+                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+            }
         }
         // Persistently map the CPU buffers.
         vertexPositionBufferCpuPtr = vertexPositionBufferCpu->mapMemory();
-        vertexColorBufferCpuPtr = vertexColorBufferCpu->mapMemory();
+        if (getUseVertexColors()) {
+            vertexColorBufferCpuPtr = vertexColorBufferCpu->mapMemory();
+        }
+        if (getUseCellColors()) {
+            cellColorBufferCpuPtr = cellColorBufferCpu->mapMemory();
+        }
         if (useGradients) {
             vertexPositionGradientBufferCpuPtr = vertexPositionGradientBufferCpu->mapMemory();
-            vertexColorGradientBufferCpuPtr = vertexColorGradientBufferCpu->mapMemory();
+            if (getUseVertexColors()) {
+                vertexColorGradientBufferCpuPtr = vertexColorGradientBufferCpu->mapMemory();
+            }
+            if (getUseCellColors()) {
+                cellColorGradientBufferCpuPtr = cellColorGradientBufferCpu->mapMemory();
+            }
         }
     }
 #endif
@@ -662,13 +785,23 @@ void TetMesh::setVerticesChangedOnDevice(bool _verticesChanged) {
         // Data actually changed on the CPU, not the device. Copy data from CPU to GPU.
         auto commandBuffer = device->beginSingleTimeCommands();
         vertexPositionBufferCpu->copyHostMemoryToAllocation(vertexPositions.data());
-        vertexColorBufferCpu->copyHostMemoryToAllocation(vertexColors.data());
+        if (getUseVertexColors()) {
+            vertexColorBufferCpu->copyHostMemoryToAllocation(vertexColors.data());
+        }
+        if (getUseCellColors()) {
+            cellColorBufferCpu->copyHostMemoryToAllocation(cellColors.data());
+        }
         device->insertMemoryBarrier(
                 VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
                 VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 commandBuffer);
         vertexPositionBufferCpu->copyDataTo(vertexPositionBuffer, commandBuffer);
-        vertexColorBufferCpu->copyDataTo(vertexColorBuffer, commandBuffer);
+        if (getUseVertexColors()) {
+            vertexColorBufferCpu->copyDataTo(vertexColorBuffer, commandBuffer);
+        }
+        if (getUseCellColors()) {
+            cellColorBufferCpu->copyDataTo(cellColorBuffer, commandBuffer);
+        }
         device->endSingleTimeCommands(commandBuffer);
     }
 #else
@@ -681,7 +814,12 @@ void TetMesh::onZeroGrad() {
     if (!useComputeInterop) {
         auto commandBuffer = device->beginSingleTimeCommands();
         vertexPositionGradientBuffer->fill(0, commandBuffer);
-        vertexColorGradientBuffer->fill(0, commandBuffer);
+        if (getUseVertexColors()) {
+            vertexColorGradientBuffer->fill(0, commandBuffer);
+        }
+        if (getUseCellColors()) {
+            cellColorGradientBuffer->fill(0, commandBuffer);
+        }
         device->endSingleTimeCommands(commandBuffer);
     }
 #endif
@@ -691,38 +829,76 @@ void TetMesh::fetchVertexDataFromDeviceIfNecessary() {
     if (verticesChangedOnDevice) {
         device->waitIdle();
         auto commandBuffer = device->beginSingleTimeCommands();
-        sgl::vk::BufferPtr stagingBufferPosition = std::make_shared<sgl::vk::Buffer>(
+        sgl::vk::BufferPtr stagingBufferVertexPosition = std::make_shared<sgl::vk::Buffer>(
                 device, vertexPositionBuffer->getSizeInBytes(),
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
-        sgl::vk::BufferPtr stagingBufferColor = std::make_shared<sgl::vk::Buffer>(
-                device, vertexColorBuffer->getSizeInBytes(),
-                VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
-        vertexPositionBuffer->copyDataTo(stagingBufferPosition, commandBuffer);
-        vertexColorBuffer->copyDataTo(stagingBufferColor, commandBuffer);
+        sgl::vk::BufferPtr stagingBufferVertexColor, stagingBufferCellColor;
+        if (getUseVertexColors()) {
+            stagingBufferVertexColor = std::make_shared<sgl::vk::Buffer>(
+                    device, vertexColorBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        }
+        if (getUseCellColors()) {
+            stagingBufferCellColor = std::make_shared<sgl::vk::Buffer>(
+                    device, cellColorBuffer->getSizeInBytes(),
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        }
+        vertexPositionBuffer->copyDataTo(stagingBufferVertexPosition, commandBuffer);
+        if (getUseVertexColors()) {
+            vertexColorBuffer->copyDataTo(stagingBufferVertexColor, commandBuffer);
+        }
+        if (getUseCellColors()) {
+            cellColorBuffer->copyDataTo(stagingBufferCellColor, commandBuffer);
+        }
         device->endSingleTimeCommands(commandBuffer);
-        auto* positionsPtr = reinterpret_cast<glm::vec3*>(stagingBufferPosition->mapMemory());
-        auto* colorsPtr = reinterpret_cast<glm::vec4*>(stagingBufferColor->mapMemory());
+        auto* positionsPtr = reinterpret_cast<glm::vec3*>(stagingBufferVertexPosition->mapMemory());
         for (size_t i = 0; i < vertexPositions.size(); i++) {
             vertexPositions.at(i) = positionsPtr[i];
-            vertexColors.at(i) = colorsPtr[i];
         }
-        stagingBufferPosition->unmapMemory();
-        stagingBufferColor->unmapMemory();
+        stagingBufferVertexPosition->unmapMemory();
+        if (getUseVertexColors()) {
+            auto* vertexColorsPtr = reinterpret_cast<glm::vec4*>(stagingBufferVertexColor->mapMemory());
+            for (size_t i = 0; i < vertexPositions.size(); i++) {
+                vertexColors.at(i) = vertexColorsPtr[i];
+            }
+            stagingBufferVertexColor->unmapMemory();
+        }
+        if (getUseCellColors()) {
+            auto* cellColorsPtr = reinterpret_cast<glm::vec4*>(stagingBufferCellColor->mapMemory());
+            for (size_t i = 0; i < cellColors.size(); i++) {
+                cellColors.at(i) = cellColorsPtr[i];
+            }
+            stagingBufferCellColor->unmapMemory();
+        }
 
 #ifdef USE_OPEN_VOLUME_MESH
         if (useOvmRepresentation) {
             // Update OpenVolumeMesh data structure.
             auto& ovmMesh = ovmRepresentationData->ovmMesh;
             auto& vertexPositionsOvm = ovmMesh.vertex_positions();
-            auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
             for (size_t vertexIdx = 0; vertexIdx < vertexPositions.size(); vertexIdx++) {
                 OpenVolumeMesh::VertexHandle vh((int)vertexIdx);
                 auto& vp = vertexPositions.at(vertexIdx);
-                auto& vc = vertexColors.at(vertexIdx);
                 auto& vpo = vertexPositionsOvm.at(vh);
-                auto& vco = vertexColorProp.at(vh);
                 vpo = OpenVolumeMesh::Vec3f(vp.x, vp.y, vp.z);
-                vco = OpenVolumeMesh::Vec4f(vc.x, vc.y, vc.z, vc.w);
+            }
+            if (getUseVertexColors()) {
+                auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
+                for (size_t vertexIdx = 0; vertexIdx < vertexPositions.size(); vertexIdx++) {
+                    OpenVolumeMesh::VertexHandle vh((int)vertexIdx);
+                    auto& vc = vertexColors.at(vertexIdx);
+                    auto& vco = vertexColorProp.at(vh);
+                    vco = OpenVolumeMesh::Vec4f(vc.x, vc.y, vc.z, vc.w);
+                }
+            }
+            if (getUseCellColors()) {
+                auto& cellColorProp = ovmRepresentationData->cellColorProp.value();
+                for (size_t cellIdx = 0; cellIdx < cellColors.size(); cellIdx++) {
+                    OpenVolumeMesh::CellHandle ch((int)cellIdx);
+                    auto& cc = cellColors.at(cellIdx);
+                    auto& cco = cellColorProp.at(ch);
+                    cco = OpenVolumeMesh::Vec4f(cc.x, cc.y, cc.z, cc.w);
+                }
             }
         }
 #endif
@@ -892,7 +1068,7 @@ void TetMesh::loadTestData(TestCase testCase) {
     }
 }
 
-void TetMesh::setNextLoaderUseConstColor(const glm::vec4& constColor) {
+void TetMesh::setNextLoaderUseConstColor(const glm::vec4& constColor, ColorStorage ColorStorage) {
     nextLoaderUseConstColor = true;
     constColorNext = constColor;
 }
@@ -906,6 +1082,7 @@ bool TetMesh::loadFromFile(const std::string& filePath) {
     std::vector<uint32_t> _cellIndices;
     std::vector<glm::vec3> _vertexPositions;
     std::vector<glm::vec4> _vertexColors;
+    std::vector<glm::vec4> _cellColors;
     bool retVal;
 #ifdef USE_OPEN_VOLUME_MESH
     if (tetMeshLoader->getNeedsOpenVolumeMeshSupport()) {
@@ -916,8 +1093,14 @@ bool TetMesh::loadFromFile(const std::string& filePath) {
         useOvmRepresentation = true;
 
         retVal = tetMeshLoader->loadFromFileOvm(filePath, ovmRepresentationData->ovmMesh);
-        ovmRepresentationData->vertexColorProp =
-                ovmRepresentationData->ovmMesh.request_vertex_property<OpenVolumeMesh::Vec4f>("vertexColors");
+        if (ovmRepresentationData->ovmMesh.property_exists<OpenVolumeMesh::Vec4f, OpenVolumeMesh::Entity::Vertex>("vertexColors")) {
+            ovmRepresentationData->vertexColorProp =
+                    ovmRepresentationData->ovmMesh.request_vertex_property<OpenVolumeMesh::Vec4f>("vertexColors");
+        }
+        if (ovmRepresentationData->ovmMesh.property_exists<OpenVolumeMesh::Vec4f, OpenVolumeMesh::Entity::Cell>("cellColors")) {
+            ovmRepresentationData->cellColorProp =
+                    ovmRepresentationData->ovmMesh.request_cell_property<OpenVolumeMesh::Vec4f>("cellColors");
+        }
 
         newData = false;
         verticesDirty = true;
@@ -926,16 +1109,29 @@ bool TetMesh::loadFromFile(const std::string& filePath) {
         uploadDataToDevice();
     } else {
 #endif
-        retVal = tetMeshLoader->loadFromFile(filePath, _cellIndices, _vertexPositions, _vertexColors);
+        retVal = tetMeshLoader->loadFromFile(filePath, _cellIndices, _vertexPositions, _vertexColors, _cellColors);
         if (retVal) {
             if (nextLoaderUseConstColor) {
-                _vertexColors.clear();
-                _vertexColors.resize(_vertexPositions.size(), constColorNext);
+                if (constColorNextColorStorage == ColorStorage::PER_VERTEX) {
+                    _cellColors.clear();
+                    _vertexColors.clear();
+                    _vertexColors.resize(_vertexPositions.size(), constColorNext);
+                }
+                if (constColorNextColorStorage == ColorStorage::PER_VERTEX) {
+                    _vertexColors.clear();
+                    _cellColors.clear();
+                    _cellColors.resize(_cellIndices.size() / 4, constColorNext);
+                }
             }
             if (!forceUseOvmRepresentation) {
                 useOvmRepresentation = false;
             }
-            setTetMeshData(_cellIndices, _vertexPositions, _vertexColors);
+            if (!_vertexColors.empty()) {
+                setTetMeshData(_cellIndices, _vertexPositions, _vertexColors);
+            }
+            if (!_cellColors.empty()) {
+                setTetMeshDataCell(_cellIndices, _vertexPositions, _cellColors);
+            }
         }
 #ifdef USE_OPEN_VOLUME_MESH
     }
@@ -960,7 +1156,7 @@ bool TetMesh::saveToFile(const std::string& filePath) {
         retVal = tetMeshWriter->saveToFileOvm(filePath, ovmRepresentationData->ovmMesh);
     } else {
 #endif
-        retVal = tetMeshWriter->saveToFile(filePath, cellIndices, vertexPositions, vertexColors);
+        retVal = tetMeshWriter->saveToFile(filePath, cellIndices, vertexPositions, vertexColors, cellColors);
 #ifdef USE_OPEN_VOLUME_MESH
     }
 #endif
@@ -1086,13 +1282,25 @@ void TetMesh::rebuildInternalRepresentationIfNecessary_Ovm() {
             ovmMesh.add_cell(ovmCellVertices);
         }
 
-        ovmRepresentationData->vertexColorProp =
-                *ovmMesh.create_persistent_vertex_property<OpenVolumeMesh::Vec4f>("vertexColors");
-        auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
-        for(OpenVolumeMesh::VertexIter v_it = ovmMesh.vertices_begin(); v_it != ovmMesh.vertices_end(); ++v_it) {
-            auto vh = *v_it;
-            const auto& vertexColor = vertexColors.at(vh.idx());
-            vertexColorProp[vh] = OpenVolumeMesh::Vec4f(vertexColor.x, vertexColor.y, vertexColor.z, vertexColor.w);
+        if (getUseVertexColors()) {
+            ovmRepresentationData->vertexColorProp =
+                    *ovmMesh.create_persistent_vertex_property<OpenVolumeMesh::Vec4f>("vertexColors");
+            auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
+            for(OpenVolumeMesh::VertexIter v_it = ovmMesh.vertices_begin(); v_it != ovmMesh.vertices_end(); ++v_it) {
+                auto vh = *v_it;
+                const auto& vertexColor = vertexColors.at(vh.idx());
+                vertexColorProp[vh] = OpenVolumeMesh::Vec4f(vertexColor.x, vertexColor.y, vertexColor.z, vertexColor.w);
+            }
+        }
+        if (getUseCellColors()) {
+            ovmRepresentationData->cellColorProp =
+                    *ovmMesh.create_persistent_cell_property<OpenVolumeMesh::Vec4f>("cellColors");
+            auto& cellColorProp = ovmRepresentationData->cellColorProp.value();
+            for(OpenVolumeMesh::CellIter c_it = ovmMesh.cells_begin(); c_it != ovmMesh.cells_end(); ++c_it) {
+                auto ch = *c_it;
+                const auto& cellColor = cellColors.at(ch.idx());
+                cellColorProp[ch] = OpenVolumeMesh::Vec4f(cellColor.x, cellColor.y, cellColor.z, cellColor.w);
+            }
         }
 
         newData = false;
@@ -1156,7 +1364,6 @@ const uint32_t PRISM_TO_TET_TABLE[8][12] = {
 void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
     auto& ovmMesh = ovmRepresentationData->ovmMesh;
     auto& vertexPositionsOvm = ovmMesh.vertex_positions();
-    auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
     OpenVolumeMesh::VertexHandle vh((int)vertexIndex);
 
 #ifdef USE_SPLIT_EDGE
@@ -1167,44 +1374,78 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
         edgesToDelete.push_back(eh);
     }
 
-    for (const auto& eh : edgesToDelete) {
-        auto heh = eh.halfedge_handle(0);
-        auto verts = ovmMesh.halfedge_vertices(heh);
-        if (verts[0] != vh) {
-            heh = heh.opposite_handle();
+    if (getUseVertexColors()) {
+        auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
+        for (const auto& eh : edgesToDelete) {
+            auto heh = eh.halfedge_handle(0);
+            auto verts = ovmMesh.halfedge_vertices(heh);
+            if (verts[0] != vh) {
+                heh = heh.opposite_handle();
+            }
+            auto vhe = ovmMesh.split_edge(heh, t);
+            const auto& vc0Ovm = vertexColorProp[verts[0]];
+            const auto& vc1Ovm = vertexColorProp[verts[1]];
+            glm::vec4 vc0(vc0Ovm[0], vc0Ovm[1], vc0Ovm[2], vc0Ovm[3]);
+            glm::vec4 vc1(vc1Ovm[0], vc1Ovm[1], vc1Ovm[2], vc1Ovm[3]);
+            glm::vec4 vce = glm::mix(vc0, vc1, t);
+            vertexColorProp[vhe] = OpenVolumeMesh::Vec4f(vce.x, vce.y, vce.z, vce.w);
         }
-        auto vhe = ovmMesh.split_edge(heh, t);
-        const auto& vc0Ovm = vertexColorProp[verts[0]];
-        const auto& vc1Ovm = vertexColorProp[verts[1]];
-        glm::vec4 vc0(vc0Ovm[0], vc0Ovm[1], vc0Ovm[2], vc0Ovm[3]);
-        glm::vec4 vc1(vc1Ovm[0], vc1Ovm[1], vc1Ovm[2], vc1Ovm[3]);
-        glm::vec4 vce = glm::mix(vc0, vc1, t);
-        vertexColorProp[vhe] = OpenVolumeMesh::Vec4f(vce.x, vce.y, vce.z, vce.w);
+    }
+    if (getUseCellColors()) {
+        //auto& cellColorProp = ovmRepresentationData->cellColorProp.value();
+        for (const auto& eh : edgesToDelete) {
+            auto heh = eh.halfedge_handle(0);
+            auto verts = ovmMesh.halfedge_vertices(heh);
+            if (verts[0] != vh) {
+                heh = heh.opposite_handle();
+            }
+            auto vhe = ovmMesh.split_edge(heh, t);
+            // TODO: It's unclear if we need to do anything here with cellColorProp...
+        }
     }
     ovmMesh.collect_garbage();
 #else
     // Add new vertices along the incident edges & collect old edges to delete.
     std::vector<OpenVolumeMesh::EdgeHandle> edgesToDelete;
     std::unordered_map<OpenVolumeMesh::EdgeHandle, OpenVolumeMesh::VertexHandle> edgeToNewVertexMap;
-    for (auto ve_it = ovmMesh.ve_iter(vh); ve_it.valid(); ve_it++) {
-        const auto& eh = ve_it.cur_handle();
-        edgesToDelete.push_back(eh);
-        auto vhs = ovmMesh.edge_vertices(eh);
-        auto vh0 = vhs.at(0);
-        auto vh1 = vhs.at(1);
-        const auto& vp0Ovm = vertexPositionsOvm.at(vh0);
-        const auto& vp1Ovm = vertexPositionsOvm.at(vh1);
-        glm::vec3 vp0(vp0Ovm[0], vp0Ovm[1], vp0Ovm[2]);
-        glm::vec3 vp1(vp1Ovm[0], vp1Ovm[1], vp1Ovm[2]);
-        glm::vec3 vpe = glm::mix(vp0, vp1, t);
-        const auto& vc0Ovm = vertexColorProp[vh0];
-        const auto& vc1Ovm = vertexColorProp[vh1];
-        glm::vec4 vc0(vc0Ovm[0], vc0Ovm[1], vc0Ovm[2], vc0Ovm[3]);
-        glm::vec4 vc1(vc1Ovm[0], vc1Ovm[1], vc1Ovm[2], vc1Ovm[3]);
-        glm::vec4 vce = glm::mix(vc0, vc1, t);
-        auto vhe = ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(vpe.x, vpe.y, vpe.z));
-        vertexColorProp[vhe] = OpenVolumeMesh::Vec4f(vce.x, vce.y, vce.z, vce.w);
-        edgeToNewVertexMap.insert(std::make_pair(eh, vhe));
+    if (getUseVertexColors()) {
+        auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
+        for (auto ve_it = ovmMesh.ve_iter(vh); ve_it.valid(); ve_it++) {
+            const auto& eh = ve_it.cur_handle();
+            edgesToDelete.push_back(eh);
+            auto vhs = ovmMesh.edge_vertices(eh);
+            auto vh0 = vhs.at(0);
+            auto vh1 = vhs.at(1);
+            const auto& vp0Ovm = vertexPositionsOvm.at(vh0);
+            const auto& vp1Ovm = vertexPositionsOvm.at(vh1);
+            glm::vec3 vp0(vp0Ovm[0], vp0Ovm[1], vp0Ovm[2]);
+            glm::vec3 vp1(vp1Ovm[0], vp1Ovm[1], vp1Ovm[2]);
+            glm::vec3 vpe = glm::mix(vp0, vp1, t);
+            const auto& vc0Ovm = vertexColorProp[vh0];
+            const auto& vc1Ovm = vertexColorProp[vh1];
+            glm::vec4 vc0(vc0Ovm[0], vc0Ovm[1], vc0Ovm[2], vc0Ovm[3]);
+            glm::vec4 vc1(vc1Ovm[0], vc1Ovm[1], vc1Ovm[2], vc1Ovm[3]);
+            glm::vec4 vce = glm::mix(vc0, vc1, t);
+            auto vhe = ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(vpe.x, vpe.y, vpe.z));
+            vertexColorProp[vhe] = OpenVolumeMesh::Vec4f(vce.x, vce.y, vce.z, vce.w);
+            edgeToNewVertexMap.insert(std::make_pair(eh, vhe));
+        }
+    }
+    if (getUseCellColors()) {
+        for (auto ve_it = ovmMesh.ve_iter(vh); ve_it.valid(); ve_it++) {
+            const auto& eh = ve_it.cur_handle();
+            edgesToDelete.push_back(eh);
+            auto vhs = ovmMesh.edge_vertices(eh);
+            auto vh0 = vhs.at(0);
+            auto vh1 = vhs.at(1);
+            const auto& vp0Ovm = vertexPositionsOvm.at(vh0);
+            const auto& vp1Ovm = vertexPositionsOvm.at(vh1);
+            glm::vec3 vp0(vp0Ovm[0], vp0Ovm[1], vp0Ovm[2]);
+            glm::vec3 vp1(vp1Ovm[0], vp1Ovm[1], vp1Ovm[2]);
+            glm::vec3 vpe = glm::mix(vp0, vp1, t);
+            auto vhe = ovmMesh.add_vertex(OpenVolumeMesh::Vec3f(vpe.x, vpe.y, vpe.z));
+            edgeToNewVertexMap.insert(std::make_pair(eh, vhe));
+        }
     }
 
     // Iterate over all cells incident with the vertex.
@@ -1224,6 +1465,16 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
         halffaceToIndexMap.insert(std::make_pair(tt->adb(), tetIdx * 3 + 2));
         cellToIndexMap.insert(std::make_pair(*vc_it, tetIdx));
         tetIdx++;
+    }
+
+    std::vector<OpenVolumeMesh::Vec4f> oldCellColors;
+    if (getUseCellColors()) {
+        oldCellColors.resize(numIncidentTets);
+        auto& cellColorProp = ovmRepresentationData->cellColorProp.value();
+        for (auto vc_it = ovmMesh.vc_iter(vh); vc_it.valid(); vc_it++) {
+            tetIdx = cellToIndexMap[*vc_it];
+            oldCellColors.at(tetIdx) = cellColorProp[*vc_it];
+        }
     }
 
     // Build neighborhood graph.
@@ -1293,18 +1544,42 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
     ovmMesh.collect_garbage();
 
     // Add the new cells after the old ones have been deleted.
-    for (size_t i = 0; i < newCells.size(); i += 4) {
-        auto& p0Ovm = vertexPositionsOvm.at(newCells.at(i));
-        auto& p1Ovm = vertexPositionsOvm.at(newCells.at(i + 1));
-        auto& p2Ovm = vertexPositionsOvm.at(newCells.at(i + 2));
-        auto& p3Ovm = vertexPositionsOvm.at(newCells.at(i + 3));
-        glm::vec3 p0(p0Ovm[0], p0Ovm[1], p0Ovm[2]);
-        glm::vec3 p1(p1Ovm[0], p1Ovm[1], p1Ovm[2]);
-        glm::vec3 p2(p2Ovm[0], p2Ovm[1], p2Ovm[2]);
-        glm::vec3 p3(p3Ovm[0], p3Ovm[1], p3Ovm[2]);
-        float volumeSign = -glm::sign(glm::dot(glm::cross(p1 - p0, p2 - p0), p3 - p0));
-        assert(volumeSign > 0.0f && "Invalid winding");
-        ovmMesh.add_cell(newCells.at(i), newCells.at(i + 1), newCells.at(i + 2), newCells.at(i + 3), true);
+    if (getUseVertexColors()) {
+        for (size_t i = 0; i < newCells.size(); i += 4) {
+            auto& p0Ovm = vertexPositionsOvm.at(newCells.at(i));
+            auto& p1Ovm = vertexPositionsOvm.at(newCells.at(i + 1));
+            auto& p2Ovm = vertexPositionsOvm.at(newCells.at(i + 2));
+            auto& p3Ovm = vertexPositionsOvm.at(newCells.at(i + 3));
+            glm::vec3 p0(p0Ovm[0], p0Ovm[1], p0Ovm[2]);
+            glm::vec3 p1(p1Ovm[0], p1Ovm[1], p1Ovm[2]);
+            glm::vec3 p2(p2Ovm[0], p2Ovm[1], p2Ovm[2]);
+            glm::vec3 p3(p3Ovm[0], p3Ovm[1], p3Ovm[2]);
+#ifndef NDEBUG
+            float volumeSign = -glm::sign(glm::dot(glm::cross(p1 - p0, p2 - p0), p3 - p0));
+            assert(volumeSign > 0.0f && "Invalid winding");
+#endif
+            ovmMesh.add_cell(newCells.at(i), newCells.at(i + 1), newCells.at(i + 2), newCells.at(i + 3), true);
+        }
+    }
+    if (getUseCellColors()) {
+        auto& cellColorProp = ovmRepresentationData->cellColorProp.value();
+        for (size_t i = 0; i < newCells.size(); i += 4) {
+            auto& p0Ovm = vertexPositionsOvm.at(newCells.at(i));
+            auto& p1Ovm = vertexPositionsOvm.at(newCells.at(i + 1));
+            auto& p2Ovm = vertexPositionsOvm.at(newCells.at(i + 2));
+            auto& p3Ovm = vertexPositionsOvm.at(newCells.at(i + 3));
+            glm::vec3 p0(p0Ovm[0], p0Ovm[1], p0Ovm[2]);
+            glm::vec3 p1(p1Ovm[0], p1Ovm[1], p1Ovm[2]);
+            glm::vec3 p2(p2Ovm[0], p2Ovm[1], p2Ovm[2]);
+            glm::vec3 p3(p3Ovm[0], p3Ovm[1], p3Ovm[2]);
+#ifndef NDEBUG
+            float volumeSign = -glm::sign(glm::dot(glm::cross(p1 - p0, p2 - p0), p3 - p0));
+            assert(volumeSign > 0.0f && "Invalid winding");
+#endif
+            auto newCell = ovmMesh.add_cell(
+                    newCells.at(i), newCells.at(i + 1), newCells.at(i + 2), newCells.at(i + 3), true);
+            cellColorProp[newCell] = oldCellColors.at(i / 4);
+        }
     }
 #endif
 
@@ -1338,8 +1613,10 @@ void TetMesh::subdivideAtVertex(uint32_t vertexIndex, float t) {
         glm::vec3 p1(p1Ovm[0], p1Ovm[1], p1Ovm[2]);
         glm::vec3 p2(p2Ovm[0], p2Ovm[1], p2Ovm[2]);
         glm::vec3 p3(p3Ovm[0], p3Ovm[1], p3Ovm[2]);
+#ifndef NDEBUG
         float volumeSign = -glm::sign(glm::dot(glm::cross(p1 - p0, p2 - p0), p3 - p0));
         assert(volumeSign > 0.0f && "Invalid winding");
+#endif
     }
 
     // Sanity check: Genus doesn't change from subdivision.
@@ -1358,15 +1635,29 @@ void TetMesh::updateVerticesIfNecessary() {
     if (useOvmRepresentation && verticesDirty) {
         // Update vertex data.
         auto& ovmMesh = ovmRepresentationData->ovmMesh;
-        auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
         vertexPositions.resize(ovmMesh.n_vertices());
-        vertexColors.resize(ovmMesh.n_vertices());
         for (OpenVolumeMesh::VertexIter v_it = ovmMesh.vertices_begin(); v_it != ovmMesh.vertices_end(); v_it++) {
             auto vh = *v_it;
             const auto& vertexPosition = ovmMesh.vertex(vh);
-            const auto& vertexColor = vertexColorProp[vh];
             vertexPositions.at(vh.idx()) = glm::vec3(vertexPosition[0], vertexPosition[1], vertexPosition[2]);
-            vertexColors.at(vh.idx()) = glm::vec4(vertexColor[0], vertexColor[1], vertexColor[2], vertexColor[3]);
+        }
+        if (getUseVertexColors()) {
+            auto& vertexColorProp = ovmRepresentationData->vertexColorProp.value();
+            vertexColors.resize(ovmMesh.n_vertices());
+            for (OpenVolumeMesh::VertexIter v_it = ovmMesh.vertices_begin(); v_it != ovmMesh.vertices_end(); v_it++) {
+                auto vh = *v_it;
+                const auto& vertexColor = vertexColorProp[vh];
+                vertexColors.at(vh.idx()) = glm::vec4(vertexColor[0], vertexColor[1], vertexColor[2], vertexColor[3]);
+            }
+        }
+        if (getUseCellColors()) {
+            auto& cellColorProp = ovmRepresentationData->cellColorProp.value();
+            cellColors.resize(ovmMesh.n_cells());
+            for (OpenVolumeMesh::CellIter c_it = ovmMesh.cells_begin(); c_it != ovmMesh.cells_end(); c_it++) {
+                auto ch = *c_it;
+                const auto& cellColor = cellColorProp[ch];
+                cellColors.at(ch.idx()) = glm::vec4(cellColor[0], cellColor[1], cellColor[2], cellColor[3]);
+            }
         }
 
         boundingBox = {};
@@ -1494,21 +1785,43 @@ void TetMesh::splitByLargestGradientMagnitudes(
                     device, vertexPositionGradientBuffer->getSizeInBytes(),
                     VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
         }
-        if (!vertexColorGradientBufferCpu
-                || vertexColorGradientBufferCpu->getSizeInBytes() != vertexColorGradientBuffer->getSizeInBytes()) {
-            vertexColorGradientBufferCpu = std::make_shared<sgl::vk::Buffer>(
-                    device, vertexColorGradientBuffer->getSizeInBytes(),
-                    VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        if (getUseVertexColors()) {
+            if (!vertexColorGradientBufferCpu
+                    || vertexColorGradientBufferCpu->getSizeInBytes() != vertexColorGradientBuffer->getSizeInBytes()) {
+                vertexColorGradientBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                        device, vertexColorGradientBuffer->getSizeInBytes(),
+                        VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+            }
+        }
+        if (getUseCellColors()) {
+            if (!cellColorGradientBufferCpu
+                    || cellColorGradientBufferCpu->getSizeInBytes() != cellColorGradientBuffer->getSizeInBytes()) {
+                cellColorGradientBufferCpu = std::make_shared<sgl::vk::Buffer>(
+                        device, cellColorGradientBuffer->getSizeInBytes(),
+                        VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+            }
         }
         vertexPositionGradientBuffer->copyDataTo(
                 vertexPositionGradientBufferCpu, 0, 0, vertexPositionGradientBuffer->getSizeInBytes(),
                 renderer->getVkCommandBuffer());
-        vertexColorGradientBuffer->copyDataTo(
-                vertexColorGradientBufferCpu, 0, 0, vertexColorGradientBuffer->getSizeInBytes(),
-                renderer->getVkCommandBuffer());
+        if (getUseVertexColors()) {
+            vertexColorGradientBuffer->copyDataTo(
+                    vertexColorGradientBufferCpu, 0, 0, vertexColorGradientBuffer->getSizeInBytes(),
+                    renderer->getVkCommandBuffer());
+        }
+        if (getUseCellColors()) {
+            cellColorGradientBuffer->copyDataTo(
+                    cellColorGradientBufferCpu, 0, 0, cellColorGradientBuffer->getSizeInBytes(),
+                    renderer->getVkCommandBuffer());
+        }
         renderer->syncWithCpu();
         vertexPositionGradientBufferCpuPtr = vertexPositionGradientBufferCpu->mapMemory();
-        vertexColorGradientBufferCpuPtr = vertexColorGradientBufferCpu->mapMemory();
+        if (getUseVertexColors()) {
+            vertexColorGradientBufferCpuPtr = vertexColorGradientBufferCpu->mapMemory();
+        }
+        if (getUseCellColors()) {
+            cellColorGradientBufferCpuPtr = cellColorGradientBufferCpu->mapMemory();
+        }
 #ifdef BUILD_PYTHON_MODULE
     }
 #endif
@@ -1518,7 +1831,8 @@ void TetMesh::splitByLargestGradientMagnitudes(
 
     std::vector<float> gradientMagnitudes(getNumVertices());
     if (splitGradientType == SplitGradientType::POSITION
-            || splitGradientType == SplitGradientType::ABS_POSITION) {
+            || splitGradientType == SplitGradientType::ABS_POSITION
+            || getUseCellColors()) {
         computeVectorMagnitudeField(
                 reinterpret_cast<glm::vec3*>(vertexPositionGradientBufferCpuPtr),
                 gradientMagnitudes.data(), int(getNumVertices()));
@@ -1537,9 +1851,17 @@ void TetMesh::splitByLargestGradientMagnitudes(
             vertexPositionGradientBufferCpu->unmapMemory();
             vertexPositionGradientBufferCpuPtr = nullptr;
         }
-        if (vertexColorGradientBufferCpu) {
-            vertexColorGradientBufferCpu->unmapMemory();
-            vertexColorGradientBufferCpuPtr = nullptr;
+        if (getUseVertexColors()) {
+            if (vertexColorGradientBufferCpu) {
+                vertexColorGradientBufferCpu->unmapMemory();
+                vertexColorGradientBufferCpuPtr = nullptr;
+            }
+        }
+        if (getUseCellColors()) {
+            if (cellColorGradientBufferCpu) {
+                cellColorGradientBufferCpu->unmapMemory();
+                cellColorGradientBufferCpuPtr = nullptr;
+            }
         }
 #ifdef BUILD_PYTHON_MODULE
     }
@@ -1548,11 +1870,13 @@ void TetMesh::splitByLargestGradientMagnitudes(
 
 
 void TetMesh::setHexMeshConst(
-        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor) {
+        const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
+        ColorStorage ColorStorage) {
     std::vector<uint32_t> hexIndices;
     cellIndices.clear();
     vertexPositions.clear();
     vertexColors.clear();
+    cellColors.clear();
 
     // Add vertex positions & colors.
     for (int iz = 0; iz < int(zs); iz++) {
@@ -1563,7 +1887,9 @@ void TetMesh::setHexMeshConst(
                 p.y = gridAabb.min.y + (float(iy) / float(ys - 1)) * (gridAabb.max.y - gridAabb.min.y);
                 p.z = gridAabb.min.z + (float(iz) / float(zs - 1)) * (gridAabb.max.z - gridAabb.min.z);
                 vertexPositions.emplace_back(p);
-                vertexColors.emplace_back(constColor);
+                if (ColorStorage == ColorStorage::PER_VERTEX) {
+                    vertexColors.emplace_back(constColor);
+                }
             }
         }
     }
@@ -1586,6 +1912,9 @@ void TetMesh::setHexMeshConst(
                     for (int idx = 0; idx < 4; idx++) {
                         cellIndices.push_back(hex[HEX_TO_TET_TABLE[tet][idx]]);
                     }
+                    if (ColorStorage == ColorStorage::PER_CELL) {
+                        cellColors.emplace_back(constColor);
+                    }
                 }
             }
         }
@@ -1598,14 +1927,14 @@ void TetMesh::setHexMeshConst(
 
 bool TetMesh::setTetrahedralizedGridFTetWild(
         const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-        const FTetWildParams& params) {
-    return tetrahedralizeGridFTetWild(this, aabb, xs, ys, zs, constColor, params);
+        ColorStorage ColorStorage, const FTetWildParams& params) {
+    return tetrahedralizeGridFTetWild(this, aabb, xs, ys, zs, constColor, ColorStorage, params);
 }
 
 bool TetMesh::setTetrahedralizedGridTetGen(
         const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-        const TetGenParams& params) {
-    return tetrahedralizeGridTetGen(this, aabb, xs, ys, zs, constColor, params);
+        ColorStorage ColorStorage, const TetGenParams& params) {
+    return tetrahedralizeGridTetGen(this, aabb, xs, ys, zs, constColor, ColorStorage, params);
 }
 
 void TetMesh::unlinkTets() {
@@ -1616,24 +1945,35 @@ void TetMesh::unlinkTets() {
     }
     std::vector<uint32_t> cellIndicesUnlinked(cellIndices.size());
     std::vector<glm::vec3> vertexPositionsUnlinked(cellIndices.size());
-    std::vector<glm::vec4> vertexColorsUnlinked(cellIndices.size());
+    std::vector<glm::vec4> vertexColorsUnlinked;
+    if (getUseVertexColors()) {
+        vertexColorsUnlinked.resize(cellIndices.size());
+    }
+    const bool useVertexColors = getUseVertexColors();
     const size_t numIndices = cellIndicesUnlinked.size();
 #ifdef USE_TBB
     tbb::parallel_for(tbb::blocked_range<size_t>(0, numIndices), [&](auto const& r) {
             for (auto i = r.begin(); i != r.end(); i++) {
 #else
 #if _OPENMP >= 201107
-    #pragma omp parallel for shared(numIndices, cellIndices, cellIndicesUnlinked, vertexPositionsUnlinked, vertexColorsUnlinked) default(none)
+    #pragma omp parallel for shared(numIndices, cellIndices, cellIndicesUnlinked, vertexPositionsUnlinked, vertexColorsUnlinked, useVertexColors) default(none)
 #endif
     for (size_t i = 0; i < numIndices; i++) {
 #endif
         size_t vidx = cellIndices.at(i);
         cellIndicesUnlinked.at(i) = uint32_t(i);
         vertexPositionsUnlinked.at(i) = vertexPositions.at(vidx);
-        vertexColorsUnlinked.at(i) = vertexColors.at(vidx);
+        if (useVertexColors) {
+            vertexColorsUnlinked.at(i) = vertexColors.at(vidx);
+        }
     }
 #ifdef USE_TBB
     });
 #endif
-    setTetMeshData(cellIndicesUnlinked, vertexPositionsUnlinked, vertexColorsUnlinked);
+    if (getUseVertexColors()) {
+        setTetMeshData(cellIndicesUnlinked, vertexPositionsUnlinked, vertexColorsUnlinked);
+    }
+    if (getUseCellColors()) {
+        setTetMeshDataCell(cellIndicesUnlinked, vertexPositionsUnlinked, cellColors);
+    }
 }

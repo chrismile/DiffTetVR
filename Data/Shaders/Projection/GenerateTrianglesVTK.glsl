@@ -62,9 +62,15 @@ layout(binding = 2, std430) readonly buffer TetIndexBuffer {
 layout(binding = 3, scalar) readonly buffer TetVertexPositionBuffer {
     vec3 tetsVertexPositions[];
 };
+#ifdef PER_VERTEX_COLORS
 layout(binding = 4, std430) readonly buffer TetVertexColorBuffer {
     vec4 tetsVertexColors[];
 };
+#else
+layout(binding = 4, std430) readonly buffer TetCellColorBuffer {
+    vec4 tetsCellColors[];
+};
+#endif
 
 // Output triangle data.
 layout(binding = 5, scalar) writeonly buffer TriangleVertexPositionBuffer {
@@ -129,19 +135,26 @@ void main() {
     // Read the tet vertex positions and colors from the global buffer.
     // tets have 4 points, 5th point here is used to insert a point in case of intersections
     vec3 tetVertexPosition[4];
+#ifdef PER_VERTEX_COLORS
     vec4 tetVertexColors[5];
+#endif
     vec4 tetVertexPositionNdc[5];
     float tetDepths[5];
     [[unroll]] for (uint tetVertIdx = 0; tetVertIdx < 4; tetVertIdx++) {
         uint tetGlobalVertIdx = tetsIndices[tetIdx * 4 + tetVertIdx];
         tetVertexPosition[tetVertIdx] = tetsVertexPositions[tetGlobalVertIdx];
+#ifdef PER_VERTEX_COLORS
         tetVertexColors[tetVertIdx] = tetsVertexColors[tetGlobalVertIdx];
+#endif
         vec4 vertexPosNdc = viewProjMat * vec4(tetsVertexPositions[tetGlobalVertIdx], 1.0);
         vertexPosNdc.xyz /= vertexPosNdc.w;
         vertexPosNdc.w = 1.0;
         tetVertexPositionNdc[tetVertIdx] = vertexPosNdc;
         tetDepths[tetVertIdx] = 0.0;
     }
+#ifndef PER_VERTEX_COLORS
+    vec4 tetColor = tetsCellColors[tetIdx];
+#endif
 
     // Do not render this cell if it is outside of the cutting planes. For most planes, cut if all points are outside.
     // For the near plane, cut if any points are outside because things can go very wrong if one of the points is behind
@@ -221,10 +234,12 @@ void main() {
     vec3 P2 = tetVertexPositionNdc[segment1[1]].xyz;
     vec3 P3 = tetVertexPositionNdc[segment2[0]].xyz;
     vec3 P4 = tetVertexPositionNdc[segment2[1]].xyz;
+#ifdef PER_VERTEX_COLORS
     vec4 C1 = tetVertexColors[segment1[0]];
     vec4 C2 = tetVertexColors[segment1[1]];
     vec4 C3 = tetVertexColors[segment2[0]];
     vec4 C4 = tetVertexColors[segment2[1]];
+#endif
 
     // Find the intersection of the projection of the two segments in the XY plane.
     // This algorithm is based on that given in Graphics Gems III, pg. 199-202.
@@ -285,8 +300,10 @@ void main() {
         float depth = GetCorrectedDepth(
                 tetVertexPositionNdc[4].x, tetVertexPositionNdc[4].y, tetVertexPositionNdc[4].z, P3.z + beta * B.z);
 
+#ifdef PER_VERTEX_COLORS
         // Find color and opacity at intersection.
         tetVertexColors[4] = (0.5 * (C1 + alpha * (C2 - C1) + C3 + beta * (C4 - C3)));
+#endif
 
         // Record the depth at the intersection.
         tetDepths[4] = depth * attenuationCoefficient;
@@ -316,10 +333,12 @@ void main() {
             tmpVec3 = P1;
             P1 = P2;
             P2 = tmpVec3;
+#ifdef PER_VERTEX_COLORS
             vec4 tmpVec4;
             tmpVec4 = C1;
             C1 = C2;
             C2 = tmpVec4;
+#endif
         }
         // From here on, we can assume P2 is the "thick" point.
 
@@ -330,11 +349,13 @@ void main() {
         float facez = (edgez + (alpha - 1.0) * pointz) / alpha;
         float depth = GetCorrectedDepth(P2.x, P2.y, P2.z, facez);
 
+#ifdef PER_VERTEX_COLORS
         // Fix color and opacity at thick point. Average color/opacity with color/opacity of opposite face.
         vec4 edgec = C3 + beta * (C4 - C3);
         vec4 pointc = C1;
         vec4 facec = (edgec + (alpha - 1.0) * pointc) / alpha;
         tetVertexColors[segment1[1]] = (0.5 * (facec + C2));
+#endif
 
         // Record thickness at thick point.
         tetDepths[segment1[1]] = depth * attenuationCoefficient;
@@ -358,9 +379,15 @@ void main() {
         vertexPositions[vertexOffset] = vec4(tetVertexPositionNdc[i0].xyz, 1.0);
         vertexPositions[vertexOffset + 1] = vec4(tetVertexPositionNdc[i1].xyz, 1.0);
         vertexPositions[vertexOffset + 2] = vec4(tetVertexPositionNdc[i2].xyz, 1.0);
+#ifdef PER_VERTEX_COLORS
         vertexColors[vertexOffset] = tetVertexColors[i0];
         vertexColors[vertexOffset + 1] = tetVertexColors[i1];
         vertexColors[vertexOffset + 2] = tetVertexColors[i2];
+#else
+        vertexColors[vertexOffset] = tetColor;
+        vertexColors[vertexOffset + 1] = tetColor;
+        vertexColors[vertexOffset + 2] = tetColor;
+#endif
         vertexDepths[vertexOffset] = tetDepths[i0];
         vertexDepths[vertexOffset + 1] = tetDepths[i1];
         vertexDepths[vertexOffset + 2] = tetDepths[i2];

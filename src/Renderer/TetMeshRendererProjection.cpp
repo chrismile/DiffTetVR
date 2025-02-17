@@ -74,7 +74,11 @@ protected:
         computeData->setStaticBuffer(volumeRenderer->getTriangleCounterBuffer(), "TriangleCounterBuffer");
         computeData->setStaticBuffer(tetMesh->getCellIndicesBuffer(), "TetIndexBuffer");
         computeData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "TetVertexPositionBuffer");
-        computeData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
+        if (tetMesh->getUseVertexColors()) {
+            computeData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
+        } else {
+            computeData->setStaticBuffer(tetMesh->getCellColorBuffer(), "TetCellColorBuffer");
+        }
         computeData->setStaticBuffer(volumeRenderer->getTriangleVertexPositionBuffer(), "TriangleVertexPositionBuffer");
         computeData->setStaticBuffer(volumeRenderer->getTriangleVertexColorBuffer(), "TriangleVertexColorBuffer");
         computeData->setStaticBuffer(volumeRenderer->getTriangleVertexDepthBuffer(), "TriangleVertexDepthBuffer");
@@ -453,7 +457,11 @@ protected:
 
         computeData->setStaticBuffer(tetMesh->getCellIndicesBuffer(), "TetIndexBuffer");
         computeData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "TetVertexPositionBuffer");
-        computeData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
+        if (tetMesh->getUseVertexColors()) {
+            computeData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
+        } else {
+            computeData->setStaticBuffer(tetMesh->getCellColorBuffer(), "TetCellColorBuffer");
+        }
 
         computeData->setStaticBuffer(volumeRenderer->getTriangleTetIndexBuffer(), "TriangleTetIndexBuffer");
 

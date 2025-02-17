@@ -89,9 +89,15 @@ layout(binding = 6, scalar) readonly buffer TetVertexPositionBuffer {
 };
 
 #ifndef SHOW_TET_QUALITY
+#ifdef PER_VERTEX_COLORS
 layout(binding = 7, scalar) readonly buffer TetVertexColorBuffer {
     vec4 tetsVertexColors[];
 };
+#else
+layout(binding = 7, scalar) readonly buffer TetCellColorBuffer {
+    vec4 tetsCellColors[];
+};
+#endif
 #else
 #define INVALID_TET 0xFFFFFFFFu
 layout(binding = 7, scalar) readonly buffer TetQualityBuffer {
@@ -138,14 +144,14 @@ void main() {
 
     // Fetch the tet vertex positions and colors.
     vec3 tetVertexPositions[4];
-#ifndef SHOW_TET_QUALITY
+#if !defined(SHOW_TET_QUALITY) && defined(PER_VERTEX_COLORS)
     vec4 tetVertexColors[4];
 #endif
     const uint tetOffset = tetIdx * 4u;
     [[unroll]] for (uint tetVertIdx = 0; tetVertIdx < 4; tetVertIdx++) {
         uint tetGlobalVertIdx = tetsIndices[tetOffset + tetVertIdx];
         tetVertexPositions[tetVertIdx] = tetsVertexPositions[tetGlobalVertIdx];
-#ifndef SHOW_TET_QUALITY
+#if !defined(SHOW_TET_QUALITY) && defined(PER_VERTEX_COLORS)
         tetVertexColors[tetVertIdx] = tetsVertexColors[tetGlobalVertIdx];
 #endif
     }
@@ -161,7 +167,7 @@ void main() {
     vec3 intersectPos0 = cameraPosition + t0 * rayDirection;
     vec3 intersectPos1 = cameraPosition + t1 * rayDirection;
 
-#ifndef SHOW_TET_QUALITY
+#if !defined(SHOW_TET_QUALITY) && defined(PER_VERTEX_COLORS)
     // Barycentric interpolation (face 0 and 1).
     uint i0, i1, i2;
     vec3 p0, p1, p2;
@@ -216,6 +222,8 @@ void main() {
 
 #else // !defined(SHOW_TET_QUALITY)
 
+#ifdef PER_VERTEX_COLORS
+
 #ifdef USE_SUBDIVS
     float tSeg = t / float(NUM_SUBDIVS);
     const float INV_N_SUB = 1.0 / float(NUM_SUBDIVS);
@@ -237,6 +245,15 @@ void main() {
     rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
     rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
 #endif
+
+#else // !defined(PER_VERTEX_COLORS)
+
+    vec4 fragmentColor = tetsCellColors[tetIdx];
+    vec4 currentColor = accumulateConst(t, fragmentColor.rgb, fragmentColor.a * attenuationCoefficient);
+    rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
+    rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
+
+#endif // PER_VERTEX_COLORS
 
 #ifdef ALPHA_MODE_STRAIGHT
     if (rayColor.a > 1e-5) {

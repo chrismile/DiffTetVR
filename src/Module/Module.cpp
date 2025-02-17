@@ -769,6 +769,9 @@ PYBIND11_MODULE(difftetvr, m) {
             .value("COLOR", SplitGradientType::COLOR)
             .value("ABS_POSITION", SplitGradientType::ABS_POSITION)
             .value("ABS_COLOR", SplitGradientType::ABS_COLOR);
+    py::enum_<ColorStorage>(m, "ColorStorage")
+            .value("PER_VERTEX", ColorStorage::PER_VERTEX)
+            .value("PER_CELL", ColorStorage::PER_CELL);
     py::enum_<TetMeshingApp>(m, "TetMeshingApp")
             .value("FTETWILD", TetMeshingApp::FTETWILD)
             .value("TETGEN", TetMeshingApp::TETGEN);
@@ -794,14 +797,15 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("set_force_use_ovm_representation", &TetMesh::setForceUseOvmRepresentation, "Coarse to fine strategy.")
             .def("set_hex_mesh_const", &TetMesh::setHexMeshConst,
                  py::arg("aabb"), py::arg("xs"), py::arg("ys"), py::arg("zs"), py::arg("const_color"),
+                 py::arg("color_storage") = ColorStorage::PER_VERTEX,
                  "Initialize with tetrahedralized hex mesh with constant color.")
             .def("set_tetrahedralized_grid_ftetwild", &TetMesh::setTetrahedralizedGridFTetWild,
                  py::arg("aabb"), py::arg("xs"), py::arg("ys"), py::arg("zs"), py::arg("const_color"),
-                 py::arg("params"),
+                 py::arg("color_storage"), py::arg("params"),
                  "Initialize with constant color tet mesh tetrahedralized from a grid using fTetWild.")
             .def("set_tetrahedralized_grid_tetgen", &TetMesh::setTetrahedralizedGridTetGen,
                  py::arg("aabb"), py::arg("xs"), py::arg("ys"), py::arg("zs"), py::arg("const_color"),
-                 py::arg("params"),
+                 py::arg("color_storage"), py::arg("params"),
                  "Initialize with constant color tet mesh tetrahedralized from a grid using TetGen.")
             .def("get_num_cells", &TetMesh::getNumCells)
             .def("get_num_vertices", &TetMesh::getNumVertices)

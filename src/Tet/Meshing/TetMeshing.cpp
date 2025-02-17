@@ -174,7 +174,7 @@ void createGridSurfaceMesh(
 bool tetrahedralizeGridFTetWild(
         TetMesh* tetMesh,
         const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-        const FTetWildParams& params) {
+        ColorStorage ColorStorage, const FTetWildParams& params) {
     if (xs < 1 || ys < 1 || zs < 1) {
         return false;
     }
@@ -222,7 +222,7 @@ bool tetrahedralizeGridFTetWild(
     }
 
     // Load the generated tet mesh from disk.
-    tetMesh->setNextLoaderUseConstColor(constColor);
+    tetMesh->setNextLoaderUseConstColor(constColor, ColorStorage);
     bool loadingSucceeded = tetMesh->loadFromFile(tetMeshFile);
     if (!loadingSucceeded) {
         return false;
@@ -242,7 +242,7 @@ bool tetrahedralizeGridFTetWild(
 bool tetrahedralizeGridTetGen(
         TetMesh* tetMesh,
         const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-        const TetGenParams& params) {
+        ColorStorage ColorStorage, const TetGenParams& params) {
     if (xs < 1 || ys < 1 || zs < 1) {
         return false;
     }
@@ -310,7 +310,7 @@ bool tetrahedralizeGridTetGen(
     }
 
     // Load the generated tet mesh from disk.
-    tetMesh->setNextLoaderUseConstColor(constColor);
+    tetMesh->setNextLoaderUseConstColor(constColor, ColorStorage);
     bool loadingSucceeded = tetMesh->loadFromFile(tetMeshFile);
     if (!loadingSucceeded) {
         return false;

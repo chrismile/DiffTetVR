@@ -33,6 +33,8 @@ layout(binding = 8, scalar) coherent buffer VertexPositionGradientBuffer {
     uint vertexPositionGradients[]; // stride: vec3
 #endif
 };
+
+#ifdef PER_VERTEX_COLORS
 layout(binding = 9, scalar) coherent buffer VertexColorGradientBuffer {
 #ifdef SUPPORT_BUFFER_FLOAT_ATOMIC_ADD
     float vertexColorGradients[]; // stride: vec4
@@ -40,6 +42,16 @@ layout(binding = 9, scalar) coherent buffer VertexColorGradientBuffer {
     uint vertexColorGradients[]; // stride: vec4
 #endif
 };
+#else
+layout(binding = 9, scalar) coherent buffer CellColorGradientBuffer {
+    // We also use the name "vertexColorGradients" here, so we can use the same name in the atomic functions.
+#ifdef SUPPORT_BUFFER_FLOAT_ATOMIC_ADD
+    float vertexColorGradients[]; // stride: vec4
+#else
+    uint vertexColorGradients[]; // stride: vec4
+#endif
+};
+#endif
 
 void atomicAddGradCol(uint idx, vec4 value) {
     const uint stride = idx * 4;

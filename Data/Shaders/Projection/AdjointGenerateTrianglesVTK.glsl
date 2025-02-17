@@ -70,9 +70,15 @@ layout(binding = 3, std430) readonly buffer TetIndexBuffer {
 layout(binding = 4, scalar) readonly buffer TetVertexPositionBuffer {
     vec3 tetsVertexPositions[];
 };
-layout(binding = 5, std430) readonly buffer TetVertexColorBuffer {
+#ifdef PER_VERTEX_COLORS
+layout(binding = 5, scalar) readonly buffer TetVertexColorBuffer {
     vec4 tetsVertexColors[];
 };
+#else
+layout(binding = 5, scalar) readonly buffer TetCellColorBuffer {
+    vec4 tetsCellColors[];
+};
+#endif
 
 // Output triangle data.
 layout(binding = 6, std430) readonly buffer TriangleTetIndexBuffer {

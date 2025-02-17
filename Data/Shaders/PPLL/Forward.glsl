@@ -34,7 +34,7 @@
 
 void getNextFragment(
         in uint i, in uint fragsCount,
-#ifdef SHOW_TET_QUALITY
+#if defined(SHOW_TET_QUALITY) || !defined(PER_VERTEX_COLORS)
         out uvec2 tetIds,
 #else
         out vec4 color,
@@ -54,7 +54,7 @@ void getNextFragment(
     frontFace = (faceBits & 1u) == 1u ? true : false;
     boundary = ((faceBits >> 1u) & 1u) == 1u ? true : false;
 
-#ifdef SHOW_TET_QUALITY
+#if defined(SHOW_TET_QUALITY) || !defined(PER_VERTEX_COLORS)
     uint faceIndexTri = faceBits >> 2u;
     tetIds = faceToTetMap[faceIndexTri];
 #if defined(SHOW_TET_QUALITY) && defined(USE_SHADING)
@@ -71,7 +71,7 @@ void getNextFragment(
     fragmentPosition = fragmentPositionWorld;
     faceNormal = normalize(cross(p1 - p0, p2 - p0));
 #endif
-#else
+#else // !defined(SHOW_TET_QUALITY) && defined(PER_VERTEX_COLORS)
     uint faceIndex = (faceBits >> 2u) * 3u;
     // Compute world space position from depth.
 #ifndef COMPUTE_SHADER // TODO
@@ -87,9 +87,11 @@ void getNextFragment(
     vec3 p0 = vertexPositions[i0];
     vec3 p1 = vertexPositions[i1];
     vec3 p2 = vertexPositions[i2];
+#ifdef PER_VERTEX_COLORS
     vec4 c0 = vertexColors[i0];
     vec4 c1 = vertexColors[i1];
     vec4 c2 = vertexColors[i2];
+#endif
 
     // Barycentric interpolation.
     vec3 d20 = p2 - p0;
@@ -154,7 +156,7 @@ vec4 frontToBackPQ(uint fragsCount) {
 #endif
     }
 
-#else // !defined(SHOW_TET_QUALITY)
+#elif defined(PER_VERTEX_COLORS) // !defined(SHOW_TET_QUALITY)
 
     vec4 fragment0Color, fragment1Color;
     float fragment0Depth, fragment1Depth;
@@ -208,6 +210,32 @@ vec4 frontToBackPQ(uint fragsCount) {
 #endif
     }
 
+#else // !defined(SHOW_TET_QUALITY) && !defined(SHOW_TET_QUALITY)
+
+    uvec2 fragmentTetIds;
+    float fragmentDepth, lastFragmentDepth;
+    bool fragmentBoundary;
+    bool fragmentFrontFace;
+
+    uint openTetId = INVALID_TET;
+    for (i = 0; i < fragsCount; i++) {
+        getNextFragment(
+                i, fragsCount, fragmentTetIds, fragmentDepth, fragmentBoundary, fragmentFrontFace);
+        bool eqA = fragmentTetIds.x != INVALID_TET && fragmentTetIds.x == openTetId;
+        bool eqB = fragmentTetIds.y != INVALID_TET && fragmentTetIds.y == openTetId;
+        if (eqA || eqB) {
+            float t = fragmentDepth - lastFragmentDepth;
+            vec4 tetColor = cellColors[openTetId];
+            vec4 currentColor = accumulateConst(t, tetColor.rgb, tetColor.a * attenuationCoefficient);
+            rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
+            rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
+        } else {
+            eqA = fragmentTetIds.y != INVALID_TET;
+        }
+        openTetId = eqA ? fragmentTetIds.y : fragmentTetIds.x;
+        lastFragmentDepth = fragmentDepth;
+    }
+    
 #endif // SHOW_TET_QUALITY
 
 #ifdef ALPHA_MODE_STRAIGHT

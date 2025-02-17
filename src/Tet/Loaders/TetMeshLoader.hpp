@@ -47,7 +47,8 @@ public:
     virtual ~TetMeshLoader() = default;
     virtual bool loadFromFile(
             const std::string& filePath, std::vector<uint32_t>& cellIndices,
-            std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors) = 0;
+            std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors,
+            std::vector<glm::vec4>& cellColors) = 0;
     // May be used to peek at the size of the data stored in the file. Returns false if not supported.
     virtual bool peekSizes(const std::string& filePath, size_t& numCells, size_t& numVertices) { return false; }
 
@@ -64,7 +65,8 @@ public:
     virtual ~TetMeshWriter() = default;
     virtual bool saveToFile(
             const std::string& filePath, const std::vector<uint32_t>& cellIndices,
-            const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors) = 0;
+            const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors,
+            const std::vector<glm::vec4>& cellColors) = 0;
 
 #ifdef USE_OPEN_VOLUME_MESH
     // For formats relying on Open Volume Mesh support.

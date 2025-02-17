@@ -139,8 +139,10 @@ protected:
         const auto& tetMesh = volumeRenderer->getTetMesh();
         rasterData->setStaticBuffer(tetMesh->getTriangleIndexBuffer(), "TriangleIndicesBuffer");
         rasterData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "VertexPositionBuffer");
-        if (volumeRenderer->getShowTetQuality()) {
+        if (volumeRenderer->getShowTetQuality() || (tetMesh && tetMesh->getUseCellColors())) {
             rasterData->setStaticBuffer(tetMesh->getFaceToTetMapBuffer(), "FaceToTetMapBuffer");
+        }
+        if (volumeRenderer->getShowTetQuality()) {
             rasterData->setStaticBuffer(tetMesh->getTetQualityBuffer(), "TetQualityBuffer");
             rasterData->setStaticTexture(
                     volumeRenderer->getTransferFunctionWindow()->getTransferFunctionMapTextureVulkan(),
@@ -149,7 +151,11 @@ protected:
                     volumeRenderer->getTransferFunctionWindow()->getMinMaxUboVulkan(),
                     "MinMaxUniformBuffer");
         } else {
-            rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "VertexColorBuffer");
+            if (tetMesh->getUseVertexColors()) {
+                rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "VertexColorBuffer");
+            } else {
+                rasterData->setStaticBuffer(tetMesh->getCellColorBuffer(), "CellColorBuffer");
+            }
         }
         volumeRenderer->setRenderDataBindings(rasterData);
     }
@@ -230,7 +236,11 @@ protected:
         const auto& tetMesh = volumeRenderer->getTetMesh();
         rasterData->setStaticBuffer(tetMesh->getTriangleIndexBuffer(), "TriangleIndicesBuffer");
         rasterData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "VertexPositionBuffer");
-        rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "VertexColorBuffer");
+        if (tetMesh->getUseVertexColors()) {
+            rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "VertexColorBuffer");
+        } else {
+            rasterData->setStaticBuffer(tetMesh->getCellColorBuffer(), "CellColorBuffer");
+        }
         volumeRenderer->setRenderDataBindings(rasterData);
     }
 

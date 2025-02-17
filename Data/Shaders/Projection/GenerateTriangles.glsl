@@ -62,9 +62,15 @@ layout(binding = 2, std430) readonly buffer TetIndexBuffer {
 layout(binding = 3, scalar) readonly buffer TetVertexPositionBuffer {
     vec3 tetsVertexPositions[];
 };
-layout(binding = 4, std430) readonly buffer TetVertexColorBuffer {
+#ifdef PER_VERTEX_COLORS
+layout(binding = 4, scalar) readonly buffer TetVertexColorBuffer {
     vec4 tetsVertexColors[];
 };
+#else
+layout(binding = 4, scalar) readonly buffer TetCellColorBuffer {
+    vec4 tetsCellColors[];
+};
+#endif
 
 // Output triangle data.
 layout(binding = 5, scalar) writeonly buffer TriangleVertexPositionBuffer {
@@ -139,17 +145,24 @@ void main() {
 
     // Read the tet vertex positions and colors from the global buffer.
     vec3 tetVertexPosition[4];
+#ifdef PER_VERTEX_COLORS
     vec4 tetVertexColors[4];
+#endif
     vec4 tetVertexPositionNdc[4];
     [[unroll]] for (uint tetVertIdx = 0; tetVertIdx < 4; tetVertIdx++) {
         uint tetGlobalVertIdx = tetsIndices[tetIdx * 4 + tetVertIdx];
         tetVertexPosition[tetVertIdx] = tetsVertexPositions[tetGlobalVertIdx];
+#ifdef PER_VERTEX_COLORS
         tetVertexColors[tetVertIdx] = tetsVertexColors[tetGlobalVertIdx];
+#endif
         vec4 vertexPosNdc = viewProjMat * vec4(tetsVertexPositions[tetGlobalVertIdx], 1.0);
         vertexPosNdc.xyz /= vertexPosNdc.w;
         vertexPosNdc.w = 1.0;
         tetVertexPositionNdc[tetVertIdx] = vertexPosNdc;
     }
+#ifndef PER_VERTEX_COLORS
+    vec4 tetColor = tetsCellColors[tetIdx];
+#endif
 
 #ifdef USE_CLIP_PLANE
     bool allOutside = true;
@@ -225,19 +238,23 @@ void main() {
         vec3 pB = tetVertexPositionNdc[tetFaceTable[oppositeFaceIdx][1]].xyz;
         vec3 pC = tetVertexPositionNdc[tetFaceTable[oppositeFaceIdx][2]].xyz;
         vec3 pI = tetVertexPositionNdc[tetFaceTable[oppositeFaceIdx][3]].xyz;
+#ifdef PER_VERTEX_COLORS
         vec4 cA = tetVertexColors[tetFaceTable[oppositeFaceIdx][0]];
         vec4 cB = tetVertexColors[tetFaceTable[oppositeFaceIdx][1]];
         vec4 cC = tetVertexColors[tetFaceTable[oppositeFaceIdx][2]];
         vec4 cI = tetVertexColors[tetFaceTable[oppositeFaceIdx][3]];
+#endif
 
         // Solve Barycentric interpolation equation described in Sec. 2.4 of paper by Shirley and Tuchmann.
         // Solve for pT.z, pT.{x,y} == pI.{x,y}: pT = pA + u(pB - pA) + v(pC - pA)
         vec2 uv = inverse(mat2(pB.xy - pA.xy, pC.xy - pA.xy)) * (pI.xy - pA.xy);
         vec3 pT = vec3(pI.xy, pA.z + uv.x * (pB.z - pA.z) + uv.y * (pC.z - pA.z));
-        vec4 cT = cA + uv.x * (cB - cA) + uv.y * (cC - cA);
         vec4 pTW = invProjMat * vec4(pT, 1.0);
         vec4 pIW = invProjMat * vec4(pI, 1.0);
         float thickness = distance(pTW.xyz / pTW.w, pIW.xyz / pIW.w);
+
+#ifdef PER_VERTEX_COLORS
+        vec4 cT = cA + uv.x * (cB - cA) + uv.y * (cC - cA);
         vec4 colorFront, colorBack;
         if (numPositiveSigns > numNegativeSigns) {
             colorFront = cI;
@@ -247,10 +264,14 @@ void main() {
             colorBack = cI;
         }
         vec4 colorIntegrated = integrateColor(colorFront, colorBack, thickness);
-
         pushTri(triOffset, thickness, pT, pA, pB, colorIntegrated, cA, cB);
         pushTri(triOffset, thickness, pT, pB, pC, colorIntegrated, cB, cC);
         pushTri(triOffset, thickness, pT, pC, pA, colorIntegrated, cC, cA);
+#else
+        pushTri(triOffset, thickness, pT, pA, pB, tetColor, tetColor, tetColor);
+        pushTri(triOffset, thickness, pT, pB, pC, tetColor, tetColor, tetColor);
+        pushTri(triOffset, thickness, pT, pC, pA, tetColor, tetColor, tetColor);
+#endif
     } else if (caseIdx == 2) {
         // Find vertices forming lines lp and lm, which are formed by faces with sign (1, 1) and sign (-1, -1).
         uint ff0 = 4, ff1 = 4; // faces plus
@@ -282,16 +303,24 @@ void main() {
         uint bvb = bvb0 & bvb1; // vertices bits minus/back
         uint idx = findLSB(bvf);
         vec3 pf0 = tetVertexPositionNdc[idx].xyz;
+#ifdef PER_VERTEX_COLORS
         vec4 cf0 = tetVertexColors[idx];
+#endif
         idx = findMSB(bvf);
         vec3 pf1 = tetVertexPositionNdc[idx].xyz;
+#ifdef PER_VERTEX_COLORS
         vec4 cf1 = tetVertexColors[idx];
+#endif
         idx = findLSB(bvb);
         vec3 pb0 = tetVertexPositionNdc[idx].xyz;
+#ifdef PER_VERTEX_COLORS
         vec4 cb0 = tetVertexColors[idx];
+#endif
         idx = findMSB(bvb);
         vec3 pb1 = tetVertexPositionNdc[idx].xyz;
+#ifdef PER_VERTEX_COLORS
         vec4 cb1 = tetVertexColors[idx];
+#endif
 
         // Compute the perspective formula for the lines and compute their intersection in screen coordinates.
         vec3 lf = cross(pf0, pf1);
@@ -303,18 +332,25 @@ void main() {
         float tf = solveLineT(pf0.xy, pf1.xy, pIntersectScreen.xy);
         float tb = solveLineT(pb0.xy, pb1.xy, pIntersectScreen.xy);
         vec3 pF = vec3(pIntersectScreen.xy, pf0.z + tf * (pf1.z - pf0.z));
-        vec4 cF = cf0 + tf * (cf1 - cf0);
         vec3 pB = vec3(pIntersectScreen.xy, pb0.z + tf * (pb1.z - pb0.z));
-        vec4 cB = cb0 + tf * (cb1 - cb0);
         vec4 pFW = invProjMat * vec4(pF, 1.0);
         vec4 pBW = invProjMat * vec4(pB, 1.0);
         float thickness = distance(pFW.xyz / pFW.w, pBW.xyz / pBW.w);
-        vec4 colorIntegrated = integrateColor(cF, cB, thickness);
 
+#ifdef PER_VERTEX_COLORS
+        vec4 cF = cf0 + tf * (cf1 - cf0);
+        vec4 cB = cb0 + tf * (cb1 - cb0);
+        vec4 colorIntegrated = integrateColor(cF, cB, thickness);
         pushTri(triOffset, thickness, pF, pf0, pb0, colorIntegrated, cf0, cb0);
         pushTri(triOffset, thickness, pF, pf0, pb1, colorIntegrated, cf0, cb1);
         pushTri(triOffset, thickness, pF, pf1, pb0, colorIntegrated, cf1, cb0);
         pushTri(triOffset, thickness, pF, pf1, pb1, colorIntegrated, cf1, cb1);
+#else
+        pushTri(triOffset, thickness, pF, pf0, pb0, tetColor, tetColor, tetColor);
+        pushTri(triOffset, thickness, pF, pf0, pb1, tetColor, tetColor, tetColor);
+        pushTri(triOffset, thickness, pF, pf1, pb0, tetColor, tetColor, tetColor);
+        pushTri(triOffset, thickness, pF, pf1, pb1, tetColor, tetColor, tetColor);
+#endif
     } else if (caseIdx == 3) {
         // 2 triangles; find the two tris formed by 2x negative or 2x positive faces.
 
@@ -355,19 +391,22 @@ void main() {
         vec3 pA = vec3(tetVertexPositionNdc[ivThin].xyz);
         vec3 pB = vec3(tetVertexPositionNdc[ivLine0].xyz);
         vec3 pC = vec3(tetVertexPositionNdc[ivLine1].xyz);
+#ifdef PER_VERTEX_COLORS
         vec4 cF = tetVertexColors[ivProtruding];
         vec4 cA = tetVertexColors[ivThin];
         vec4 cB = tetVertexColors[ivLine0];
         vec4 cC = tetVertexColors[ivLine1];
+#endif
 
         // Compute intersection of line (eye, pF) with line (pB, pC) to get thickness.
         float t = solveLineT(pB.xy, pC.xy, pF.xy);
         vec3 pT = pB + t * (pC - pB);
-        vec4 cT = cB + t * (cC - cB);
         vec4 pFW = invProjMat * vec4(pF, 1.0);
         vec4 pTW = invProjMat * vec4(pT, 1.0);
         float thickness = distance(pFW, pTW);
         vec4 colorFront, colorBack;
+#ifdef PER_VERTEX_COLORS
+        vec4 cT = cB + t * (cC - cB);
         if (numPositiveSigns > numNegativeSigns) {
             colorFront = cF;
             colorBack = cT;
@@ -376,9 +415,12 @@ void main() {
             colorBack = cF;
         }
         vec4 colorIntegrated = integrateColor(colorFront, colorBack, thickness);
-
         pushTri(triOffset, thickness, pF, pA, pB, colorIntegrated, cA, cB);
         pushTri(triOffset, thickness, pF, pA, pC, colorIntegrated, cA, cC);
+#else
+        pushTri(triOffset, thickness, pF, pA, pB, tetColor, tetColor, tetColor);
+        pushTri(triOffset, thickness, pF, pA, pC, tetColor, tetColor, tetColor);
+#endif
     } else if (caseIdx == 4) {
         // The protruding vertex is not shared by front and back face.
         uint ff = 4, fb = 4; // face front, back
@@ -411,12 +453,15 @@ void main() {
         vec3 pF = vec3(tetVertexPositionNdc[idxf].xyz);
         vec3 pB = vec3(tetVertexPositionNdc[ivShared0].xyz);
         vec3 pC = vec3(tetVertexPositionNdc[ivShared1].xyz);
+        float thickness = distance(tetVertexPosition[ivUnique0], tetVertexPosition[ivUnique1]);
+#ifdef PER_VERTEX_COLORS
         vec4 cF = tetVertexColors[idxf];
         vec4 cB = tetVertexColors[ivShared0];
         vec4 cC = tetVertexColors[ivShared0];
-        float thickness = distance(tetVertexPosition[ivUnique0], tetVertexPosition[ivUnique1]);
         vec4 colorIntegrated = integrateColor(cF, cB, thickness);
-
         pushTri(triOffset, thickness, pF, pB, pC, colorIntegrated, cB, cC);
+#else
+        pushTri(triOffset, thickness, pF, pB, pC, tetColor, tetColor, tetColor);
+#endif
     }
 }

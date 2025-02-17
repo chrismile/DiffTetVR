@@ -37,7 +37,8 @@
 
 bool TxtTetLoader::loadFromFile(
         const std::string& filePath, std::vector<uint32_t>& cellIndices,
-        std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors) {
+        std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors,
+        std::vector<glm::vec4>& cellColors) {
     uint8_t* buffer = nullptr;
     size_t length = 0;
     bool loaded = sgl::loadFileFromSource(filePath, buffer, length, true);
@@ -50,6 +51,7 @@ bool TxtTetLoader::loadFromFile(
     std::vector<uint32_t> cellIndicesVector;
     std::vector<float> vertexPositionsVector;
     std::vector<float> vertexColorsVector;
+    std::vector<float> cellColorsVector;
     while (lineReader.isLineLeft()) {
         lineReader.readVectorLine<std::string>(linesInfo);
         if (linesInfo.size() != 2) {
@@ -99,6 +101,20 @@ bool TxtTetLoader::loadFromFile(
                         vertexColorsVector.at(0), vertexColorsVector.at(1),
                         vertexColorsVector.at(2), vertexColorsVector.at(3));
             }
+        } else if (key == "cellColors") {
+            cellColors.reserve(numEntries);
+            for (uint32_t i = 0; i < numEntries; i++) {
+                lineReader.readVectorLine<float>(cellColorsVector);
+                if (cellColorsVector.size() != 4) {
+                    sgl::Logfile::get()->writeError(
+                            "Error in TxtTetLoader::loadFromFile: Invalid number of vertex color entries.");
+                    delete[] buffer;
+                    return false;
+                }
+                cellColors.emplace_back(
+                        cellColorsVector.at(0), cellColorsVector.at(1),
+                        cellColorsVector.at(2), cellColorsVector.at(3));
+            }
         }
     }
 
@@ -125,7 +141,8 @@ bool TxtTetLoader::peekSizes(const std::string& filePath, size_t& numCells, size
     std::vector<uint32_t> cellIndices;
     std::vector<glm::vec3> vertexPositions;
     std::vector<glm::vec4> vertexColors;
-    loadFromFile(filePath, cellIndices, vertexPositions, vertexColors);
+    std::vector<glm::vec4> cellColors;
+    loadFromFile(filePath, cellIndices, vertexPositions, vertexColors, cellColors);
 
     numCells = cellIndices.size() / 4;
     numVertices = vertexPositions.size();
@@ -134,7 +151,8 @@ bool TxtTetLoader::peekSizes(const std::string& filePath, size_t& numCells, size
 
 bool TxtTetWriter::saveToFile(
         const std::string& filePath, const std::vector<uint32_t>& cellIndices,
-        const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors) {
+        const std::vector<glm::vec3>& vertexPositions, const std::vector<glm::vec4>& vertexColors,
+        const std::vector<glm::vec4>& cellColors) {
     std::ofstream file(filePath.c_str(), std::ofstream::binary);
     if (!file.is_open()) {
         sgl::Logfile::get()->writeError(
@@ -154,9 +172,18 @@ bool TxtTetWriter::saveToFile(
         file << v.x << " " << v.y << " " << v.z << "\n";
     }
 
-    file << "vertexColors " << vertexColors.size() << "\n";
-    for (const auto& v : vertexColors) {
-        file << v.x << " " << v.y << " " << v.z << " " << v.w << "\n";
+    if (!vertexColors.empty()) {
+        file << "vertexColors " << vertexColors.size() << "\n";
+        for (const auto& v : vertexColors) {
+            file << v.x << " " << v.y << " " << v.z << " " << v.w << "\n";
+        }
+    }
+
+    if (!cellColors.empty()) {
+        file << "cellColors " << cellColors.size() << "\n";
+        for (const auto& c : cellColors) {
+            file << c.x << " " << c.y << " " << c.z << " " << c.w << "\n";
+        }
     }
 
     file.close();

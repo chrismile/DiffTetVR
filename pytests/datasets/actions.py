@@ -39,6 +39,29 @@ class SplitGradientTypeAction(argparse.Action):
         setattr(namespace, self.dest, self.table[values])
 
 
+class ColorStorageAction(argparse.Action):
+    def __init__(self, *args, **kwargs):
+        table = {
+            'PER_VERTEX': d.ColorStorage.PER_VERTEX,
+            'PER_CELL': d.ColorStorage.PER_CELL,
+            'PER_VERTEX'.casefold(): d.ColorStorage.PER_VERTEX,
+            'PER_CELL'.casefold(): d.ColorStorage.PER_CELL,
+            'PER-VERTEX': d.ColorStorage.PER_VERTEX,
+            'PER-CELL': d.ColorStorage.PER_CELL,
+            'PER-VERTEX'.casefold(): d.ColorStorage.PER_VERTEX,
+            'PER-CELL'.casefold(): d.ColorStorage.PER_CELL,
+            'VERTEX': d.ColorStorage.PER_VERTEX,
+            'CELL': d.ColorStorage.PER_CELL,
+            'VERTEX'.casefold(): d.ColorStorage.PER_VERTEX,
+            'CELL'.casefold(): d.ColorStorage.PER_CELL,
+        }
+        super().__init__(*args, choices=table, **kwargs)
+        self.table = table
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, self.table[values])
+
+
 class RendererTypeAction(argparse.Action):
     def __init__(self, *args, **kwargs):
         table = {

@@ -86,9 +86,15 @@ layout(binding = 5, std430) readonly buffer TetIndexBuffer {
 layout(binding = 6, scalar) readonly buffer TetVertexPositionBuffer {
     vec3 tetsVertexPositions[];
 };
+#ifdef PER_VERTEX_COLORS
 layout(binding = 7, scalar) readonly buffer TetVertexColorBuffer {
     vec4 tetsVertexColors[];
 };
+#else
+layout(binding = 7, scalar) readonly buffer TetCellColorBuffer {
+    vec4 tetsCellColors[];
+};
+#endif
 
 in vec4 gl_FragCoord;
 layout(location = 0) flat in uint tetIdx;
@@ -110,12 +116,16 @@ void main() {
 
     // Fetch the tet vertex positions and colors.
     vec3 tetVertexPositions[4];
+#ifdef PER_VERTEX_COLORS
     vec4 tetVertexColors[4];
+#endif
     const uint tetOffset = tetIdx * 4u;
     [[unroll]] for (uint tetVertIdx = 0; tetVertIdx < 4; tetVertIdx++) {
         uint tetGlobalVertIdx = tetsIndices[tetOffset + tetVertIdx];
         tetVertexPositions[tetVertIdx] = tetsVertexPositions[tetGlobalVertIdx];
+#ifdef PER_VERTEX_COLORS
         tetVertexColors[tetVertIdx] = tetsVertexColors[tetGlobalVertIdx];
+#endif
     }
 
     uint f0, f1; //< Face index hit 0, 1.
@@ -134,13 +144,17 @@ void main() {
     vec3 pf00 = tetVertexPositions[if00];
     vec3 pf01 = tetVertexPositions[if01];
     vec3 pf02 = tetVertexPositions[if02];
+#ifdef PER_VERTEX_COLORS
     vec4 cf00 = tetVertexColors[if00];
     vec4 cf01 = tetVertexColors[if01];
     vec4 cf02 = tetVertexColors[if02];
+#endif
     vec3 bary0 = barycentricInterpolation(pf00, pf01, pf02, pf0);
     float uf0 = bary0.x;
     float vf0 = bary0.y;
+#ifdef PER_VERTEX_COLORS
     vec4 fragment0Color = cf00 * bary0.x + cf01 * bary0.y + cf02 * bary0.z;
+#endif
     if00 = tetsIndices[tetOffset + if00];
     if01 = tetsIndices[tetOffset + if01];
     if02 = tetsIndices[tetOffset + if02];
@@ -151,13 +165,17 @@ void main() {
     vec3 pf10 = tetVertexPositions[if10];
     vec3 pf11 = tetVertexPositions[if11];
     vec3 pf12 = tetVertexPositions[if12];
+#ifdef PER_VERTEX_COLORS
     vec4 cf10 = tetVertexColors[if10];
     vec4 cf11 = tetVertexColors[if11];
     vec4 cf12 = tetVertexColors[if12];
+#endif
     vec3 bary1 = barycentricInterpolation(pf10, pf11, pf12, pf1);
     float uf1 = bary1.x;
     float vf1 = bary1.y;
+#ifdef PER_VERTEX_COLORS
     vec4 fragment1Color = cf10 * bary1.x + cf11 * bary1.y + cf12 * bary1.z;
+#endif
     if10 = tetsIndices[tetOffset + if10];
     if11 = tetsIndices[tetOffset + if11];
     if12 = tetsIndices[tetOffset + if12];
@@ -177,6 +195,7 @@ void main() {
     vec4 colorRayOut = imageLoad(colorImageOpt, workIdx);
     vec4 dOut_dColorRayOut = imageLoad(adjointColors, workIdx);
 
+#ifdef PER_VERTEX_COLORS
     for (int s = NUM_SUBDIVS - 1; s > 0; s--) {
         float fbegin = (float(s)) * INV_N_SUB;
         float fmid = (float(s) + 0.5) * INV_N_SUB;
@@ -217,6 +236,9 @@ void main() {
         dOut_dcf0 += vec4((1.0 - fbegin) * dOut_dc0 + (1.0 - fend) * dOut_dc1, (1.0 - fmid) * dOut_da);
         dOut_dcf1 += vec4(fbegin * dOut_dc0 + fend * dOut_dc1, fmid * dOut_da);
     }
+#else // !defined(PER_VERTEX_COLORS)
+    // TODO
+#endif // PER_VERTEX_COLORS
 
     vec3 dOut_dpf00, dOut_dpf01, dOut_dpf02, dOut_dpf10, dOut_dpf11, dOut_dpf12;
     vec4 dOut_dcf00, dOut_dcf01, dOut_dcf02, dOut_dcf10, dOut_dcf11, dOut_dcf12;
@@ -248,12 +270,17 @@ void main() {
      * Zongxin Ye, Wenyu Li, Sidun Liu, Peng Qiao, Yong Dou.
      */
     if (useAbsGrad != 0u) {
+#ifdef PER_VERTEX_COLORS
         dOut_dcf00 = abs(dOut_dcf00);
         dOut_dcf01 = abs(dOut_dcf01);
         dOut_dcf02 = abs(dOut_dcf02);
         dOut_dcf10 = abs(dOut_dcf10);
         dOut_dcf11 = abs(dOut_dcf11);
         dOut_dcf12 = abs(dOut_dcf12);
+        
+#else
+        dOut_dc = abs(dOut_dc);
+#endif
         dOut_dpf00 = abs(dOut_dpf00);
         dOut_dpf01 = abs(dOut_dpf01);
         dOut_dpf02 = abs(dOut_dpf02);
@@ -263,6 +290,7 @@ void main() {
     }
 
     // Accumulate gradients wrt. tet properties.
+#ifdef PER_VERTEX_COLORS
     atomicAddGradCol(if00, dOut_dcf00);
     atomicAddGradCol(if01, dOut_dcf01);
     atomicAddGradCol(if02, dOut_dcf02);
@@ -270,6 +298,9 @@ void main() {
     atomicAddGradCol(if10, dOut_dcf10);
     atomicAddGradCol(if11, dOut_dcf11);
     atomicAddGradCol(if12, dOut_dcf12);
+#else
+    atomicAddGradCol(tetIdx, dOut_dc);
+#endif
 
     atomicAddGradPos(if00, dOut_dpf00);
     atomicAddGradPos(if01, dOut_dpf01);

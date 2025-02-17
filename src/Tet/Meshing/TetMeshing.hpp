@@ -30,6 +30,7 @@
 #define DIFFTETVR_TETMESHING_HPP
 
 #include <Math/Geometry/AABB3.hpp>
+#include "../ColorStorage.hpp"
 
 class TetMesh;
 
@@ -78,13 +79,14 @@ struct TetGenParams {
  * @param ys The number of vertices in x direction.
  * @param zs The number of vertices in x direction.
  * @param constColor The constant color at all vertices.
+ * @param colorStorage Whether to use per-vertex or per-cell colors.
  * @param params The meshing parameters.
  * @return Whether generating the mesh was successful.
  */
 bool tetrahedralizeGridFTetWild(
         TetMesh* tetMesh,
         const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-        const FTetWildParams& params);
+        ColorStorage colorStorage, const FTetWildParams& params);
 
 /**
  * Tetrahedralizes a grid using the external application TetGen and stores it in a passed tet mesh object.
@@ -94,12 +96,13 @@ bool tetrahedralizeGridFTetWild(
  * @param ys The number of vertices in x direction.
  * @param zs The number of vertices in x direction.
  * @param constColor The constant color at all vertices.
+ * @param colorStorage Whether to use per-vertex or per-cell colors.
  * @param params The meshing parameters.
  * @return Whether generating the mesh was successful.
  */
 bool tetrahedralizeGridTetGen(
         TetMesh* tetMesh,
         const sgl::AABB3& gridAabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-        const TetGenParams& params);
+        ColorStorage colorStorage, const TetGenParams& params);
 
 #endif //DIFFTETVR_TETMESHING_HPP

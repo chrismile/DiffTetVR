@@ -114,7 +114,8 @@ bool MeshLoader::parseEdges(
 
 bool MeshLoader::loadFromFile(
         const std::string& filePath, std::vector<uint32_t>& cellIndices,
-        std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors) {
+        std::vector<glm::vec3>& vertexPositions, std::vector<glm::vec4>& vertexColors,
+        std::vector<glm::vec4>& cellColors) {
     uint8_t* buffer = nullptr;
     size_t length = 0;
     bool loaded = sgl::loadFileFromSource(filePath, buffer, length, true);

@@ -46,6 +46,7 @@ const char* const LOSS_TYPE_NAMES[] = {
         "L1", "L2"
 };
 
+// The choices COLOR, ABS_COLOR only respected if vertex colors (and not cell colors) are used.
 enum class SplitGradientType {
     POSITION, COLOR, ABS_POSITION, ABS_COLOR
 };
@@ -102,6 +103,8 @@ struct OptimizationSettings {
     bool useConstantInitGrid = false;
     InitGridType initGridType = InitGridType::DECOMPOSED_HEX_MESH;
     glm::uvec3 initGridResolution{16,16,16};
+    glm::vec4 initColor = glm::vec4(0.5f, 0.5f, 0.5f, 0.1f);
+    ColorStorage colorStorage = ColorStorage::PER_VERTEX;
     FTetWildParams fTetWildParams{};
     TetGenParams tetGenParams{};
     uint32_t maxNumTets = 1320000;

@@ -249,7 +249,11 @@ protected:
                     volumeRenderer->getTransferFunctionWindow()->getMinMaxUboVulkan(),
                     "MinMaxUniformBuffer");
         } else {
-            rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
+            if (tetMesh->getUseVertexColors()) {
+                rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
+            } else {
+                rasterData->setStaticBuffer(tetMesh->getCellColorBuffer(), "TetCellColorBuffer");
+            }
         }
         rasterData->setIndirectDrawBuffer(volumeRenderer->getDrawIndirectBuffer(), sizeof(VkDrawIndirectCommand));
         rasterData->setIndirectDrawCount(1);
@@ -329,7 +333,11 @@ protected:
         rasterData->setStaticBuffer(volumeRenderer->getTriangleTetIndexBuffer(), "TriangleTetIndexBuffer");
         rasterData->setStaticBuffer(tetMesh->getCellIndicesBuffer(), "TetIndexBuffer");
         rasterData->setStaticBuffer(tetMesh->getVertexPositionBuffer(), "TetVertexPositionBuffer");
-        rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
+        if (tetMesh->getUseVertexColors()) {
+            rasterData->setStaticBuffer(tetMesh->getVertexColorBuffer(), "TetVertexColorBuffer");
+        } else {
+            rasterData->setStaticBuffer(tetMesh->getCellColorBuffer(), "TetCellColorBuffer");
+        }
         rasterData->setIndirectDrawBuffer(volumeRenderer->getDrawIndirectBuffer(), sizeof(VkDrawIndirectCommand));
         rasterData->setIndirectDrawCount(1);
         volumeRenderer->setRenderDataBindings(rasterData);

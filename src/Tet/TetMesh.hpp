@@ -50,6 +50,7 @@
 
 #include "../Renderer/OptimizerDefines.hpp"
 #include "Meshing/TetMeshing.hpp"
+#include "ColorStorage.hpp"
 #include "TetQuality.hpp"
 
 namespace sgl {
@@ -92,6 +93,9 @@ public:
     void setTetMeshData(
             const std::vector<uint32_t>& _cellIndices, const std::vector<glm::vec3>& _vertexPositions,
             const std::vector<glm::vec4>& _vertexColors);
+    void setTetMeshDataCell(
+            const std::vector<uint32_t>& _cellIndices, const std::vector<glm::vec3>& _vertexPositions,
+            const std::vector<glm::vec4>& _cellColors);
     void loadTestData(TestCase testCase);
     bool loadFromFile(const std::string& filePath);
     bool saveToFile(const std::string& filePath);
@@ -111,22 +115,28 @@ public:
     void splitByLargestGradientMagnitudes(
             sgl::vk::Renderer* renderer, SplitGradientType splitGradientType, float splitsRatio);
     /// Initialize with tetrahedralized hex mesh with constant color.
-    void setHexMeshConst(const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor);
+    void setHexMeshConst(
+            const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
+            ColorStorage ColorStorage);
     /// Initialize with tetrahedralized boundary mesh with constant color using an external application.
     bool setTetrahedralizedGridFTetWild(
             const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-            const FTetWildParams& params);
+            ColorStorage ColorStorage, const FTetWildParams& params);
     bool setTetrahedralizedGridTetGen(
             const sgl::AABB3& aabb, uint32_t xs, uint32_t ys, uint32_t zs, const glm::vec4& constColor,
-            const TetGenParams& params);
+            ColorStorage ColorStorage, const TetGenParams& params);
 
     [[nodiscard]] const std::vector<uint32_t>& getCellIndices() { return cellIndices; }
     [[nodiscard]] const std::vector<glm::vec3>& getVertexPositions() { fetchVertexDataFromDeviceIfNecessary(); return vertexPositions; }
     [[nodiscard]] const std::vector<glm::vec4>& getVertexColors() { fetchVertexDataFromDeviceIfNecessary(); return vertexColors; }
+    [[nodiscard]] const std::vector<glm::vec4>& getCellColors() { fetchVertexDataFromDeviceIfNecessary(); return cellColors; }
+    [[nodiscard]] bool getUseVertexColors() const { return !vertexColors.empty(); }
+    [[nodiscard]] bool getUseCellColors() const { return !cellColors.empty(); }
     const sgl::vk::BufferPtr& getCellIndicesBuffer() { return cellIndicesBuffer; }
     const sgl::vk::BufferPtr& getTriangleIndexBuffer() { return triangleIndexBuffer; }
     const sgl::vk::BufferPtr& getVertexPositionBuffer() { return vertexPositionBuffer; }
     const sgl::vk::BufferPtr& getVertexColorBuffer() { return vertexColorBuffer; }
+    const sgl::vk::BufferPtr& getCellColorBuffer() { return cellColorBuffer; }
     const sgl::vk::BufferPtr& getFaceBoundaryBitBuffer() { return faceBoundaryBitBuffer; }
     const sgl::vk::BufferPtr& getVertexBoundaryBitBuffer() { return vertexBoundaryBitBuffer; }
     // Buffers below are only used for tet quality renderer.
@@ -138,6 +148,7 @@ public:
     [[nodiscard]] inline bool getUseGradients() const { return useGradients; }
     sgl::vk::BufferPtr getVertexPositionGradientBuffer() { return vertexPositionGradientBuffer; }
     sgl::vk::BufferPtr getVertexColorGradientBuffer() { return vertexColorGradientBuffer; }
+    sgl::vk::BufferPtr getCellColorGradientBuffer() { return cellColorGradientBuffer; }
 
     // PyTorch buffer interface.
 #ifdef BUILD_PYTHON_MODULE
@@ -146,6 +157,7 @@ public:
     void copyGradientsToCpu(sgl::vk::Renderer* renderer);
     torch::Tensor getVertexPositionTensor();
     torch::Tensor getVertexColorTensor();
+    torch::Tensor getCellColorTensor();
     torch::Tensor getVertexBoundaryBitTensor();
     // Experimental triangle mesh support.
     void setTriangleMeshData(
@@ -164,7 +176,7 @@ public:
     TetMeshLoader* createTetMeshLoaderByExtension(const std::string& fileExtension);
     std::map<std::string, std::function<TetMeshLoader*()>> factoriesLoader;
     // Interface such that the next loader uses a constant vertex color instead of info from the file.
-    void setNextLoaderUseConstColor(const glm::vec4& constColor);
+    void setNextLoaderUseConstColor(const glm::vec4& constColor, ColorStorage ColorStorage);
 
     // File writers.
     TetMeshWriter* createTetMeshWriterByExtension(const std::string& fileExtension);
@@ -182,7 +194,9 @@ private:
     size_t meshNumVertices = 0;
     std::vector<uint32_t> cellIndices;
     std::vector<glm::vec3> vertexPositions;
+    // Data sets can either provide vertex colors (for barycentric interpolation) or cell colors.
     std::vector<glm::vec4> vertexColors;
+    std::vector<glm::vec4> cellColors;
     sgl::AABB3 boundingBox;
     bool newData = false;
     bool verticesDirty = false;
@@ -201,6 +215,7 @@ private:
 
     bool nextLoaderUseConstColor = false;
     glm::vec4 constColorNext{};
+    ColorStorage constColorNextColorStorage = ColorStorage::PER_VERTEX;
 
     void rebuildInternalRepresentationIfNecessary_Slim();
     std::vector<FaceSlim> facesSlim;
@@ -224,6 +239,7 @@ private:
     sgl::vk::BufferPtr triangleIndexBuffer;
     sgl::vk::BufferPtr vertexPositionBuffer;
     sgl::vk::BufferPtr vertexColorBuffer;
+    sgl::vk::BufferPtr cellColorBuffer;
     sgl::vk::BufferPtr faceBoundaryBitBuffer;
     sgl::vk::BufferPtr vertexBoundaryBitBuffer;
     // Buffers below are only used for tet quality renderer.
@@ -233,16 +249,21 @@ private:
     bool useGradients = false;
     sgl::vk::BufferPtr vertexPositionGradientBuffer;
     sgl::vk::BufferPtr vertexColorGradientBuffer;
+    sgl::vk::BufferPtr cellColorGradientBuffer;
 
     // CPU buffers.
     sgl::vk::BufferPtr vertexPositionBufferCpu;
     sgl::vk::BufferPtr vertexColorBufferCpu;
+    sgl::vk::BufferPtr cellColorBufferCpu;
     sgl::vk::BufferPtr vertexPositionGradientBufferCpu;
     sgl::vk::BufferPtr vertexColorGradientBufferCpu;
+    sgl::vk::BufferPtr cellColorGradientBufferCpu;
     void* vertexPositionBufferCpuPtr = nullptr;
     void* vertexColorBufferCpuPtr = nullptr;
+    void* cellColorBufferCpuPtr = nullptr;
     void* vertexPositionGradientBufferCpuPtr = nullptr;
     void* vertexColorGradientBufferCpuPtr = nullptr;
+    void* cellColorGradientBufferCpuPtr = nullptr;
 
 #ifdef BUILD_PYTHON_MODULE
     bool useComputeInterop = false;
@@ -250,9 +271,11 @@ private:
 #ifdef SUPPORT_COMPUTE_INTEROP
     sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexPositionBufferCu;
     sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexColorBufferCu;
+    sgl::vk::BufferComputeApiExternalMemoryVkPtr cellColorBufferCu;
     sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexBoundaryBitBufferCu;
     sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexPositionGradientBufferCu;
     sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexColorGradientBufferCu;
+    sgl::vk::BufferComputeApiExternalMemoryVkPtr cellColorGradientBufferCu;
 #endif
     bool hasTriangleMeshData = false;
 #endif

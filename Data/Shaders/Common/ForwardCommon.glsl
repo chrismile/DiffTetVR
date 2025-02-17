@@ -34,6 +34,11 @@
     return vec4(B * ((A - 1.0) * p0 + ((t - B) * A + B) * p1), 1.0 - A);
 }*/
 
+vec4 accumulateConst(float t, vec3 c, float a) {
+    float A = 1.0 - exp(-a * t);
+    return vec4(A * c, A);
+}
+
 vec4 accumulateLinearConst(float t, vec3 c0, vec3 c1, float a) {
     if (a < 1e-6) {
         // lim a->0 (t + 1.0 / a) * A - 1.0 / a) = 0
