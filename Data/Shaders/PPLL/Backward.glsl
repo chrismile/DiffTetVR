@@ -288,6 +288,11 @@ vec4 frontToBackPQ(uint fragsCount) {
                 , terminationIndex != 0u
 #endif
 );
+#ifdef USE_TERMINATION_INDEX
+        if (i <= terminationIndex) {
+            continue;
+        }
+#endif
         bool eqA = fragmentTetIds.x != INVALID_TET && fragmentTetIds.x == openTetId;
         bool eqB = fragmentTetIds.y != INVALID_TET && fragmentTetIds.y == openTetId;
         if (eqA || eqB) {
@@ -484,6 +489,9 @@ vec4 frontToBackPQ(uint fragsCount) {
         } else {
             eqA = fragmentTetIds.y != INVALID_TET;
         }
+#ifdef USE_TERMINATION_INDEX
+        if (i > terminationIndex) {
+#endif
         openTetId = eqA ? fragmentTetIds.y : fragmentTetIds.x;
         lastFragmentDepth = fragmentDepth;
         if10 = if00;
@@ -495,6 +503,9 @@ vec4 frontToBackPQ(uint fragsCount) {
         pf12 = pf02;
         uf1 = uf0;
         vf1 = vf0;
+#ifdef USE_TERMINATION_INDEX
+        }
+#endif
 #endif
     }
 

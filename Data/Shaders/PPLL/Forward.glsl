@@ -219,6 +219,11 @@ vec4 frontToBackPQ(uint fragsCount) {
 
     uint openTetId = INVALID_TET;
     for (i = 0; i < fragsCount; i++) {
+#ifdef USE_TERMINATION_INDEX
+        if (rayColor.a > earlyRayTerminationAlpha) {
+            break;
+        }
+#endif
         getNextFragment(
                 i, fragsCount, fragmentTetIds, fragmentDepth, fragmentBoundary, fragmentFrontFace);
         bool eqA = fragmentTetIds.x != INVALID_TET && fragmentTetIds.x == openTetId;
