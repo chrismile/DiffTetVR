@@ -201,6 +201,7 @@ def main():
             num_tets_init = int(args.init_grid_largest ** 3)
         else:
             num_tets_init = args.init_grid_x * args.init_grid_y * args.init_grid_z
+    color_storage = tet_mesh_opt.get_color_storage()
 
     # Create the ground truth data set.
     tet_mesh_gt = None
@@ -287,11 +288,19 @@ def main():
         renderer.reuse_intermediate_buffers_from(dataset.renderer)
 
     variables = []
-    vertex_colors = tet_mesh_opt.get_vertex_colors()
+    if color_storage == d.ColorStorage.PER_VERTEX:
+        vertex_colors = tet_mesh_opt.get_vertex_colors()
+        cell_colors = None
+    else:
+        cell_colors = tet_mesh_opt.get_cell_colors()
+        vertex_colors = None
     vertex_positions = tet_mesh_opt.get_vertex_positions()
     vertex_boundary_bit_tensor = tet_mesh_opt.get_vertex_boundary_bit_tensor()
     if args.lr_col > 0.0:
-        variables.append({'params': [vertex_colors], 'lr': args.lr_col, 'name': 'vertex_colors'})
+        if color_storage == d.ColorStorage.PER_VERTEX:
+            variables.append({'params': [vertex_colors], 'lr': args.lr_col, 'name': 'vertex_colors'})
+        else:
+            variables.append({'params': [cell_colors], 'lr': args.lr_col, 'name': 'cell_colors'})
     if args.lr_pos > 0.0:
         variables.append(
             {'params': [vertex_positions], 'lr': args.lr_pos, 'name': 'vertex_positions'})
@@ -317,7 +326,7 @@ def main():
         vtk_writer = d.TetMeshVtkWriter(vtk_file_path)
 
     def training_step(view_matrix_array, optimizer_step=True):
-        nonlocal vertex_colors
+        nonlocal vertex_colors, cell_colors
         if optimizer_step:
             optimizer.zero_grad(set_to_none=False)
             tet_mesh_opt.on_zero_grad()  # Necessary for CPU device to propagate zeros to Vulkan buffers.
@@ -330,7 +339,10 @@ def main():
                 vertex_positions.grad = torch.where(vertex_boundary_bit_tensor > 0, 0.0, vertex_positions.grad)
             optimizer.step()
             with torch.no_grad():
-                vertex_colors -= torch.min(vertex_colors, torch.zeros_like(vertex_colors))
+                if color_storage == d.ColorStorage.PER_VERTEX:
+                    vertex_colors -= torch.min(vertex_colors, torch.zeros_like(vertex_colors))
+                else:
+                    cell_colors -= torch.min(cell_colors, torch.zeros_like(cell_colors))
             tet_mesh_opt.set_vertices_changed()
         if args.record_video and optimizer_step:
             with torch.no_grad():
@@ -382,10 +394,16 @@ def main():
 
             # Split the tets incident to the vertices with the largest gradients.
             tet_mesh_opt.split_by_largest_gradient_magnitudes(renderer, args.split_grad_type, args.splits_ratio)
-            vertex_colors = tet_mesh_opt.get_vertex_colors()
+            if color_storage == d.ColorStorage.PER_VERTEX:
+                vertex_colors = tet_mesh_opt.get_vertex_colors()
+            else:
+                cell_colors = tet_mesh_opt.get_cell_colors()
             vertex_positions = tet_mesh_opt.get_vertex_positions()
             vertex_boundary_bit_tensor = tet_mesh_opt.get_vertex_boundary_bit_tensor()
-            replace_tensor_in_optimizer(optimizer, vertex_colors, 'vertex_colors')
+            if color_storage == d.ColorStorage.PER_VERTEX:
+                replace_tensor_in_optimizer(optimizer, vertex_colors, 'vertex_colors')
+            else:
+                replace_tensor_in_optimizer(optimizer, cell_colors, 'cell_colors')
             replace_tensor_in_optimizer(optimizer, vertex_positions, 'vertex_positions')
             num_splits += 1
 

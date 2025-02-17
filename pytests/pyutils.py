@@ -30,7 +30,7 @@ import difftetvr as d
 
 class DifferentiableRenderingFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, renderer, tet_regularizer, use_abs_grad, vertex_positions, vertex_colors):
+    def forward(ctx, renderer, tet_regularizer, use_abs_grad, vertex_positions, colors):
         image = renderer.render()
         ctx.save_for_backward(image)
         ctx.renderer = renderer
@@ -71,6 +71,9 @@ class DifferentiableRenderer(torch.nn.Module):
     def forward(self):
         tet_mesh = self.renderer.get_tet_mesh()
         vertex_positions = tet_mesh.get_vertex_positions()
-        vertex_colors = tet_mesh.get_vertex_colors()
+        if tet_mesh.get_color_storage() == d.ColorStorage.PER_VERTEX:
+            colors = tet_mesh.get_vertex_colors()
+        else:
+            colors = tet_mesh.get_cell_colors()
         return DifferentiableRenderingFunction.apply(
-            self.renderer, self.tet_regularizer, self.use_abs_grad, vertex_positions, vertex_colors)
+            self.renderer, self.tet_regularizer, self.use_abs_grad, vertex_positions, colors)

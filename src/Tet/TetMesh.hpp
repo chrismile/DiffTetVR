@@ -132,6 +132,7 @@ public:
     [[nodiscard]] const std::vector<glm::vec4>& getCellColors() { fetchVertexDataFromDeviceIfNecessary(); return cellColors; }
     [[nodiscard]] bool getUseVertexColors() const { return !vertexColors.empty(); }
     [[nodiscard]] bool getUseCellColors() const { return !cellColors.empty(); }
+    [[nodiscard]] ColorStorage getColorStorage() const { return !vertexColors.empty() ? ColorStorage::PER_VERTEX : ColorStorage::PER_CELL; }
     const sgl::vk::BufferPtr& getCellIndicesBuffer() { return cellIndicesBuffer; }
     const sgl::vk::BufferPtr& getTriangleIndexBuffer() { return triangleIndexBuffer; }
     const sgl::vk::BufferPtr& getVertexPositionBuffer() { return vertexPositionBuffer; }

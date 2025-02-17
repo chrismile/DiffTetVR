@@ -811,7 +811,9 @@ PYBIND11_MODULE(difftetvr, m) {
             .def("get_num_vertices", &TetMesh::getNumVertices)
             .def("get_vertex_positions", &TetMesh::getVertexPositionTensor)
             .def("get_vertex_colors", &TetMesh::getVertexColorTensor)
+            .def("get_cell_colors", &TetMesh::getCellColorTensor)
             .def("get_vertex_boundary_bit_tensor", &TetMesh::getVertexBoundaryBitTensor)
+            .def("get_color_storage", &TetMesh::getColorStorage)
             .def("check_is_any_tet_degenerate", &TetMesh::checkIsAnyTetDegenerate,
                  "Returns whether any tetrahedral element is degenerate (i.e., has a volume <= 0).")
             .def("unlink_tets", &TetMesh::unlinkTets,

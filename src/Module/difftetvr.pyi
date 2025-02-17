@@ -197,7 +197,13 @@ class TetMesh:
         pass
     def get_vertex_colors(self) -> torch.Tensor:
         pass
+    def get_cell_colors(self) -> torch.Tensor:
+        pass
     def get_vertex_boundary_bit_tensor(self) -> torch.Tensor:
+        pass
+
+    def get_color_storage(self) -> ColorStorage:
+        """ Returns whether colors are stored by vertex or by cell """
         pass
 
     def check_is_any_tet_degenerate(self) -> bool:
