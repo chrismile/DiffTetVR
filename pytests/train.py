@@ -201,7 +201,6 @@ def main():
             num_tets_init = int(args.init_grid_largest ** 3)
         else:
             num_tets_init = args.init_grid_x * args.init_grid_y * args.init_grid_z
-    color_storage = tet_mesh_opt.get_color_storage()
 
     # Create the ground truth data set.
     tet_mesh_gt = None
@@ -276,6 +275,7 @@ def main():
     print(f'#Cells (init): {tet_mesh_opt.get_num_cells()}')
     print(f'#Vertices (init): {tet_mesh_opt.get_num_vertices()}')
 
+    color_storage = tet_mesh_opt.get_color_storage()
     renderer.set_tet_mesh(tet_mesh_opt)
     diff_renderer = DifferentiableRenderer(
         renderer, args.tet_regularizer, args.tet_reg_lambda, args.tet_reg_softplus_beta)
