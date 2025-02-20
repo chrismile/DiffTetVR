@@ -269,6 +269,10 @@ torch::Tensor TetMesh::getVertexPositionTensor() {
 }
 
 torch::Tensor TetMesh::getVertexColorTensor() {
+    if (!getUseVertexColors()) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::getVertexColorTensor: No vertex color data available.", false);
+    }
 #ifdef SUPPORT_COMPUTE_INTEROP
     if (useComputeInterop) {
         torch::Tensor vertexColorTensor = torch::from_blob(
@@ -304,6 +308,10 @@ torch::Tensor TetMesh::getVertexColorTensor() {
 }
 
 torch::Tensor TetMesh::getCellColorTensor() {
+    if (!getUseCellColors()) {
+        sgl::Logfile::get()->throwError(
+                "Error in TetMesh::getCellColorTensor: No cell color data available.", false);
+    }
 #ifdef SUPPORT_COMPUTE_INTEROP
     if (useComputeInterop) {
         torch::Tensor cellColorTensor = torch::from_blob(
