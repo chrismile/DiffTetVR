@@ -76,6 +76,23 @@ layout(binding = 7, scalar) readonly buffer FaceToTetMapBuffer {
 };
 #endif
 
+#ifndef PER_VERTEX_COLORS
+/*
+ * Input: The indices of the (up to two) tets incident to two tet mesh faces.
+ * Output: The tet index shared by the two faces, or INVALID_TET if no face is shared.
+ */
+uint tetIdUnion(uvec2 ids0, uvec2 ids1) {
+    uvec4 unionVals;
+    if ((ids0.x == ids1.x || ids0.x == ids1.y) && ids0.x != INVALID_TET) {
+        return ids0.x;
+    } else if ((ids0.y == ids1.x || ids0.y == ids1.y) && ids0.y != INVALID_TET) {
+        return ids0.y;
+    } else {
+        return INVALID_TET;
+    }
+}
+#endif
+
 #ifdef SHOW_TET_QUALITY
 layout(binding = 8, scalar) readonly buffer TetQualityBuffer {
     float tetQualityArray[];

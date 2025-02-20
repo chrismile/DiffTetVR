@@ -212,7 +212,7 @@ vec4 frontToBackPQ(uint fragsCount) {
 
 #else // !defined(SHOW_TET_QUALITY) && !defined(SHOW_TET_QUALITY)
 
-    uvec2 fragmentTetIds;
+    uvec2 fragmentTetIds, lastFragmentTetIds = uvec2(INVALID_TET, INVALID_TET);
     float fragmentDepth, lastFragmentDepth;
     bool fragmentBoundary;
     bool fragmentFrontFace;
@@ -226,19 +226,23 @@ vec4 frontToBackPQ(uint fragsCount) {
 #endif
         getNextFragment(
                 i, fragsCount, fragmentTetIds, fragmentDepth, fragmentBoundary, fragmentFrontFace);
-        bool eqA = fragmentTetIds.x != INVALID_TET && fragmentTetIds.x == openTetId;
-        bool eqB = fragmentTetIds.y != INVALID_TET && fragmentTetIds.y == openTetId;
-        if (eqA || eqB) {
+        openTetId = tetIdUnion(fragmentTetIds, lastFragmentTetIds);
+        // tetIdUnion is more stable when missing some fragments, and is the only solution for USE_TERMINATION_INDEX.
+        //bool eqA = fragmentTetIds.x != INVALID_TET && fragmentTetIds.x == openTetId;
+        //bool eqB = fragmentTetIds.y != INVALID_TET && fragmentTetIds.y == openTetId;
+        //if (eqA || eqB) {
+        if (openTetId != INVALID_TET) {
             float t = fragmentDepth - lastFragmentDepth;
             vec4 tetColor = cellColors[openTetId];
             vec4 currentColor = accumulateConst(t, tetColor.rgb, tetColor.a * attenuationCoefficient);
             rayColor.rgb = rayColor.rgb + (1.0 - rayColor.a) * currentColor.rgb;
             rayColor.a = rayColor.a + (1.0 - rayColor.a) * currentColor.a;
-        } else {
+        } /*else {
             eqA = fragmentTetIds.y != INVALID_TET;
-        }
-        openTetId = eqA ? fragmentTetIds.y : fragmentTetIds.x;
+        }*/
+        //openTetId = eqA ? fragmentTetIds.y : fragmentTetIds.x;
         lastFragmentDepth = fragmentDepth;
+        lastFragmentTetIds = fragmentTetIds;
     }
 
 #endif // SHOW_TET_QUALITY

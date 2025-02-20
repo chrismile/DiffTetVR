@@ -142,7 +142,7 @@ vec4 frontToBackPQ(uint fragsCount) {
 
 #else // !defined(PER_VERTEX_COLORS)
 
-    uvec2 fragmentTetIds;
+    uvec2 fragmentTetIds, lastFragmentTetIds = uvec2(INVALID_TET, INVALID_TET);
     float fragmentDepth, lastFragmentDepth;
     bool fragmentBoundary;
     bool fragmentFrontFace;
@@ -160,8 +160,9 @@ vec4 frontToBackPQ(uint fragsCount) {
     // Start with transparent Ray
     vec4 colorAcc;
     float A;
-    float t, tSeg;
+    float t;
 #ifdef PER_VERTEX_COLORS
+    float tSeg;
     for (i = 1; i < fragsCount; i++)
 #else
     for (i = 0; i < fragsCount; i++)
@@ -285,18 +286,21 @@ vec4 frontToBackPQ(uint fragsCount) {
                 i, fragsCount, fragmentTetIds, fragmentDepth, fragmentBoundary, fragmentFrontFace,
                 if00, if01, if02, pf0, pf00, pf01, pf02, uf0, vf0
 #ifdef USE_TERMINATION_INDEX
-                , terminationIndex != 0u
+                , i < terminationIndex
 #endif
-);
+        );
 #ifdef USE_TERMINATION_INDEX
-        if (i <= terminationIndex) {
+        if (i < terminationIndex) {
             continue;
         }
 #endif
-        bool eqA = fragmentTetIds.x != INVALID_TET && fragmentTetIds.x == openTetId;
-        bool eqB = fragmentTetIds.y != INVALID_TET && fragmentTetIds.y == openTetId;
-        if (eqA || eqB) {
-            float t = fragmentDepth - lastFragmentDepth;
+        openTetId = tetIdUnion(fragmentTetIds, lastFragmentTetIds);
+        // tetIdUnion is more stable when missing some fragments, and is the only solution for USE_TERMINATION_INDEX.
+        //bool eqA = fragmentTetIds.x != INVALID_TET && fragmentTetIds.x == openTetId;
+        //bool eqB = fragmentTetIds.y != INVALID_TET && fragmentTetIds.y == openTetId;
+        //if (eqA || eqB) {
+        if (openTetId != INVALID_TET) {
+            float t = lastFragmentDepth - fragmentDepth;
             vec4 c = cellColors[openTetId];
             colorAcc = accumulateConst(t, c.rgb, c.a * attenuationCoefficient, A);
 
@@ -320,7 +324,7 @@ vec4 frontToBackPQ(uint fragsCount) {
             // Compute adjoint for the pre-accumulation colors and opacity.
             float dOut_dt = 0.0;
             vec4 dOut_dc = vec4(0.0);
-            accumulateConstAdjoint(tSeg, c.rgb, c.a * attenuationCoefficient, A, dOut_dColorAcc, dOut_dt, dOut_dc);
+            accumulateConstAdjoint(t, c.rgb, c.a * attenuationCoefficient, A, dOut_dColorAcc, dOut_dt, dOut_dc);
             dOut_dc.a *= attenuationCoefficient;
 
 #endif // PER_VERTEX_COLORS
@@ -486,14 +490,12 @@ vec4 frontToBackPQ(uint fragsCount) {
         atomicAddGradPos(if12, dOut_dpf12);
 
 #ifndef PER_VERTEX_COLORS
-        } else {
+        } /*else {
             eqA = fragmentTetIds.y != INVALID_TET;
-        }
-#ifdef USE_TERMINATION_INDEX
-        if (i > terminationIndex) {
-#endif
-        openTetId = eqA ? fragmentTetIds.y : fragmentTetIds.x;
+        }*/
+        //openTetId = eqA ? fragmentTetIds.y : fragmentTetIds.x;
         lastFragmentDepth = fragmentDepth;
+        lastFragmentTetIds = fragmentTetIds;
         if10 = if00;
         if11 = if01;
         if12 = if02;
@@ -503,9 +505,6 @@ vec4 frontToBackPQ(uint fragsCount) {
         pf12 = pf02;
         uf1 = uf0;
         vf1 = vf0;
-#ifdef USE_TERMINATION_INDEX
-        }
-#endif
 #endif
     }
 
