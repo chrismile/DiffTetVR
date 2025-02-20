@@ -35,8 +35,9 @@ from .imgutils import load_image_array
 
 
 class ImagesDataset(torch.utils.data.Dataset, Dataset3D):
-    def __init__(self, img_dir):
+    def __init__(self, img_dir, used_device=torch.device('cpu')):
         super().__init__()
+        self.used_device = used_device
 
         images_dir = os.path.join(img_dir, 'images')
         cameras_path = os.path.join(img_dir, 'cameras.json')
@@ -88,7 +89,7 @@ class ImagesDataset(torch.utils.data.Dataset, Dataset3D):
             image_path = os.path.join(self.images_dir, camera_json['img_name'])
         else:
             raise RuntimeError('Error in ImagesDataset.__getitem__: No image entry found in .json file.')
-        image = torch.from_numpy(load_image_array(image_path)).cuda()
+        image = torch.from_numpy(load_image_array(image_path)).to(self.used_device)
         return image, self.get_view_matrix_array(idx)
 
     def get_fovy(self) -> float:

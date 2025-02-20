@@ -43,8 +43,9 @@ class NeRFSyntheticDataset(torch.utils.data.Dataset, Dataset3D):
     NOTE: synthetic_compute_aabb.py needs to be run in advance to generate AABB information.
     """
 
-    def __init__(self, data_dir, images_dir_name='train'):
+    def __init__(self, data_dir, images_dir_name='train', used_device=torch.device('cpu')):
         super().__init__()
+        self.used_device = used_device
 
         self.data_dir = data_dir
         self.images_dir = os.path.join(data_dir, images_dir_name)
@@ -95,7 +96,7 @@ class NeRFSyntheticDataset(torch.utils.data.Dataset, Dataset3D):
     def __getitem__(self, idx):
         frame = self.frames[idx]
         image_path = os.path.join(self.data_dir, frame['file_path'] + '.png')
-        image = torch.from_numpy(load_image_array(image_path)).cuda()
+        image = torch.from_numpy(load_image_array(image_path)).to(self.used_device)
         return image, self.get_view_matrix_array(idx)
 
     def get_fovy(self) -> float:

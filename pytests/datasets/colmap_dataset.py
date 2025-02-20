@@ -70,8 +70,11 @@ class ColmapDataset(torch.utils.data.Dataset, Dataset3D):
     - https://github.com/colmap/colmap/blob/main/src/colmap/scene/reconstruction_io.cc
     """
 
-    def __init__(self, data_dir, resolution=1, images_dir_name='images', sparse_dirname='sparse/0'):
+    def __init__(
+            self, data_dir, resolution=1, images_dir_name='images', sparse_dirname='sparse/0',
+            used_device=torch.device('cpu')):
         super().__init__()
+        self.used_device = used_device
 
         if resolution > 1 and '_' not in images_dir_name:
             images_dir_name += f'_{resolution}'
@@ -246,7 +249,7 @@ class ColmapDataset(torch.utils.data.Dataset, Dataset3D):
     def __getitem__(self, idx):
         camera_dict = self.camera_settings[idx]
         image_path = os.path.join(self.images_dir, camera_dict['img_name'])
-        image = torch.from_numpy(load_image_array(image_path)).cuda()
+        image = torch.from_numpy(load_image_array(image_path)).to(self.used_device)
         return image, self.get_view_matrix_array(idx)
 
     def get_fovy(self) -> float:

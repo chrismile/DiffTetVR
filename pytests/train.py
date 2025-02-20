@@ -178,9 +178,19 @@ def main():
     if not os.path.isdir(args.out_dir):
         pathlib.Path(args.out_dir).mkdir(parents=False, exist_ok=True)
 
+    used_device = torch.device('cpu')
     if args.device_name is not None:
-        d.set_device_type(torch.device(args.device_name).type)
-    # d.set_device_type(torch.device('cpu').type)
+        used_device = torch.device(args.device_name)
+        d.set_device_type(used_device.type)
+    else:
+        if torch.cuda.is_available():
+            used_device = torch.device('cuda')
+        else:
+            try:
+                if torch.xpu.is_available():
+                    used_device = torch.device('xpu')
+            except AttributeError:
+                pass
 
     renderer = d.Renderer(renderer_type=args.renderer_type)
     renderer.set_attenuation(args.attenuation)
@@ -226,17 +236,18 @@ def main():
             tet_mesh_gt, args.num_iterations, renderer, args.coarse_to_fine, args.max_num_tets, num_tets_init,
             args.img_width, args.img_height, args.cam_sample_method)
     elif args.gt_images_path is not None:
-        dataset = ImagesDataset(args.gt_images_path)
+        dataset = ImagesDataset(args.gt_images_path, used_device=used_device)
     elif args.gt_colmap_data_path is not None:
         if args.image_folder_name is None:
             args.image_folder_name = 'images'
         dataset = ColmapDataset(
             args.gt_colmap_data_path, images_dir_name=args.image_folder_name,
-            sparse_dirname=args.colmap_sparse_dirname)
+            sparse_dirname=args.colmap_sparse_dirname, used_device=used_device)
     elif args.gt_nerf_synthetic_data_path is not None:
         if args.image_folder_name is None:
             args.image_folder_name = 'train'
-        dataset = NeRFSyntheticDataset(args.gt_nerf_synthetic_data_path, images_dir_name=args.image_folder_name)
+        dataset = NeRFSyntheticDataset(
+            args.gt_nerf_synthetic_data_path, images_dir_name=args.image_folder_name, used_device=used_device)
     else:
         raise RuntimeError(
             'Either \'--gt_grid_path\', \'--gt_images_path\', \'--gt_colmap_data_path\' or '

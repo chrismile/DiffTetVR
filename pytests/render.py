@@ -46,6 +46,7 @@ def main():
     # Rendering settings.
     parser.add_argument('--renderer_type', action=RendererTypeAction, default=d.RendererType.PPLL)
     parser.add_argument('--attenuation', type=float, default=100.0)
+    parser.add_argument('--device_name', type=str, default=None)
     parser.add_argument('--img_width', type=int, default=512)
     parser.add_argument('--img_height', type=int, default=512)
 
@@ -55,6 +56,20 @@ def main():
 
     args = parser.parse_args()
 
+    used_device = torch.device('cpu')
+    if args.device_name is not None:
+        used_device = torch.device(args.device_name)
+        d.set_device_type(used_device.type)
+    else:
+        if torch.cuda.is_available():
+            used_device = torch.device('cuda')
+        else:
+            try:
+                if torch.xpu.is_available():
+                    used_device = torch.device('xpu')
+            except AttributeError:
+                pass
+
     tet_mesh = d.TetMesh()
     if args.tet_mesh_file is not None:
         tet_mesh.load_from_file(args.tet_mesh_file)
@@ -62,7 +77,7 @@ def main():
         raise RuntimeError('No tet mesh file was specified using the argument \'--tet_mesh_file\'.')
 
     if args.gt_images_path is not None:
-        dataset = ImagesDataset(args.gt_images_path)
+        dataset = ImagesDataset(args.gt_images_path, used_device=used_device)
     else:
         raise RuntimeError(
             '\'--gt_images_path\' needs to be passed to the script to specify the used ground truth data.')
