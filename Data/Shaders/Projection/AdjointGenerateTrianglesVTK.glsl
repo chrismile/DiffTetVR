@@ -135,7 +135,12 @@ void GetCorrectedDepthAdjoint(
     dOut_dz2 += dOut_dDepth * dot(dDepth_dq, dq_dz2);
 }
 
-void addTetTetVertGrads(uint tetIdx, uint tetVertIdx, vec3 dOut_dPi, vec4 dOut_dCi) {
+void addTetTetVertGrads(
+        uint tetIdx, uint tetVertIdx, vec3 dOut_dPi
+#ifdef PER_VERTEX_COLORS
+        , vec4 dOut_dCi
+#endif
+) {
     uint tetGlobalVertIdx = tetsIndices[tetIdx * 4 + tetVertIdx];
     vec4 phom = viewProjMat * vec4(tetsVertexPositions[tetGlobalVertIdx], 1.0);
     float pwsqinv = 1.0 / (phom.w * phom.w);
@@ -150,10 +155,14 @@ void addTetTetVertGrads(uint tetIdx, uint tetVertIdx, vec3 dOut_dPi, vec4 dOut_d
      * Zongxin Ye, Wenyu Li, Sidun Liu, Peng Qiao, Yong Dou.
      */
     if (useAbsGrad != 0u) {
+#ifdef PER_VERTEX_COLORS
         dOut_dCi = abs(dOut_dCi);
+#endif
         dOut_dTetP = abs(dOut_dTetP);
     }
+#ifdef PER_VERTEX_COLORS
     atomicAddGradCol(tetGlobalVertIdx, dOut_dCi);
+#endif
     atomicAddGradPos(tetGlobalVertIdx, dOut_dTetP);
 }
 
@@ -380,11 +389,15 @@ void main() {
     // Now do adjoint pass.
     uint vertexOffset = triangleIdxOffset * 3u;
     vec3 dOut_dTriP[5];
+#ifdef PER_VERTEX_COLORS
     vec4 dOut_dTriC[5];
+#endif
     float dOut_dTriD[5];
     [[unroll]] for (uint i = 0; i < 5; i++) {
         dOut_dTriP[i] = vec3(0.0);
+#ifdef PER_VERTEX_COLORS
         dOut_dTriC[i] = vec4(0.0);
+#endif
         dOut_dTriD[i] = 0.0;
     }
     uint i0 = indices[0];
@@ -405,9 +418,11 @@ void main() {
         dOut_dTriP[i0] += triangleVertexPositionGradients[vertexOffset].xyz;
         dOut_dTriP[i1] += triangleVertexPositionGradients[vertexOffset + 1].xyz;
         dOut_dTriP[i2] += triangleVertexPositionGradients[vertexOffset + 2].xyz;
+#ifdef PER_VERTEX_COLORS
         dOut_dTriC[i0] += triangleVertexColorGradients[vertexOffset];
         dOut_dTriC[i1] += triangleVertexColorGradients[vertexOffset + 1];
         dOut_dTriC[i2] += triangleVertexColorGradients[vertexOffset + 2];
+#endif
         dOut_dTriD[i0] += triangleVertexDepthGradients[vertexOffset];
         dOut_dTriD[i1] += triangleVertexDepthGradients[vertexOffset + 1];
         dOut_dTriD[i2] += triangleVertexDepthGradients[vertexOffset + 2];
@@ -427,8 +442,8 @@ void main() {
     vec4 dOut_dC2 = dOut_dTriC[segment1[1]];
     vec4 dOut_dC3 = dOut_dTriC[segment2[0]];
     vec4 dOut_dC4 = dOut_dTriC[segment2[1]];
-#else
-    
+//#else
+    //vec4 dOut_dc = triangleVertexColorGradients[tetIdx];
 #endif
     vec3 dOut_dA = vec3(0.0);
     vec3 dOut_dB = vec3(0.0);
@@ -483,6 +498,7 @@ void main() {
         //tetDepths[segment1[1]] = depth * attenuationCoefficient;
         float dOut_dDepth = dOut_dTriD[segment1[1]] * attenuationCoefficient;
 
+#ifdef PER_VERTEX_COLORS
         // Fix color and opacity at thick point. Average color/opacity with color/opacity of opposite face.
         //tetVertexColors[segment1[1]] = (0.5 * (facec + C2));
         vec4 dOut_dfacec = dOut_dTriC[segment1[1]] * 0.5;
@@ -492,7 +508,6 @@ void main() {
         //vec4 facec = (edgec + (alpha - 1.0) * pointc) / alpha;
         // tmp: vec4 dfacec_dalpha = (-edgec - pointc) / (alpha * alpha);
         // tmp: float dfacec_dC1 = 1.0 - 1.0 / alpha; // pointc == C1
-#ifdef PER_VERTEX_COLORS
         vec4 edgec = C3 + beta * (C4 - C3);
         dOut_dalpha += dot(dOut_dfacec, (-edgec - C1) / (alpha * alpha));
         dOut_dC1 += dOut_dfacec * (1.0 - 1.0 / alpha); // pointc == C1
@@ -635,6 +650,7 @@ void main() {
     //    tetVertexPositionNdc[tetVertIdx] = vertexPosNdc;
     //    tetDepths[tetVertIdx] = 0.0;
     //}
+#ifdef PER_VERTEX_COLORS
     uint tetVertexIdx;
     tetVertexIdx = segment1[0];
     addTetTetVertGrads(tetIdx, tetVertexIdx, dOut_dP1, dOut_dC1);
@@ -644,4 +660,25 @@ void main() {
     addTetTetVertGrads(tetIdx, tetVertexIdx, dOut_dP3, dOut_dC3);
     tetVertexIdx = segment2[1];
     addTetTetVertGrads(tetIdx, tetVertexIdx, dOut_dP4, dOut_dC4);
+#else
+    uint tetVertexIdx;
+    tetVertexIdx = segment1[0];
+    addTetTetVertGrads(tetIdx, tetVertexIdx, dOut_dP1);
+    tetVertexIdx = segment1[1];
+    addTetTetVertGrads(tetIdx, tetVertexIdx, dOut_dP2);
+    tetVertexIdx = segment2[0];
+    addTetTetVertGrads(tetIdx, tetVertexIdx, dOut_dP3);
+    tetVertexIdx = segment2[1];
+    addTetTetVertGrads(tetIdx, tetVertexIdx, dOut_dP4);
+    // Color gradients handled in AdjointProjectedRasterization.glsl.
+    /*
+     * For testing an idea similar to the one from the following 3DGS paper:
+     * "AbsGS: Recovering Fine Details for 3D Gaussian Splatting". 2024.
+     * Zongxin Ye, Wenyu Li, Sidun Liu, Peng Qiao, Yong Dou.
+     */
+    //if (useAbsGrad != 0u) {
+    //    dOut_dc = abs(dOut_dc);
+    //}
+    //atomicAddGradCol(tetIdx, dOut_dc);
+#endif
 }

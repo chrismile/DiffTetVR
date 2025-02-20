@@ -90,6 +90,15 @@ layout(binding = 3, std430) readonly buffer TriangleVertexDepthBuffer {
     float vertexDepths[];
 };
 
+#ifndef PER_VERTEX_COLORS
+layout(push_constant) uniform PushConstants {
+    uint useAbsGrad;
+};
+layout(binding = 6, std430) readonly buffer TriangleTetIndexBuffer {
+    uint triangleTetIndices[];
+};
+#endif
+
 layout(binding = 7, scalar) coherent buffer VertexDepthGradientBuffer {
 #ifdef SUPPORT_BUFFER_FLOAT_ATOMIC_ADD
     float vertexDepthGradients[]; // stride: float
@@ -205,7 +214,16 @@ void main() {
     atomicAddGradCol(vertexIdx1, dOut_dc1);
     atomicAddGradCol(vertexIdx2, dOut_dc2);
 #else
-    // Barycentric color gradient should be 0 in this case.
+    const uint tetIdx = triangleTetIndices[triangleIdx];
+    /*
+     * For testing an idea similar to the one from the following 3DGS paper:
+     * "AbsGS: Recovering Fine Details for 3D Gaussian Splatting". 2024.
+     * Zongxin Ye, Wenyu Li, Sidun Liu, Peng Qiao, Yong Dou.
+     */
+    if (useAbsGrad != 0u) {
+        dOut_dc = abs(dOut_dc);
+    }
+    atomicAddGradCol(tetIdx, dOut_dc);
 #endif
 
     atomicAddGradPos(vertexIdx0, dOut_dp0);

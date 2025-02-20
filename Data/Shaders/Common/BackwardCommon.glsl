@@ -34,7 +34,7 @@ layout(binding = 8, scalar) coherent buffer VertexPositionGradientBuffer {
 #endif
 };
 
-#if defined(PER_VERTEX_COLORS) || defined(PROJECTION_TRIANGLE_GRADIENTS)
+#ifdef PER_VERTEX_COLORS
 layout(binding = 9, scalar) coherent buffer VertexColorGradientBuffer {
 #ifdef SUPPORT_BUFFER_FLOAT_ATOMIC_ADD
     float vertexColorGradients[]; // stride: vec4

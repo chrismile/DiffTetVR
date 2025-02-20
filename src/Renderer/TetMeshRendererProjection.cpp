@@ -318,10 +318,17 @@ protected:
         rasterData->setStaticBuffer(volumeRenderer->getTriangleVertexDepthBuffer(), "TriangleVertexDepthBuffer");
         rasterData->setStaticBuffer(
                 volumeRenderer->getTriangleVertexPositionGradientBuffer(), "VertexPositionGradientBuffer");
-        rasterData->setStaticBuffer(
-                volumeRenderer->getTriangleVertexColorGradientBuffer(), "VertexColorGradientBuffer");
+        const auto& tetMesh = volumeRenderer->getTetMesh();
+        if (tetMesh->getUseVertexColors()) {
+            rasterData->setStaticBuffer(
+                    volumeRenderer->getTriangleVertexColorGradientBuffer(), "VertexColorGradientBuffer");
+        } else {
+            rasterData->setStaticBufferOptional(tetMesh->getCellColorGradientBuffer(), "CellColorGradientBuffer");
+        }
         rasterData->setStaticBuffer(
                 volumeRenderer->getTriangleVertexDepthGradientBuffer(), "VertexDepthGradientBuffer");
+        // Needed for per-cell color gradients.
+        rasterData->setStaticBufferOptional(volumeRenderer->getTriangleTetIndexBuffer(), "TriangleTetIndexBuffer");
         rasterData->setIndirectDrawBuffer(volumeRenderer->getDrawIndirectBuffer(), sizeof(VkDrawIndirectCommand));
         rasterData->setIndirectDrawCount(1);
         volumeRenderer->setRenderDataBindings(rasterData);
@@ -913,6 +920,12 @@ void TetMeshRendererProjection::renderAdjoint() {
     renderer->insertMemoryBarrier(
             VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+    uint32_t useAbsGradUint = useAbsGrad ? 1 : 0;
+    if (tetMesh && tetMesh->getUseCellColors()) {
+        adjointProjectedRasterPass->buildIfNecessary();
+        renderer->pushConstants(
+                adjointProjectedRasterPass->getGraphicsPipeline(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, useAbsGradUint);
+    }
     adjointProjectedRasterPass->render();
 
     // TODO: Debug code.
@@ -952,7 +965,6 @@ void TetMeshRendererProjection::renderAdjoint() {
     initializeIndirectCommandBufferAdjointPass->render();
 
     adjointGenerateTrianglesPass->buildIfNecessary();
-    uint32_t useAbsGradUint = useAbsGrad ? 1 : 0;
     renderer->pushConstants(
             adjointGenerateTrianglesPass->getComputePipeline(), VK_SHADER_STAGE_COMPUTE_BIT, 0, useAbsGradUint);
     adjointGenerateTrianglesPass->render();
