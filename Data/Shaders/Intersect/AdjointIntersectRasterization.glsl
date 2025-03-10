@@ -101,8 +101,8 @@ layout(location = 0) flat in uint tetIdx;
 layout(location = 0) out vec4 outputColor;
 
 #include "BackwardCommon.glsl"
-layout(binding = 10, rgba32f) uniform image2D colorImageOpt;
-layout(binding = 11, rgba32f) uniform image2D adjointColors;
+layout(binding = 10, rgba32f) uniform coherent image2D colorImageOpt;
+layout(binding = 11, rgba32f) uniform coherent image2D adjointColors;
 
 #include "RayIntersectionTests.glsl"
 #include "BarycentricInterpolation.glsl"

@@ -127,8 +127,8 @@ layout(location = 2) in vec4 fragmentColor;
 layout(location = 3) in float fragmentDepth;
 layout(location = 0) out vec4 outputColor;
 
-layout(binding = 10, rgba32f) uniform image2D colorImageOpt;
-layout(binding = 11, rgba32f) uniform image2D adjointColors;
+layout(binding = 10, rgba32f) uniform coherent image2D colorImageOpt;
+layout(binding = 11, rgba32f) uniform coherent image2D adjointColors;
 
 void main() {
     ivec2 workIdx = ivec2(gl_FragCoord.xy);
