@@ -122,7 +122,7 @@ source /opt/intel/oneapi/pti/0.10/env/vars.sh
 conda create -n diffdvr python=3.12
 conda activate diffdvr
 conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/xpu
 cd <path-to-difftetvr>
 pip install .
 ```
