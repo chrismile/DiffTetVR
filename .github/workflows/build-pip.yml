@@ -41,6 +41,15 @@ jobs:
           activate-environment: diffdvr
           python-version: 3.12
 
+      # On 2025-03-10, this action resulted in "System.IO.IOException: No space left on device".
+      - name: Clean up unused files
+        if: runner.os == 'Linux'
+        run: |
+          # Code below from: https://carlosbecker.com/posts/github-actions-disk-space/
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          sudo docker builder prune -a
+
       - name: Build
         shell: bash -el {0}
         run: |
