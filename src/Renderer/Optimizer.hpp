@@ -29,6 +29,8 @@
 #ifndef DIFFTETVR_OPTIMIZER_HPP
 #define DIFFTETVR_OPTIMIZER_HPP
 
+#include <chrono>
+
 #include <Graphics/Vulkan/Render/Renderer.hpp>
 
 #include "OptimizerDefines.hpp"
