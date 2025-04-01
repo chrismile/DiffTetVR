@@ -160,6 +160,9 @@ public:
     sgl::vk::SemaphoreVkComputeApiInteropPtr renderReadySemaphore;
     sgl::vk::SemaphoreVkComputeApiInteropPtr renderFinishedSemaphore;
 #endif
+#ifndef SUPPORT_SYCL_INTEROP
+    bool hasSyclManagedCommandList = false;
+#endif
 };
 static ApplicationState* sState = nullptr;
 static torch::DeviceType globalDeviceType = torch::DeviceType::CPU;
@@ -556,7 +559,29 @@ void ApplicationState::vulkanBegin() {
         if (usedDeviceType == torch::DeviceType::XPU) {
             auto& syclQueue = at::xpu::getCurrentXPUStream().queue();
             sgl::vk::setLevelZeroGlobalStateFromSyclQueue(syclQueue);
-            stream.zeCommandList = sgl::vk::syclStreamToZeCommandList(syclQueue);
+#ifndef SUPPORT_SYCL_INTEROP
+            hasSyclManagedCommandList = sgl::vk::syclGetQueueManagesCommandList(syclQueue);
+            if (hasSyclManagedCommandList) {
+                stream.zeCommandList = sgl::vk::syclStreamToZeCommandList(syclQueue);
+            } else {
+                ze_command_list_desc_t zeCommandListDesc{};
+                ze_command_list_handle_t zeCommandListHandle{};
+                zeCommandListDesc.stype = ZE_STRUCTURE_TYPE_COMMAND_LIST_DESC;
+                zeCommandListDesc.commandQueueGroupOrdinal = 0;
+                sgl::vk::checkZeResult(sgl::vk::g_levelZeroFunctionTable.zeCommandListCreate(
+                        zeContext, zeDevice, &zeCommandListDesc, &zeCommandListHandle
+                ), "Error in zeCommandListCreate: ");
+                sgl::vk::checkZeResult(sgl::vk::g_levelZeroFunctionTable.zeCommandListAppendBarrier(
+                        zeCommandListHandle, nullptr, 0, nullptr
+                ), "Error in zeCommandListAppendBarrier: ");
+                sgl::vk::checkZeResult(sgl::vk::g_levelZeroFunctionTable.zeFenceHostSynchronize(
+                        zeFence, std::numeric_limits<uint64_t>::max()
+                ), "Error in zeFenceHostSynchronize: ");
+                sgl::vk::checkZeResult(sgl::vk::g_levelZeroFunctionTable.zeCommandQueueExecuteCommandLists(
+                        zeCommandQueue, 1, &zeCommandListHandle, zeFence
+                ), "Error in zeCommandQueueExecuteCommandLists: ");
+            }
+#endif
         }
 #endif
         renderReadySemaphore->signalSemaphoreComputeApi(stream, timelineValue);

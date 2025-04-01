@@ -75,8 +75,8 @@ All packages necessary for DiffTetVR and the accompanying test scripts can be in
 export CONDA_ALWAYS_YES="true"
 conda create -n diffdvr python=3.12
 conda activate diffdvr
-conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
 conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 ```
 
 Examples how to use the Python module can be found in the directory `pytests/`.
@@ -88,12 +88,12 @@ For more details on how to install PyTorch, see: https://pytorch.org/get-started
 
 If setup.py is not able to find your CUDA installation on Linux, add the following lines to the end of `$HOME/.profile`
 and log out of and then back into your user account.
-`cuda-12.4` needs to be adapted depending on the CUDA version installed.
+`cuda-12.6` needs to be adapted depending on the CUDA version installed.
 
 ```sh
-export CPATH=/usr/local/cuda-12.4/targets/x86_64-linux/include:$CPATH
-export LD_LIBRARY_PATH=/usr/local/cuda-12.4/targets/x86_64-linux/lib:$LD_LIBRARY_PATH
-export PATH=/usr/local/cuda-12.4/bin:$PATH
+export CPATH=/usr/local/cuda-12.6/targets/x86_64-linux/include:$CPATH
+export LD_LIBRARY_PATH=/usr/local/cuda-12.6/targets/x86_64-linux/lib:$LD_LIBRARY_PATH
+export PATH=/usr/local/cuda-12.6/bin:$PATH
 ```
 
 ### Intel GPU Support
@@ -104,6 +104,8 @@ Powershell Prompt", as it does not seem to propagate the environment variables f
 
 - Step 1: Install the drivers and the "Intel Deep Learning Essentials" by following the steps at
   https://pytorch.org/docs/main/notes/get_start_xpu.html under the category "Software Prerequisite".
+  Alternatively, it can be obtained from:
+  https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html?packages=dl-essentials
 - Step 2: Open the "Anaconda Prompt" (Windows) or a terminal and activate conda (Linux).
 - Step 3: Run the following commands (replace "2025.0" by the used oneAPI version).
 
@@ -144,6 +146,31 @@ pip install .
   Example of two files on my system:
   - C:\Users\chris\miniconda3\pkgs\intel-openmp-2023.1.0-h59b6b97_46320\Library\bin\libiomp5md.dll
   - C:\Program Files (x86)\Intel\oneAPI\compiler\2025.0\bin\libiomp5md.dll
+
+
+### AMD GPU Support
+
+DiffTetVR has WIP support for AMD GPUs via the Python module. However, AMD (as of 2025-03-30) only supports PyTorch
+via ROCm on Linux and on Windows via WSL. I have not been able to get Vulkan-HIP interop to work under WSL so far.
+
+```sh
+# https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html
+sudo apt update
+sudo apt install "linux-headers-$(uname -r)" "linux-modules-extra-$(uname -r)"
+sudo apt install python3-setuptools python3-wheel
+sudo usermod -a -G render,video $LOGNAME
+wget https://repo.radeon.com/amdgpu-install/6.3.4/ubuntu/noble/amdgpu-install_6.3.60303-1_all.deb
+sudo apt install ./amdgpu-install_6.3.60304-1_all.deb
+sudo apt update
+sudo apt install amdgpu-dkms rocm
+# https://rocm.docs.amd.com/projects/radeon/en/latest/docs/install/wsl/install-radeon.html
+amdgpu-install -y --usecase=wsl,rocm,graphics --no-dkms
+
+conda create -n diffdvr python=3.12
+conda activate diffdvr
+conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm6.2.4
+```
 
 
 ## How to report bugs
