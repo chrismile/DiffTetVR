@@ -75,7 +75,9 @@ All packages necessary for DiffTetVR and the accompanying test scripts can be in
 export CONDA_ALWAYS_YES="true"
 conda create -n diffdvr python=3.12
 conda activate diffdvr
-conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
+pip install numpy sympy numba matplotlib tqdm scikit-image tensorboard opencv-python openexr
+# Alternatively to the command above: Install the dependencies via conda.  
+# conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 ```
 

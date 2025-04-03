@@ -50,8 +50,8 @@ jobs:
           # export CONDA_ALWAYS_YES="true"
           # conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv \
           # conda-forge::openexr-python pytorch torchvision torchaudio cpuonly -c pytorch
-          pip install numpy sympy numba matplotlib tqdm scikit-image tensorboard opencv-python openexr \
-          torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install numpy sympy numba matplotlib tqdm scikit-image tensorboard opencv-python openexr
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install .
 
       - name: Cache SwiftShader binaries
