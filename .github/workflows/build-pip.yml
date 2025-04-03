@@ -29,17 +29,11 @@ jobs:
         with:
           submodules: true
 
-      # CUDA is disabled for now, as it made difficulties with the default GitHub actions runners.
-      #- uses: Jimver/cuda-toolkit@v0.2.19
-      #  id: cuda-toolkit
+      #- uses: conda-incubator/setup-miniconda@v3
       #  with:
-      #    cuda: '12.4.0'
-
-      - uses: conda-incubator/setup-miniconda@v3
-        with:
-          miniconda-version: "latest"
-          activate-environment: diffdvr
-          python-version: 3.12
+      #    miniconda-version: "latest"
+      #    activate-environment: diffdvr
+      #    python-version: 3.12
 
       # On 2025-03-10, this action resulted in "System.IO.IOException: No space left on device".
       - name: Clean up unused files
@@ -53,10 +47,11 @@ jobs:
       - name: Build
         shell: bash -el {0}
         run: |
-          export CONDA_ALWAYS_YES="true"
-          #conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
-          conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv \
-          conda-forge::openexr-python pytorch torchvision torchaudio cpuonly -c pytorch
+          # export CONDA_ALWAYS_YES="true"
+          # conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv \
+          # conda-forge::openexr-python pytorch torchvision torchaudio cpuonly -c pytorch
+          pip install numpy sympy numba matplotlib tqdm scikit-image tensorboard opencv-python openexr \
+          torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install .
 
       - name: Cache SwiftShader binaries
