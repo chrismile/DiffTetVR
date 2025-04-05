@@ -29,6 +29,10 @@ jobs:
         with:
           submodules: true
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
       #- uses: conda-incubator/setup-miniconda@v3
       #  with:
       #    miniconda-version: "latest"
@@ -50,9 +54,10 @@ jobs:
           # export CONDA_ALWAYS_YES="true"
           # conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv \
           # conda-forge::openexr-python pytorch torchvision torchaudio cpuonly -c pytorch
-          pip install numpy sympy numba matplotlib tqdm scikit-image tensorboard opencv-python openexr
+          pip install numpy sympy numba matplotlib tqdm scikit-image tensorboard opencv-python openexr setuptools
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          pip install .
+          # "--no-build-isolation" seems to be only necessary for a venv build, not a conda build.
+          pip install --no-build-isolation .
 
       - name: Cache SwiftShader binaries
         id: cache-swiftshader

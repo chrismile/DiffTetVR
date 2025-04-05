@@ -55,10 +55,12 @@ Supported formats currently are:
 Please note that the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows) needs to be installed beforehand on
 Windows.
 
-To install the library as a Python module, the following command must be called in the repository directory.
+To install the library as a Python module, first install a version of PyTorch matching your GPU.
+Then, the following command must be called in the repository directory.
+It seems like `--no-build-isolation` is only necessary when installing in a Python venv, not a conda environment.
 
 ```sh
-pip install .
+pip install --no-build-isolation .
 ```
 
 If the package should be installed in a conda environment, activate the corresponding environment first as follows.
@@ -75,7 +77,7 @@ All packages necessary for DiffTetVR and the accompanying test scripts can be in
 export CONDA_ALWAYS_YES="true"
 conda create -n diffdvr python=3.12
 conda activate diffdvr
-pip install numpy sympy numba matplotlib tqdm scikit-image tensorboard opencv-python openexr
+pip install numpy sympy numba matplotlib tqdm scikit-image tensorboard opencv-python openexr setuptools
 # Alternatively to the command above: Install the dependencies via conda.  
 # conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
