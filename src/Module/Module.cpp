@@ -160,7 +160,7 @@ public:
     sgl::vk::SemaphoreVkComputeApiInteropPtr renderReadySemaphore;
     sgl::vk::SemaphoreVkComputeApiInteropPtr renderFinishedSemaphore;
 #endif
-#ifndef SUPPORT_SYCL_INTEROP
+#ifdef SUPPORT_SYCL_INTEROP
     bool hasSyclManagedCommandList = false;
 #endif
 };
@@ -532,6 +532,10 @@ ApplicationState::~ApplicationState() {
     sgl::AppSettings::get()->release();
 }
 
+// TODO
+#include <sycl/sycl.hpp>
+#include <sycl/ext/oneapi/backend/level_zero.hpp>
+
 void ApplicationState::vulkanBegin() {
     timelineValue++;
     selectNextCommandBuffer();
@@ -558,8 +562,24 @@ void ApplicationState::vulkanBegin() {
 #ifdef SUPPORT_SYCL_INTEROP
         if (usedDeviceType == torch::DeviceType::XPU) {
             auto& syclQueue = at::xpu::getCurrentXPUStream().queue();
+            syclQueue.ext_oneapi_submit_barrier();
+            // sycl_ext_oneapi_bindless_images
+            // https://github.com/intel/llvm/blob/95604ae5ca34ef2f4f0fb1643023feaab96e0b48/sycl/doc/extensions/experimental/sycl_ext_oneapi_bindless_images.asciidoc
+            // ??? ZE_EXTERNAL_SEMAPHORE_EXT_FLAG_VK_TIMELINE_SEMAPHORE_FD ???
+            sycl::ext::oneapi::experimental::external_semaphore_descriptor<sycl::ext::oneapi::experimental::resource_fd>
+                wait_external_semaphore_desc{wait_semaphore_file_descriptor,
+                sycl::ext::oneapi::experimental::external_semaphore_handle_type::opaque_fd};
+            sycl::ext::oneapi::experimental::external_semaphore extSemaphore = sycl::ext::oneapi::experimental::import_external_semaphore(
+                wait_external_semaphore_desc, syclQueue);
+            syclQueue.ext_oneapi_get_graph().add([&](sycl::handler& CGH) {
+                CGH.ext_codeplay_enqueue_native_command([=](sycl::interop_handle IH) {
+                    ze_command_list_handle_t NativeGraph =
+                        IH.ext_codeplay_get_native_graph<sycl::backend::ext_oneapi_level_zero>();
+                });
+            });
+            syclQueue.ext_oneapi_wait_external_semaphore(extSemaphore, waitValue);
+            syclQueue.ext_oneapi_signal_external_semaphore(extSemaphore, signalValue);
             sgl::vk::setLevelZeroGlobalStateFromSyclQueue(syclQueue);
-#ifndef SUPPORT_SYCL_INTEROP
             hasSyclManagedCommandList = sgl::vk::syclGetQueueManagesCommandList(syclQueue);
             if (hasSyclManagedCommandList) {
                 stream.zeCommandList = sgl::vk::syclStreamToZeCommandList(syclQueue);
@@ -581,7 +601,6 @@ void ApplicationState::vulkanBegin() {
                         zeCommandQueue, 1, &zeCommandListHandle, zeFence
                 ), "Error in zeCommandQueueExecuteCommandLists: ");
             }
-#endif
         }
 #endif
         renderReadySemaphore->signalSemaphoreComputeApi(stream, timelineValue);
