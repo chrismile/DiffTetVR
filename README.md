@@ -111,19 +111,19 @@ Powershell Prompt", as it does not seem to propagate the environment variables f
   Alternatively, it can be obtained from:
   https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html?packages=dl-essentials
 - Step 2: Open the "Anaconda Prompt" (Windows) or a terminal and activate conda (Linux).
-- Step 3: Run the following commands (replace "2025.0" by the used oneAPI version).
+- Step 3: Run the following commands (replace "2025.1" by the used oneAPI version).
 
 ```sh
 # Windows:
-"C:\Program Files (x86)\Intel\oneAPI\compiler\2025.0\env\vars.bat"
-"C:\Program Files (x86)\Intel\oneAPI\ocloc\2025.0\env\vars.bat"
+"C:\Program Files (x86)\Intel\oneAPI\compiler\2025.1\env\vars.bat"
+"C:\Program Files (x86)\Intel\oneAPI\ocloc\2025.1\env\vars.bat"
 set DISTUTILS_USE_SDK=1
 set VSLANG=1033
 set KMP_DUPLICATE_LIB_OK=TRUE
 # Linux:
-source /opt/intel/oneapi/compiler/2025.0/env/vars.sh
-source /opt/intel/oneapi/umf/0.9/env/vars.sh
-source /opt/intel/oneapi/pti/0.10/env/vars.sh
+source /opt/intel/oneapi/compiler/latest/env/vars.sh
+source /opt/intel/oneapi/umf/latest/env/vars.sh
+source /opt/intel/oneapi/pti/latest/env/vars.sh
 # All:
 conda create -n diffdvr python=3.12
 conda activate diffdvr
@@ -149,7 +149,7 @@ pip install .
   Turning off OpenMP support in setup.py doesn't seem to resolve it, so it is probably an oneAPI vs PyTorch problem?
   Example of two files on my system:
   - C:\Users\chris\miniconda3\pkgs\intel-openmp-2023.1.0-h59b6b97_46320\Library\bin\libiomp5md.dll
-  - C:\Program Files (x86)\Intel\oneAPI\compiler\2025.0\bin\libiomp5md.dll
+  - C:\Program Files (x86)\Intel\oneAPI\compiler\2025.1\bin\libiomp5md.dll
 
 
 ### AMD GPU Support

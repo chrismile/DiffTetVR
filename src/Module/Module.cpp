@@ -39,9 +39,6 @@
 #ifdef SUPPORT_HIP_INTEROP
 #include <Graphics/Vulkan/Utils/InteropHIP.hpp>
 #endif
-#ifdef SUPPORT_SYCL_INTEROP
-#include <Graphics/Vulkan/Utils/InteropLevelZero.hpp>
-#endif
 #ifdef SUPPORT_CUDA_INTEROP
 #include <c10/cuda/CUDAStream.h>
 #endif
@@ -86,14 +83,6 @@ namespace sgl { namespace vk {
 DLL_OBJECT bool initializeHipDeviceApiFunctionTable();
 DLL_OBJECT bool getIsHipDeviceApiFunctionTableInitialized();
 DLL_OBJECT void freeHipDeviceApiFunctionTable();
-}}
-#endif
-
-#ifdef SUPPORT_SYCL_INTEROP
-namespace sgl { namespace vk {
-DLL_OBJECT bool initializeLevelZeroFunctionTable();
-DLL_OBJECT bool getIsLevelZeroFunctionTableInitialized();
-DLL_OBJECT void freeLevelZeroFunctionTable();
 }}
 #endif
 
@@ -159,9 +148,6 @@ public:
 #ifdef SUPPORT_COMPUTE_INTEROP
     sgl::vk::SemaphoreVkComputeApiInteropPtr renderReadySemaphore;
     sgl::vk::SemaphoreVkComputeApiInteropPtr renderFinishedSemaphore;
-#endif
-#ifdef SUPPORT_SYCL_INTEROP
-    bool hasSyclManagedCommandList = false;
 #endif
 };
 static ApplicationState* sState = nullptr;
@@ -286,7 +272,9 @@ ApplicationState::ApplicationState() {
 #endif
 #ifdef SUPPORT_SYCL_INTEROP
     if (usedDeviceType == torch::DeviceType::XPU) {
-        //torch::xpu::synchronize(); //< Needs device index, which we might not have yet?
+        if (torch::xpu::device_count() == 1) {
+            torch::xpu::synchronize(0); //< Needs device index, which we might not have yet?
+        }
     }
 #endif
     if (usedDeviceType == torch::DeviceType::CUDA) {
@@ -335,20 +323,18 @@ ApplicationState::ApplicationState() {
     }
     if (usedDeviceType == torch::DeviceType::XPU) {
 #ifdef SUPPORT_SYCL_INTEROP
-        if (!sgl::vk::getIsLevelZeroFunctionTableInitialized()) {
-            bool success = sgl::vk::initializeLevelZeroFunctionTable();
-            if (!success) {
-                usedDeviceType = torch::DeviceType::CPU;
-                sgl::Logfile::get()->writeError(
-                        "Error in ApplicationState::ApplicationState: "
-                        "sgl::vk::initializeLevelZeroFunctionTable() failed. Switching to CPU.", false);
-            } else {
-                auto& syclQueue = at::xpu::getCurrentXPUStream().queue();
-                sgl::vk::setLevelZeroGlobalStateFromSyclQueue(syclQueue);
-                auto zeDeviceProperties = sgl::vk::retrieveZeDevicePropertiesFromSyclQueue(syclQueue);
-                deviceUuid = new uint8_t[VK_UUID_SIZE];
-                memcpy(deviceUuid, zeDeviceProperties.uuid.id, VK_UUID_SIZE);
-            }
+        bool success = torch::xpu::is_available();
+        if (!success) {
+            usedDeviceType = torch::DeviceType::CPU;
+            sgl::Logfile::get()->writeError(
+                    "Error in ApplicationState::ApplicationState: "
+                    "sgl::vk::initializeLevelZeroFunctionTable() failed. Switching to CPU.", false);
+        } else {
+            auto& syclQueue = at::xpu::getCurrentXPUStream().queue();
+            sycl::device syclDevice = syclQueue.get_device();
+            sycl::detail::uuid_type uuid = syclDevice.get_info<sycl::ext::intel::info::device::uuid>();
+            deviceUuid = new uint8_t[VK_UUID_SIZE];
+            memcpy(deviceUuid, uuid.data(), VK_UUID_SIZE);
         }
 #else
         sgl::Logfile::get()->throwError(
@@ -524,17 +510,8 @@ ApplicationState::~ApplicationState() {
         sgl::vk::freeHipDeviceApiFunctionTable();
     }
 #endif
-#ifdef SUPPORT_SYCL_INTEROP
-    if (sgl::vk::getIsLevelZeroFunctionTableInitialized()) {
-        sgl::vk::freeLevelZeroFunctionTable();
-    }
-#endif
     sgl::AppSettings::get()->release();
 }
-
-// TODO
-#include <sycl/sycl.hpp>
-#include <sycl/ext/oneapi/backend/level_zero.hpp>
 
 void ApplicationState::vulkanBegin() {
     timelineValue++;
@@ -563,44 +540,8 @@ void ApplicationState::vulkanBegin() {
         if (usedDeviceType == torch::DeviceType::XPU) {
             auto& syclQueue = at::xpu::getCurrentXPUStream().queue();
             syclQueue.ext_oneapi_submit_barrier();
-            // sycl_ext_oneapi_bindless_images
-            // https://github.com/intel/llvm/blob/95604ae5ca34ef2f4f0fb1643023feaab96e0b48/sycl/doc/extensions/experimental/sycl_ext_oneapi_bindless_images.asciidoc
-            // ??? ZE_EXTERNAL_SEMAPHORE_EXT_FLAG_VK_TIMELINE_SEMAPHORE_FD ???
-            sycl::ext::oneapi::experimental::external_semaphore_descriptor<sycl::ext::oneapi::experimental::resource_fd>
-                wait_external_semaphore_desc{wait_semaphore_file_descriptor,
-                sycl::ext::oneapi::experimental::external_semaphore_handle_type::opaque_fd};
-            sycl::ext::oneapi::experimental::external_semaphore extSemaphore = sycl::ext::oneapi::experimental::import_external_semaphore(
-                wait_external_semaphore_desc, syclQueue);
-            syclQueue.ext_oneapi_get_graph().add([&](sycl::handler& CGH) {
-                CGH.ext_codeplay_enqueue_native_command([=](sycl::interop_handle IH) {
-                    ze_command_list_handle_t NativeGraph =
-                        IH.ext_codeplay_get_native_graph<sycl::backend::ext_oneapi_level_zero>();
-                });
-            });
-            syclQueue.ext_oneapi_wait_external_semaphore(extSemaphore, waitValue);
-            syclQueue.ext_oneapi_signal_external_semaphore(extSemaphore, signalValue);
-            sgl::vk::setLevelZeroGlobalStateFromSyclQueue(syclQueue);
-            hasSyclManagedCommandList = sgl::vk::syclGetQueueManagesCommandList(syclQueue);
-            if (hasSyclManagedCommandList) {
-                stream.zeCommandList = sgl::vk::syclStreamToZeCommandList(syclQueue);
-            } else {
-                ze_command_list_desc_t zeCommandListDesc{};
-                ze_command_list_handle_t zeCommandListHandle{};
-                zeCommandListDesc.stype = ZE_STRUCTURE_TYPE_COMMAND_LIST_DESC;
-                zeCommandListDesc.commandQueueGroupOrdinal = 0;
-                sgl::vk::checkZeResult(sgl::vk::g_levelZeroFunctionTable.zeCommandListCreate(
-                        zeContext, zeDevice, &zeCommandListDesc, &zeCommandListHandle
-                ), "Error in zeCommandListCreate: ");
-                sgl::vk::checkZeResult(sgl::vk::g_levelZeroFunctionTable.zeCommandListAppendBarrier(
-                        zeCommandListHandle, nullptr, 0, nullptr
-                ), "Error in zeCommandListAppendBarrier: ");
-                sgl::vk::checkZeResult(sgl::vk::g_levelZeroFunctionTable.zeFenceHostSynchronize(
-                        zeFence, std::numeric_limits<uint64_t>::max()
-                ), "Error in zeFenceHostSynchronize: ");
-                sgl::vk::checkZeResult(sgl::vk::g_levelZeroFunctionTable.zeCommandQueueExecuteCommandLists(
-                        zeCommandQueue, 1, &zeCommandListHandle, zeFence
-                ), "Error in zeCommandQueueExecuteCommandLists: ");
-            }
+            sgl::vk::setGlobalSyclQueue(syclQueue);
+            stream.syclQueuePtr = &syclQueue;
         }
 #endif
         renderReadySemaphore->signalSemaphoreComputeApi(stream, timelineValue);
@@ -637,8 +578,8 @@ void ApplicationState::vulkanFinished() {
 #ifdef SUPPORT_SYCL_INTEROP
         if (usedDeviceType == torch::DeviceType::XPU) {
             auto& syclQueue = at::xpu::getCurrentXPUStream().queue();
-            sgl::vk::setLevelZeroGlobalStateFromSyclQueue(syclQueue);
-            stream.zeCommandList = sgl::vk::syclStreamToZeCommandList(syclQueue);
+            sgl::vk::setGlobalSyclQueue(syclQueue);
+            stream.syclQueuePtr = &syclQueue;
         }
 #endif
         renderFinishedSemaphore->waitSemaphoreComputeApi(stream, timelineValue);
