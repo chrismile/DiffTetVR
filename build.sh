@@ -170,10 +170,26 @@ is_installed_apt() {
         return 1
     fi
 }
+is_available_apt() {
+    local pkg_name="$1"
+    if [ -z "$(apt-cache search --names-only $pkg_name)" ]; then
+        return 1
+    else
+        return 0
+    fi
+}
 
 is_installed_pacman() {
     local pkg_name="$1"
     if pacman -Qs $pkg_name > /dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+is_available_pacman() {
+    local pkg_name="$1"
+    if pacman -Ss $pkg_name > /dev/null; then
         return 0
     else
         return 1
@@ -197,7 +213,16 @@ is_installed_yum() {
         return 1
     fi
 }
+is_available_yum() {
+    local pkg_name="$1"
+    if yum list "$pkg_name" > /dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
 
+# is_installed_rpm is supposedly faster than is_installed_yum.
 is_installed_rpm() {
     local pkg_name="$1"
     if rpm -q "$pkg_name" > /dev/null 2>&1; then
@@ -241,7 +266,7 @@ if $use_msys && command -v pacman &> /dev/null && [ ! -d $build_dir_debug ] && [
     if ! is_installed_pacman "mingw-w64-x86_64-boost" || ! is_installed_pacman "mingw-w64-x86_64-icu" \
             || ! is_installed_pacman "mingw-w64-x86_64-glm" || ! is_installed_pacman "mingw-w64-x86_64-libarchive" \
             || ! is_installed_pacman "mingw-w64-x86_64-tinyxml2" || ! is_installed_pacman "mingw-w64-x86_64-libpng" \
-            || ! is_installed_pacman "mingw-w64-x86_64-SDL2" || ! is_installed_pacman "mingw-w64-x86_64-SDL2_image" \
+            || ! is_installed_pacman "mingw-w64-x86_64-sdl3" || ! is_installed_pacman "mingw-w64-x86_64-sdl3-image" \
             || ! is_installed_pacman "mingw-w64-x86_64-glew" || ! is_installed_pacman "mingw-w64-x86_64-vulkan-headers" \
             || ! is_installed_pacman "mingw-w64-x86_64-vulkan-loader" \
             || ! is_installed_pacman "mingw-w64-x86_64-vulkan-validation-layers" \
@@ -250,9 +275,9 @@ if $use_msys && command -v pacman &> /dev/null && [ ! -d $build_dir_debug ] && [
         echo "------------------------"
         echo "installing dependencies "
         echo "------------------------"
-        pacman --noconfirm -S --needed mingw64/mingw-w64-x86_64-boost mingw64/mingw-w64-x86_64-icu \
+        pacman --noconfirm --needed -S mingw64/mingw-w64-x86_64-boost mingw64/mingw-w64-x86_64-icu \
         mingw64/mingw-w64-x86_64-glm mingw64/mingw-w64-x86_64-libarchive mingw64/mingw-w64-x86_64-tinyxml2 \
-        mingw64/mingw-w64-x86_64-libpng mingw64/mingw-w64-x86_64-SDL2 mingw64/mingw-w64-x86_64-SDL2_image \
+        mingw64/mingw-w64-x86_64-libpng mingw64/mingw-w64-x86_64-sdl3 mingw64/mingw-w64-x86_64-sdl3-image \
         mingw64/mingw-w64-x86_64-glew mingw64/mingw-w64-x86_64-vulkan-headers mingw64/mingw-w64-x86_64-vulkan-loader \
         mingw64/mingw-w64-x86_64-vulkan-validation-layers mingw64/mingw-w64-x86_64-shaderc \
         mingw64/mingw-w64-x86_64-jsoncpp mingw64/mingw-w64-x86_64-gmp
@@ -323,11 +348,11 @@ elif $use_macos && command -v brew &> /dev/null && [ ! -d $build_dir_debug ] && 
         if ! is_installed_brew "libpng"; then
             brew install libpng
         fi
-        if ! is_installed_brew "sdl2"; then
-            brew install sdl2
+        if ! is_installed_brew "sdl3"; then
+            brew install sdl3
         fi
-        if ! is_installed_brew "sdl2_image"; then
-            brew install sdl2_image
+        if ! is_installed_brew "sdl3_image"; then
+            brew install sdl3_image
         fi
         if ! is_installed_brew "glew"; then
             brew install glew
@@ -376,14 +401,31 @@ elif command -v apt &> /dev/null && ! $use_conda; then
         if ! is_installed_apt "libboost-filesystem-dev" || ! is_installed_apt "libicu-dev" \
                 || ! is_installed_apt "libglm-dev" || ! is_installed_apt "libarchive-dev" \
                 || ! is_installed_apt "libtinyxml2-dev" || ! is_installed_apt "libpng-dev" \
-                || ! is_installed_apt "libsdl2-dev" || ! is_installed_apt "libsdl2-image-dev" \
                 || ! is_installed_apt "libglew-dev" || ! is_installed_apt "libjsoncpp-dev" \
                 || ! is_installed_apt "libgmp-dev"; then
             echo "------------------------"
             echo "installing dependencies "
             echo "------------------------"
             sudo apt install -y libboost-filesystem-dev libicu-dev libglm-dev libarchive-dev libtinyxml2-dev libpng-dev \
-            libsdl2-dev libsdl2-image-dev libglew-dev libjsoncpp-dev libgmp-dev
+            libglew-dev libjsoncpp-dev libgmp-dev
+        fi
+        if is_available_apt "libsdl3-dev"; then
+            if ! is_installed_apt "libsdl3-dev"; then
+                sudo apt install -y libsdl3-dev
+            fi
+        else
+            if ! is_installed_apt "libsdl2-dev"; then
+                sudo apt install -y libsdl2-dev
+            fi
+        fi
+        if is_available_apt "libsdl3-image-dev"; then
+            if ! is_installed_apt "libsdl3-image-dev"; then
+                sudo apt install -y libsdl3-image-dev
+            fi
+        else
+            if ! is_installed_apt "libsdl2-image-dev"; then
+                sudo apt install -y libsdl2-image-dev
+            fi
         fi
     fi
 elif command -v pacman &> /dev/null && ! $use_conda; then
@@ -393,7 +435,7 @@ elif command -v pacman &> /dev/null && ! $use_conda; then
         echo "------------------------"
         echo "installing build essentials"
         echo "------------------------"
-        sudo pacman -S cmake git curl pkgconf base-devel patchelf
+        sudo pacman --noconfirm --needed -S cmake git curl pkgconf base-devel patchelf
     fi
 
     # Dependencies of sgl and the application.
@@ -408,31 +450,40 @@ elif command -v pacman &> /dev/null && ! $use_conda; then
             echo "------------------------"
             echo "installing dependencies "
             echo "------------------------"
-            sudo pacman -S libgl glu vulkan-devel shaderc openssl autoconf automake autoconf-archive libxinerama \
-            libxcursor pkgconf libxkbcommon wayland-protocols wayland extra-cmake-modules
+            sudo pacman --noconfirm --needed -S libgl glu vulkan-devel shaderc openssl autoconf automake \
+            autoconf-archive libxinerama libxcursor pkgconf libxkbcommon wayland-protocols wayland extra-cmake-modules
         fi
     else
         if ! is_installed_pacman "boost" || ! is_installed_pacman "icu" || ! is_installed_pacman "glm" \
                 || ! is_installed_pacman "libarchive" || ! is_installed_pacman "tinyxml2" \
-                || ! is_installed_pacman "libpng" || ! is_installed_pacman "sdl2" || ! is_installed_pacman "sdl2_image" \
-                || ! is_installed_pacman "glew" || ! is_installed_pacman "vulkan-devel" \
-                || ! is_installed_pacman "shaderc" || ! is_installed_pacman "jsoncpp" \
-                || ! is_installed_pacman "gmp"; then
+                || ! is_installed_pacman "libpng" || ! is_installed_pacman "glew" \
+                || ! is_installed_pacman "vulkan-devel" || ! is_installed_pacman "shaderc" \
+                || ! is_installed_pacman "jsoncpp" || ! is_installed_pacman "gmp"; then
             echo "------------------------"
             echo "installing dependencies "
             echo "------------------------"
-            sudo pacman -S boost icu glm libarchive tinyxml2 libpng sdl2 sdl2_image glew vulkan-devel shaderc jsoncpp \
-            gmp
+            sudo pacman --noconfirm --needed -S boost icu glm libarchive tinyxml2 libpng glew vulkan-devel shaderc \
+            jsoncpp gmp
+        fi
+        if is_available_pacman "sdl3"; then
+            if ! is_installed_pacman "sdl3"; then
+                sudo pacman --noconfirm --needed -S sdl3
+            fi
+        else
+            if ! is_installed_pacman "sdl2"; then
+                sudo pacman --noconfirm --needed -S sdl2
+            fi
         fi
     fi
 elif command -v yum &> /dev/null && ! $use_conda; then
     if ! command -v cmake &> /dev/null || ! command -v git &> /dev/null || ! command -v curl &> /dev/null \
             || ! command -v pkg-config &> /dev/null || ! command -v g++ &> /dev/null \
-            || ! command -v patchelf &> /dev/null; then
+            || ! command -v patchelf &> /dev/null || ! command -v awk &> /dev/null \
+            || ! command -v wget &> /dev/null; then
         echo "------------------------"
         echo "installing build essentials"
         echo "------------------------"
-        sudo yum install -y cmake git curl pkgconf gcc gcc-c++ patchelf
+        sudo yum install -y cmake git curl pkgconf gcc gcc-c++ patchelf gawk wget
     fi
 
     # Dependencies of sgl and the application.
@@ -459,15 +510,32 @@ elif command -v yum &> /dev/null && ! $use_conda; then
     else
         if ! is_installed_rpm "boost-devel" || ! is_installed_rpm "libicu-devel" || ! is_installed_rpm "glm-devel" \
                 || ! is_installed_rpm "libarchive-devel" || ! is_installed_rpm "tinyxml2-devel" \
-                || ! is_installed_rpm "libpng-devel" || ! is_installed_rpm "SDL2-devel" \
-                || ! is_installed_rpm "SDL2_image-devel" || ! is_installed_rpm "glew-devel" \
+                || ! is_installed_rpm "libpng-devel" || ! is_installed_rpm "glew-devel" \
                 || ! is_installed_rpm "vulkan-headers" || ! is_installed_rpm "libshaderc-devel" \
                 || ! is_installed_rpm "jsoncpp-devel" || ! is_installed_rpm "gmp-devel"; then
             echo "------------------------"
             echo "installing dependencies "
             echo "------------------------"
             sudo yum install -y boost-devel libicu-devel glm-devel libarchive-devel tinyxml2-devel libpng-devel \
-            SDL2-devel SDL2_image-devel glew-devel vulkan-headers libshaderc-devel jsoncpp-devel gmp-devel
+            glew-devel vulkan-headers libshaderc-devel jsoncpp-devel gmp-devel
+        fi
+        if is_available_yum "SDL3-devel"; then
+            if ! is_installed_rpm "SDL3-devel"; then
+                sudo yum install -y SDL3-devel
+            fi
+        else
+            if ! is_installed_rpm "SDL2-devel"; then
+                sudo yum install -y SDL2-devel
+            fi
+        fi
+        if is_available_yum "SDL3_image-devel"; then
+            if ! is_installed_rpm "SDL3_image-devel"; then
+                sudo yum install -y SDL3_image-devel
+            fi
+        else
+            if ! is_installed_rpm "SDL2_image-devel"; then
+                sudo yum install -y SDL2_image-devel
+            fi
         fi
     fi
 elif $use_conda && ! $use_macos; then
@@ -513,11 +581,10 @@ elif $use_conda && ! $use_macos; then
     if ! list_contains "$conda_pkg_list" "boost" || ! list_contains "$conda_pkg_list" "conda-forge::icu" \
             || ! list_contains "$conda_pkg_list" "glm" || ! list_contains "$conda_pkg_list" "libarchive" \
             || ! list_contains "$conda_pkg_list" "tinyxml2" || ! list_contains "$conda_pkg_list" "libpng" \
-            || ! list_contains "$conda_pkg_list" "sdl2" || ! list_contains "$conda_pkg_list" "sdl2" \
-            || ! list_contains "$conda_pkg_list" "glew" || ! list_contains "$conda_pkg_list" "cxx-compiler" \
-            || ! list_contains "$conda_pkg_list" "make" || ! list_contains "$conda_pkg_list" "cmake" \
-            || ! list_contains "$conda_pkg_list" "pkg-config" || ! list_contains "$conda_pkg_list" "gdb" \
-            || ! list_contains "$conda_pkg_list" "git" \
+            || ! list_contains "$conda_pkg_list" "sdl3" || ! list_contains "$conda_pkg_list" "glew" \
+            || ! list_contains "$conda_pkg_list" "cxx-compiler" || ! list_contains "$conda_pkg_list" "make" \
+            || ! list_contains "$conda_pkg_list" "cmake" || ! list_contains "$conda_pkg_list" "pkg-config" \
+            || ! list_contains "$conda_pkg_list" "gdb" || ! list_contains "$conda_pkg_list" "git" \
             || ! list_contains "$conda_pkg_list" "mesa-libgl-devel-cos7-x86_64" \
             || ! list_contains "$conda_pkg_list" "libglvnd-glx-cos7-x86_64" \
             || ! list_contains "$conda_pkg_list" "mesa-dri-drivers-cos7-aarch64" \
@@ -533,8 +600,8 @@ elif $use_conda && ! $use_macos; then
         echo "------------------------"
         echo "installing dependencies "
         echo "------------------------"
-        conda install -y -c conda-forge boost conda-forge::icu glm libarchive tinyxml2 libpng sdl2 sdl2 glew \
-        cxx-compiler make cmake pkg-config gdb git mesa-libgl-devel-cos7-x86_64 libglvnd-glx-cos7-x86_64 \
+        conda install -y -c conda-forge boost conda-forge::icu glm libarchive tinyxml2 libpng sdl3 glew cxx-compiler \
+        make cmake pkg-config gdb git mesa-libgl-devel-cos7-x86_64 libglvnd-glx-cos7-x86_64 \
         mesa-dri-drivers-cos7-aarch64 libxau-devel-cos7-aarch64 libselinux-devel-cos7-aarch64 \
         libxdamage-devel-cos7-aarch64 libxxf86vm-devel-cos7-aarch64 libxext-devel-cos7-aarch64 xorg-libxfixes \
         xorg-libxau xorg-libxrandr patchelf libvulkan-headers shaderc jsoncpp conda-forge::gmp
