@@ -114,9 +114,18 @@ Powershell Prompt", as it does not seem to propagate the environment variables f
 - Step 3: Run the following commands (replace "2025.1" by the used oneAPI version).
 
 ```sh
-# Windows:
+# Windows (Intel Deep Learning Essentials/oneAPI only)
 "C:\Program Files (x86)\Intel\oneAPI\compiler\2025.1\env\vars.bat"
 "C:\Program Files (x86)\Intel\oneAPI\ocloc\2025.1\env\vars.bat"
+# Windows (release from https://github.com/intel/llvm/releases only; adapt paths where necessary)
+set "CMPLR_ROOT=C:\Users\cneuhaus\Programming\Tools\sycl_windows_2025-04-25"
+set "ONEAPI_ROOT=%CMPLR_ROOT%"
+set "PATH=%CMPLR_ROOT%\bin;%PATH%"
+set "CPATH=%CMPLR_ROOT%\include;%CPATH%"
+set "INCLUDE=%CMPLR_ROOT%\include;%INCLUDE%"
+set "LIB=%CMPLR_ROOT%\lib\clang\21\lib\windows;%CMPLR_ROOT%\lib;%LIB%"
+call "%ProgramFiles%\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" amd64
+# Windows (all)
 set DISTUTILS_USE_SDK=1
 set VSLANG=1033
 set KMP_DUPLICATE_LIB_OK=TRUE
@@ -127,7 +136,7 @@ source /opt/intel/oneapi/pti/latest/env/vars.sh
 # All:
 conda create -n diffdvr python=3.12
 conda activate diffdvr
-conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
+pip3 install numpy sympy numba matplotlib tqdm scikit-image tensorboard opencv-python openexr setuptools
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/xpu
 cd <path-to-difftetvr>
 pip install .
