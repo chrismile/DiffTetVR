@@ -189,7 +189,7 @@ std::string getLibraryPath() {
 
 ApplicationState::ApplicationState() {
     // Initialize the filesystem utilities.
-    sgl::FileUtils::get()->initialize("pysrg", 1, argv);
+    sgl::FileUtils::get()->initialize("PyDiffTetVR", 1, argv);
 
     std::string dataDirectory = getLibraryPath();
     if (!sgl::endsWith(dataDirectory, "/") && !sgl::endsWith(dataDirectory, "\\")) {
