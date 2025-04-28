@@ -335,6 +335,7 @@ ApplicationState::ApplicationState() {
             sycl::detail::uuid_type uuid = syclDevice.get_info<sycl::ext::intel::info::device::uuid>();
             deviceUuid = new uint8_t[VK_UUID_SIZE];
             memcpy(deviceUuid, uuid.data(), VK_UUID_SIZE);
+            sgl::vk::setGlobalSyclQueue(syclQueue);
         }
 #else
         sgl::Logfile::get()->throwError(
