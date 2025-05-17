@@ -178,6 +178,7 @@ int main(int argc, char *argv[]) {
     device->setPhysicalDeviceCheckCallback(physicalDeviceCheckCallback);
 #endif
 
+    device->setUseAppDeviceSelector();
     device->createDeviceSwapchain(
             instance, window, {
                     VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME

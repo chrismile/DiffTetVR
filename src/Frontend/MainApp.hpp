@@ -40,6 +40,10 @@
 #include "SceneData.hpp"
 #include "Renderer/TetMeshRendererType.hpp"
 
+namespace sgl {
+class DeviceSelectorVulkan;
+}
+
 namespace sgl { namespace dialog {
 class MsgBoxHandle;
 typedef std::shared_ptr<MsgBoxHandle> MsgBoxHandlePtr;
@@ -84,6 +88,9 @@ private:
     bool checkHasValidExtension(const std::string& filenameLower);
     /// Called when the clear color was changed.
     void onClearColorChanged() override;
+
+    // Vulkan device selector.
+    sgl::DeviceSelectorVulkan* deviceSelector = nullptr;
 
     // Dock space mode.
     void renderGuiMenuBar();

@@ -39,6 +39,7 @@
 #include <Graphics/Window.hpp>
 #include <Graphics/Vulkan/Utils/Instance.hpp>
 #include <Graphics/Vulkan/Utils/Swapchain.hpp>
+#include <Graphics/Vulkan/Utils/DeviceSelectionVulkan.hpp>
 #include <Graphics/Vulkan/Render/Renderer.hpp>
 
 #include <ImGui/ImGuiWrapper.hpp>
@@ -147,6 +148,7 @@ MainApp::MainApp()
 
     useLinearRGB = false;
     onClearColorChanged();
+    deviceSelector = device->getDeviceSelector();
 
     createTetMeshRenderer();
     dataView = std::make_shared<DataView>(camera, rendererVk, tetMeshVolumeRenderer);
@@ -866,6 +868,8 @@ void MainApp::renderGuiMenuBar() {
                 tetMesh->unlinkTets();
             }
 
+            deviceSelector->renderGui();
+
             ImGui::EndMenu();
         }
 
@@ -879,6 +883,10 @@ void MainApp::renderGuiMenuBar() {
         ImGui::EndMainMenuBar();
     }
 
+    deviceSelector->renderGuiDialog();
+    if (deviceSelector->getShallRestartApp()) {
+        quit();
+    }
     if (openOptimizerDialog) {
         tetMeshOptimizer->openDialog();
     }
