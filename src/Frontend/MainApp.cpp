@@ -868,7 +868,7 @@ void MainApp::renderGuiMenuBar() {
                 tetMesh->unlinkTets();
             }
 
-            deviceSelector->renderGui();
+            deviceSelector->renderGuiMenu();
 
             ImGui::EndMenu();
         }
