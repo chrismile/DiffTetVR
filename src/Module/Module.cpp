@@ -138,7 +138,7 @@ public:
 
     torch::DeviceType usedDeviceType = torch::DeviceType::CPU;
 
-    // For invocation of Vulkan command buffer in CUDA/HIP stream.
+    // For invocation of Vulkan command buffer in CUDA/HIP/SYCL stream.
     size_t commandBufferIdx = 0;
     std::vector<sgl::vk::CommandBufferPtr> commandBuffers;
     std::vector<sgl::vk::FencePtr> fences;
@@ -465,7 +465,8 @@ ApplicationState::ApplicationState() {
 
     uint32_t maxNumCommandBuffers = 1;
 #ifdef SUPPORT_COMPUTE_INTEROP
-    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP
+            || usedDeviceType == torch::DeviceType::XPU) {
         renderReadySemaphore = std::make_shared<sgl::vk::SemaphoreVkComputeApiInterop>(
                 device, 0, VK_SEMAPHORE_TYPE_TIMELINE, timelineValue);
         renderFinishedSemaphore = std::make_shared<sgl::vk::SemaphoreVkComputeApiInterop>(
@@ -518,14 +519,16 @@ void ApplicationState::vulkanBegin() {
     timelineValue++;
     selectNextCommandBuffer();
 #ifdef SUPPORT_COMPUTE_INTEROP
-    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP
+            || usedDeviceType == torch::DeviceType::XPU) {
         fence->wait();
         fence->reset();
     }
 #endif
     commandBuffer->setFence(fence);
 #ifdef SUPPORT_COMPUTE_INTEROP
-    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP
+            || usedDeviceType == torch::DeviceType::XPU) {
         sgl::vk::StreamWrapper stream{};
 #ifdef SUPPORT_CUDA_INTEROP
         if (usedDeviceType == torch::DeviceType::CUDA) {
@@ -556,7 +559,8 @@ void ApplicationState::vulkanBegin() {
 
 void ApplicationState::vulkanFinished() {
 #ifdef SUPPORT_COMPUTE_INTEROP
-    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP
+            || usedDeviceType == torch::DeviceType::XPU) {
         renderFinishedSemaphore->setSignalSemaphoreValue(timelineValue);
         commandBuffer->pushSignalSemaphore(renderFinishedSemaphore);
     }
@@ -564,7 +568,8 @@ void ApplicationState::vulkanFinished() {
     renderer->endCommandBuffer();
     renderer->submitToQueue();
 #ifdef SUPPORT_COMPUTE_INTEROP
-    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP) {
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP
+            || usedDeviceType == torch::DeviceType::XPU) {
         sgl::vk::StreamWrapper stream{};
 #ifdef SUPPORT_CUDA_INTEROP
         if (usedDeviceType == torch::DeviceType::CUDA) {
@@ -597,7 +602,8 @@ void ApplicationState::selectNextCommandBuffer() {
     commandBuffer = commandBuffers.at(commandBufferIdx);
     fence = fences.at(commandBufferIdx);
 #ifdef SUPPORT_COMPUTE_INTEROP
-    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP)
+    if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP
+            || usedDeviceType == torch::DeviceType::XPU)
 #endif
         commandBufferIdx = (commandBufferIdx + 1) % commandBuffers.size();
 }
