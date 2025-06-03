@@ -1375,7 +1375,10 @@ fi
 # Create a run script.
 if $use_msys; then
     printf "@echo off\npushd %%~dp0\npushd bin\nstart \"\" DiffTetVR.exe\n" > "$destination_dir/run.bat"
-elif $use_macos; then
+elif [ $use_macos = true ] && [ $use_vcpkg = true ]; then
+    printf "#!/bin/sh\npushd \"\$(dirname \"\$0\")\" >/dev/null\n./DiffTetVR\npopd\n" > "$destination_dir/run.sh"
+    chmod +x "$destination_dir/run.sh"
+elif [ $use_macos = true ] && [ $use_vcpkg = false ]; then
     printf "#!/bin/sh\npushd \"\$(dirname \"\$0\")\" >/dev/null\n./DiffTetVR.app/Contents/MacOS/DiffTetVR\npopd\n" > "$destination_dir/run.sh"
     chmod +x "$destination_dir/run.sh"
 else
