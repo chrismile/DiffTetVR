@@ -270,13 +270,13 @@ private:
     bool useComputeInterop = false;
     torch::DeviceType usedDeviceType = torch::DeviceType::CPU;
 #ifdef SUPPORT_COMPUTE_INTEROP
-    sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexPositionBufferCu;
-    sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexColorBufferCu;
-    sgl::vk::BufferComputeApiExternalMemoryVkPtr cellColorBufferCu;
-    sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexBoundaryBitBufferCu;
-    sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexPositionGradientBufferCu;
-    sgl::vk::BufferComputeApiExternalMemoryVkPtr vertexColorGradientBufferCu;
-    sgl::vk::BufferComputeApiExternalMemoryVkPtr cellColorGradientBufferCu;
+    sgl::vk::BufferVkComputeApiExternalMemoryPtr vertexPositionBufferCu;
+    sgl::vk::BufferVkComputeApiExternalMemoryPtr vertexColorBufferCu;
+    sgl::vk::BufferVkComputeApiExternalMemoryPtr cellColorBufferCu;
+    sgl::vk::BufferVkComputeApiExternalMemoryPtr vertexBoundaryBitBufferCu;
+    sgl::vk::BufferVkComputeApiExternalMemoryPtr vertexPositionGradientBufferCu;
+    sgl::vk::BufferVkComputeApiExternalMemoryPtr vertexColorGradientBufferCu;
+    sgl::vk::BufferVkComputeApiExternalMemoryPtr cellColorGradientBufferCu;
 #endif
     bool hasTriangleMeshData = false;
 #endif

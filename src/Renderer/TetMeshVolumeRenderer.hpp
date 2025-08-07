@@ -206,8 +206,8 @@ protected:
 #ifdef SUPPORT_COMPUTE_INTEROP
     sgl::vk::BufferPtr colorImageBuffer;
     sgl::vk::BufferPtr colorAdjointImageBuffer;
-    sgl::vk::BufferComputeApiExternalMemoryVkPtr colorImageBufferCu;
-    sgl::vk::BufferComputeApiExternalMemoryVkPtr colorAdjointImageBufferCu;
+    sgl::vk::BufferVkComputeApiExternalMemoryPtr colorImageBufferCu;
+    sgl::vk::BufferVkComputeApiExternalMemoryPtr colorAdjointImageBufferCu;
 #endif
     // CPU interop.
     sgl::vk::BufferPtr colorImageBufferCpu;

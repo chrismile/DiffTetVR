@@ -214,7 +214,7 @@ void TetMeshVolumeRenderer::setViewportSize(uint32_t viewportWidth, uint32_t vie
                 device, imageSize,
                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                 VMA_MEMORY_USAGE_GPU_ONLY, true, true);
-        colorImageBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(colorImageBuffer);
+        colorImageBufferCu = sgl::vk::createBufferVkComputeApiExternalMemory(colorImageBuffer);
     } else {
 #endif
         colorImageBufferCpu = std::make_shared<sgl::vk::Buffer>(
@@ -247,7 +247,7 @@ void TetMeshVolumeRenderer::setViewportSize(uint32_t viewportWidth, uint32_t vie
                     device, imageSize,
                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                     VMA_MEMORY_USAGE_GPU_ONLY, true, true);
-            colorAdjointImageBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(
+            colorAdjointImageBufferCu = sgl::vk::createBufferVkComputeApiExternalMemory(
                     colorAdjointImageBuffer);
         } else {
 #endif

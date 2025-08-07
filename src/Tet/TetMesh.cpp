@@ -649,14 +649,14 @@ void TetMesh::uploadDataToDevice() {
                 device, sizeof(uint32_t) * verticesBoundarySlim.size(), verticesBoundarySlim.data(),
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                 VMA_MEMORY_USAGE_GPU_ONLY, true, true);
-        vertexPositionBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexPositionBuffer);
+        vertexPositionBufferCu = sgl::vk::createBufferVkComputeApiExternalMemory(vertexPositionBuffer);
         if (getUseVertexColors()) {
-            vertexColorBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexColorBuffer);
+            vertexColorBufferCu = sgl::vk::createBufferVkComputeApiExternalMemory(vertexColorBuffer);
         }
         if (getUseCellColors()) {
-            cellColorBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(cellColorBuffer);
+            cellColorBufferCu = sgl::vk::createBufferVkComputeApiExternalMemory(cellColorBuffer);
         }
-        vertexBoundaryBitBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexBoundaryBitBuffer);
+        vertexBoundaryBitBufferCu = sgl::vk::createBufferVkComputeApiExternalMemory(vertexBoundaryBitBuffer);
         if (useGradients) {
             vertexPositionGradientBuffer = std::make_shared<sgl::vk::Buffer>(
                     device, sizeof(glm::vec3) * vertexPositions.size(), vertexPositions.data(),
@@ -674,12 +674,12 @@ void TetMesh::uploadDataToDevice() {
                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                         VMA_MEMORY_USAGE_GPU_ONLY, true, true);
             }
-            vertexPositionGradientBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexPositionGradientBuffer);
+            vertexPositionGradientBufferCu = sgl::vk::createBufferVkComputeApiExternalMemory(vertexPositionGradientBuffer);
             if (getUseVertexColors()) {
-                vertexColorGradientBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(vertexColorGradientBuffer);
+                vertexColorGradientBufferCu = sgl::vk::createBufferVkComputeApiExternalMemory(vertexColorGradientBuffer);
             }
             if (getUseCellColors()) {
-                cellColorGradientBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(cellColorGradientBuffer);
+                cellColorGradientBufferCu = sgl::vk::createBufferVkComputeApiExternalMemory(cellColorGradientBuffer);
             }
         }
     } else {

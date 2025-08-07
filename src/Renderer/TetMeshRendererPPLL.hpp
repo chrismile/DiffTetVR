@@ -125,8 +125,8 @@ private:
 #ifdef BUILD_PYTHON_MODULE
     bool exportLinkedListData = false;
 #ifdef SUPPORT_COMPUTE_INTEROP
-    sgl::vk::BufferComputeApiExternalMemoryVkPtr fragmentBufferCu;
-    sgl::vk::BufferComputeApiExternalMemoryVkPtr startOffsetBufferCu;
+    sgl::vk::BufferVkComputeApiExternalMemoryPtr fragmentBufferCu;
+    sgl::vk::BufferVkComputeApiExternalMemoryPtr startOffsetBufferCu;
 #endif
     // CPU interop.
     sgl::vk::BufferPtr fragmentBufferCpu;

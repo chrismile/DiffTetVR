@@ -370,7 +370,7 @@ void TetMeshRendererPPLL::recreateSwapchain(uint32_t width, uint32_t height) {
     if (exportLinkedListData) {
 #ifdef SUPPORT_COMPUTE_INTEROP
         if (useComputeInterop) {
-            startOffsetBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(startOffsetBuffer);
+            startOffsetBufferCu = sgl::vk::createBufferVkComputeApiExternalMemory(startOffsetBuffer);
         } else {
 #endif
             startOffsetBufferCpu = std::make_shared<sgl::vk::Buffer>(
@@ -582,7 +582,7 @@ void TetMeshRendererPPLL::reallocateFragmentBuffer() {
         if (exportLinkedListData) {
 #ifdef SUPPORT_COMPUTE_INTEROP
             if (useComputeInterop) {
-                fragmentBufferCu = std::make_shared<sgl::vk::BufferComputeApiExternalMemoryVk>(fragmentBuffer);
+                fragmentBufferCu = sgl::vk::createBufferVkComputeApiExternalMemory(fragmentBuffer);
             } else {
 #endif
                 fragmentBufferCpu = std::make_shared<sgl::vk::Buffer>(

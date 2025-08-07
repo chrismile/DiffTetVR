@@ -467,9 +467,9 @@ ApplicationState::ApplicationState() {
 #ifdef SUPPORT_COMPUTE_INTEROP
     if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP
             || usedDeviceType == torch::DeviceType::XPU) {
-        renderReadySemaphore = std::make_shared<sgl::vk::SemaphoreVkComputeApiInterop>(
+        renderReadySemaphore = sgl::vk::createSemaphoreVkComputeApiInterop(
                 device, 0, VK_SEMAPHORE_TYPE_TIMELINE, timelineValue);
-        renderFinishedSemaphore = std::make_shared<sgl::vk::SemaphoreVkComputeApiInterop>(
+        renderFinishedSemaphore = sgl::vk::createSemaphoreVkComputeApiInterop(
                 device, 0, VK_SEMAPHORE_TYPE_TIMELINE, timelineValue);
         maxNumCommandBuffers = 30;
     }

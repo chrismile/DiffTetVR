@@ -128,7 +128,7 @@ private:
     torch::DeviceType usedDeviceType = torch::DeviceType::CPU;
 #ifdef SUPPORT_COMPUTE_INTEROP
     sgl::vk::BufferPtr colorImageBuffer;
-    sgl::vk::BufferComputeApiExternalMemoryVkPtr colorImageBufferCu;
+    sgl::vk::BufferVkComputeApiExternalMemoryPtr colorImageBufferCu;
 #endif
     // CPU interop.
     sgl::vk::BufferPtr colorImageBufferCpu;
