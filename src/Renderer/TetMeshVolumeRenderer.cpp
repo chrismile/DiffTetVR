@@ -323,11 +323,11 @@ void TetMeshVolumeRenderer::copyAdjointBufferToImagePreCheck(void* devicePtr) {
             //        "Error in TetMeshVolumeRenderer::copyAdjointBufferToImagePreCheck: "
             //        "Mismatch in internal adjoint buffer device address and tensor content.", false);
             //cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-            //CUresult cuResult = sgl::vk::g_cudaDeviceApiFunctionTable.cuMemcpyAsync(
+            //CUresult cuResult = sgl::g_cudaDeviceApiFunctionTable.cuMemcpyAsync(
             //        colorAdjointImageBufferCu->getCudaDevicePtr(), reinterpret_cast<CUdeviceptr>(devicePtr),
             //        colorAdjointImageBuffer->getSizeInBytes(), stream);
-            //sgl::vk::checkCUresult(cuResult, "Error in cuMemcpyAsync: ");
-            sgl::vk::StreamWrapper stream{};
+            //sgl::checkCUresult(cuResult, "Error in cuMemcpyAsync: ");
+            sgl::StreamWrapper stream{};
 #ifdef SUPPORT_CUDA_INTEROP
             if (usedDeviceType == torch::DeviceType::CUDA) {
                 stream.cuStream = at::cuda::getCurrentCUDAStream();

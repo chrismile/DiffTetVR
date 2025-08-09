@@ -215,16 +215,16 @@ MainApp::~MainApp() {
     IGFD_Destroy(fileDialogInstance);
 
 /*#ifdef SUPPORT_CUDA_INTEROP
-    if (sgl::vk::getIsNvrtcFunctionTableInitialized()) {
-        sgl::vk::freeNvrtcFunctionTable();
+    if (sgl::getIsNvrtcFunctionTableInitialized()) {
+        sgl::freeNvrtcFunctionTable();
     }
-    if (sgl::vk::getIsCudaDeviceApiFunctionTableInitialized()) {
+    if (sgl::getIsCudaDeviceApiFunctionTableInitialized()) {
         if (cuContext) {
-            CUresult cuResult = sgl::vk::g_cudaDeviceApiFunctionTable.cuCtxDestroy(cuContext);
-            sgl::vk::checkCUresult(cuResult, "Error in cuCtxDestroy: ");
+            CUresult cuResult = sgl::g_cudaDeviceApiFunctionTable.cuCtxDestroy(cuContext);
+            sgl::checkCUresult(cuResult, "Error in cuCtxDestroy: ");
             cuContext = {};
         }
-        sgl::vk::freeCudaDeviceApiFunctionTable();
+        sgl::freeCudaDeviceApiFunctionTable();
     }
 #endif*/
 

@@ -322,19 +322,28 @@ else:
 if IS_HIP_EXTENSION:  # (ROCM_HOME is not None) and (torch.version.hip is not None)
     defines.append(('SUPPORT_HIP_INTEROP',))
     defines.append(('SUPPORT_COMPUTE_INTEROP',))
+    source_files.append('third_party/sgl/src/Graphics/Utils/InteropHIP.cpp')
+    source_files.append('third_party/sgl/src/Graphics/Utils/InteropCompute.cpp')
     source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropHIP.cpp')
     source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCompute.cpp')
+    source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCompute/ImplHip.cpp')
 elif CUDA_HOME is not None and torch.cuda.is_available():
     defines.append(('SUPPORT_CUDA_INTEROP',))
     defines.append(('SUPPORT_COMPUTE_INTEROP',))
+    source_files.append('third_party/sgl/src/Graphics/Utils/InteropCuda.cpp')
+    source_files.append('third_party/sgl/src/Graphics/Utils/InteropCompute.cpp')
     source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCuda.cpp')
     source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCompute.cpp')
+    source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCompute/ImplCuda.cpp')
 elif SYCL_HOME is not None:
     defines.append(('SUPPORT_LEVEL_ZERO_INTEROP',))
     defines.append(('SUPPORT_SYCL_INTEROP',))
     defines.append(('SUPPORT_COMPUTE_INTEROP',))
+    source_files.append('third_party/sgl/src/Graphics/Utils/InteropLevelZero.cpp')
+    source_files.append('third_party/sgl/src/Graphics/Utils/InteropCompute.cpp')
     source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropLevelZero.cpp')
     source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCompute.cpp')
+    source_files.append('third_party/sgl/src/Graphics/Vulkan/Utils/InteropCompute/ImplSycl.cpp')
 
 
 if platform.machine() == 'x86_64' or platform.machine() == 'AMD64':

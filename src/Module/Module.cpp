@@ -279,17 +279,17 @@ ApplicationState::ApplicationState() {
 #endif
     if (usedDeviceType == torch::DeviceType::CUDA) {
 #ifdef SUPPORT_CUDA_INTEROP
-        if (!sgl::vk::getIsCudaDeviceApiFunctionTableInitialized()) {
-            bool success = sgl::vk::initializeCudaDeviceApiFunctionTable();
+        if (!sgl::getIsCudaDeviceApiFunctionTableInitialized()) {
+            bool success = sgl::initializeCudaDeviceApiFunctionTable();
             if (!success) {
                 usedDeviceType = torch::DeviceType::CPU;
                 sgl::Logfile::get()->writeError(
                         "Error in ApplicationState::ApplicationState: "
-                        "sgl::vk::initializeCudaDeviceApiFunctionTable() failed. Switching to CPU.", false);
+                        "sgl::initializeCudaDeviceApiFunctionTable() failed. Switching to CPU.", false);
             } else {
                 deviceUuid = new uint8_t[VK_UUID_SIZE];
                 CUuuid cudaDeviceUuid = {};
-                sgl::vk::checkCUresult(sgl::vk::g_cudaDeviceApiFunctionTable.cuDeviceGetUuid(
+                sgl::checkCUresult(sgl::g_cudaDeviceApiFunctionTable.cuDeviceGetUuid(
                         &cudaDeviceUuid, at::cuda::getCurrentCUDAStream().device_index()), "Error in cuDeviceGetUuid: ");
                 memcpy(deviceUuid, cudaDeviceUuid.bytes, VK_UUID_SIZE);
             }
@@ -301,17 +301,17 @@ ApplicationState::ApplicationState() {
     }
     if (usedDeviceType == torch::DeviceType::HIP) {
 #ifdef SUPPORT_HIP_INTEROP
-        if (!sgl::vk::getIsHipDeviceApiFunctionTableInitialized()) {
-            bool success = sgl::vk::initializeHipDeviceApiFunctionTable();
+        if (!sgl::getIsHipDeviceApiFunctionTableInitialized()) {
+            bool success = sgl::initializeHipDeviceApiFunctionTable();
             if (!success) {
                 usedDeviceType = torch::DeviceType::CPU;
                 sgl::Logfile::get()->writeError(
                         "Error in ApplicationState::ApplicationState: "
-                        "sgl::vk::initializeHipDeviceApiFunctionTable() failed. Switching to CPU.", false);
+                        "sgl::initializeHipDeviceApiFunctionTable() failed. Switching to CPU.", false);
             } else {
                 deviceUuid = new uint8_t[VK_UUID_SIZE];
                 hipUUID hipDeviceUuid = {};
-                sgl::vk::checkHipResult(sgl::vk::g_hipDeviceApiFunctionTable.hipDeviceGetUuid(
+                sgl::checkHipResult(sgl::g_hipDeviceApiFunctionTable.hipDeviceGetUuid(
                         &hipDeviceUuid, at::hip::getCurrentHIPStream().device_index()), "Error in hipDeviceGetUuid: ");
                 memcpy(deviceUuid, hipDeviceUuid.bytes, VK_UUID_SIZE);
             }
@@ -328,7 +328,7 @@ ApplicationState::ApplicationState() {
             usedDeviceType = torch::DeviceType::CPU;
             sgl::Logfile::get()->writeError(
                     "Error in ApplicationState::ApplicationState: "
-                    "sgl::vk::initializeLevelZeroFunctionTable() failed. Switching to CPU.", false);
+                    "sgl::initializeLevelZeroFunctionTable() failed. Switching to CPU.", false);
         } else {
             auto& syclQueue = at::xpu::getCurrentXPUStream().queue();
             sycl::device syclDevice = syclQueue.get_device();
@@ -503,13 +503,13 @@ ApplicationState::~ApplicationState() {
     delete transferFunctionWindow;
     delete renderer;
 #ifdef SUPPORT_CUDA_INTEROP
-    if (sgl::vk::getIsCudaDeviceApiFunctionTableInitialized()) {
-        sgl::vk::freeCudaDeviceApiFunctionTable();
+    if (sgl::getIsCudaDeviceApiFunctionTableInitialized()) {
+        sgl::freeCudaDeviceApiFunctionTable();
     }
 #endif
 #ifdef SUPPORT_HIP_INTEROP
-    if (sgl::vk::getIsHipDeviceApiFunctionTableInitialized()) {
-        sgl::vk::freeHipDeviceApiFunctionTable();
+    if (sgl::getIsHipDeviceApiFunctionTableInitialized()) {
+        sgl::freeHipDeviceApiFunctionTable();
     }
 #endif
     sgl::AppSettings::get()->release();
@@ -529,7 +529,7 @@ void ApplicationState::vulkanBegin() {
 #ifdef SUPPORT_COMPUTE_INTEROP
     if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP
             || usedDeviceType == torch::DeviceType::XPU) {
-        sgl::vk::StreamWrapper stream{};
+        sgl::StreamWrapper stream{};
 #ifdef SUPPORT_CUDA_INTEROP
         if (usedDeviceType == torch::DeviceType::CUDA) {
             stream.cuStream = at::cuda::getCurrentCUDAStream();
@@ -570,7 +570,7 @@ void ApplicationState::vulkanFinished() {
 #ifdef SUPPORT_COMPUTE_INTEROP
     if (usedDeviceType == torch::DeviceType::CUDA || usedDeviceType == torch::DeviceType::HIP
             || usedDeviceType == torch::DeviceType::XPU) {
-        sgl::vk::StreamWrapper stream{};
+        sgl::StreamWrapper stream{};
 #ifdef SUPPORT_CUDA_INTEROP
         if (usedDeviceType == torch::DeviceType::CUDA) {
             stream.cuStream = at::cuda::getCurrentCUDAStream();
