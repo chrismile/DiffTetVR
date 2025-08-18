@@ -84,7 +84,7 @@ endif()
 set(FPHSA_NAME_MISMATCHED TRUE)
 
 if (VCPKG_TOOLCHAIN)
-    find_package(Boost COMPONENTS system filesystem locale QUIET)
+    find_package(Boost 1.69.0 COMPONENTS filesystem locale QUIET)
 endif()
 
 find_package(sgl QUIET)
