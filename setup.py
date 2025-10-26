@@ -750,15 +750,28 @@ if uses_pip:
         fullname = build_cmd.get_ext_fullname(ext.name)
         filename = build_cmd.get_ext_filename(fullname)
         difftetvr_so_file = os.path.basename(filename)
+    # For some reason, __init__.py broke some time between September and October 2025.
+    # I opened a discussion here: https://github.com/pypa/setuptools/discussions/5101
+    # The code below is a mixture of the old and new version of what is used by setuptools at
+    # https://github.com/pypa/setuptools/blob/main/setuptools/command/bdist_egg.py.
     with open('difftetvr/__init__.py', 'w') as file:
         file.write('import torch\n\n')
         file.write('def __bootstrap__():\n')
         file.write('    global __bootstrap__, __loader__, __file__\n')
-        file.write('    import sys, pkg_resources, importlib.util\n')
-        file.write(f'    __file__ = pkg_resources.resource_filename(__name__, \'{difftetvr_so_file}\')\n')
-        file.write('    __loader__ = None; del __bootstrap__, __loader__\n')
-        file.write('    spec = importlib.util.spec_from_file_location(__name__,__file__)\n')
+        file.write('    import sys, importlib.util\n')
+        file.write(f'    lib_name = \'{difftetvr_so_file}\'\n')
+        file.write('    if sys.version_info < (3, 9):\n')
+        file.write('        import pkg_resources\n')
+        file.write(f'        __file__ = pkg_resources.resource_filename(__name__, lib_name)\n')
+        file.write('        __loader__ = None; del __bootstrap__, __loader__\n')
+        file.write('        spec = importlib.util.spec_from_file_location(__name__,__file__)\n')
+        file.write('    else:\n')
+        file.write('        import importlib.resources as irs\n')
+        file.write('        with irs.as_file(irs.files(__name__).joinpath(lib_name)) as __file__:\n')
+        file.write('            __loader__ = None; del __bootstrap__, __loader__\n')
+        file.write('            spec = importlib.util.spec_from_file_location(__name__,__file__)\n')
         file.write('    mod = importlib.util.module_from_spec(spec)\n')
+        file.write('    sys.modules[mod.__name__] = mod\n')
         file.write('    spec.loader.exec_module(mod)\n')
         file.write('__bootstrap__()\n')
     setup(
