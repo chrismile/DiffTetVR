@@ -42,6 +42,7 @@ void main() {
 #version 450 core
 
 #extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_terminate_invocation : require
 //#extension GL_EXT_debug_printf : enable
 
 #include "LinkedListHeader.glsl"
@@ -171,7 +172,9 @@ void main() {
     }
 
     if (numFrags == 0) {
-        discard;
+        // glslang changed its behavior for discard in version 15.4: https://github.com/KhronosGroup/glslang/pull/3954
+        // getNextFragment is called for fragment 0, so we explicitly need a terminate, not a demote.
+        terminateInvocation;
     }
 
     fragColor = sortingAlgorithm(numFrags);

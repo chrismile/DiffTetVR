@@ -67,6 +67,7 @@ void main() {
 #extension GL_EXT_control_flow_attributes : require
 #extension GL_EXT_scalar_block_layout : require
 #extension GL_ARB_fragment_shader_interlock : require
+#extension GL_EXT_terminate_invocation : require
 //#extension GL_EXT_debug_printf : enable
 
 layout(early_fragment_tests, pixel_interlock_ordered) in;
@@ -131,7 +132,7 @@ void main() {
     uint f0, f1; //< Face index hit 0, 1.
     float t0, t1; //< Ray distance hit 0, 1.
     if (!intersectRayTet(cameraPosition, rayDirection, tetVertexPositions, f0, f1, t0, t1)) {
-        discard; // Should never happen...
+        terminateInvocation; // Should never happen...
     }
 
     vec3 pf0 = cameraPosition + t0 * rayDirection;

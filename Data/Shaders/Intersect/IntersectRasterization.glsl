@@ -70,6 +70,7 @@ void main() {
 
 #extension GL_EXT_control_flow_attributes : require
 #extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_terminate_invocation : require
 //#extension GL_EXT_debug_printf : enable
 
 #include "TetFaceTable.glsl"
@@ -161,7 +162,7 @@ void main() {
     if (!intersectRayTet(cameraPosition, rayDirection, tetVertexPositions, f0, f1, t0, t1)) {
         //outputColor = vec4(1.0, 0.0, 0.0, 1.0);
         //return;
-        discard; // Should never happen...
+        terminateInvocation; // Should never happen...
     }
 
     vec3 intersectPos0 = cameraPosition + t0 * rayDirection;
