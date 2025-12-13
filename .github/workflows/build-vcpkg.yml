@@ -2,9 +2,9 @@ name: Build using vcpkg
 
 on:
   push:
-    branches: [ unused ]
+    branches: [ main ]
   pull_request:
-    branches: [ unused ]
+    branches: [ main ]
 
 env:
   BUILD_TYPE: Release
