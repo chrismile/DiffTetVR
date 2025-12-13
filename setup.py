@@ -590,7 +590,10 @@ if support_ftetwild:
             env_cmake_ftetwild['GMP_INC'] = os.path.join(gmp_base_path, 'include')
             env_cmake_ftetwild['GMP_LIB'] = os.path.join(gmp_base_path, 'lib')
         subprocess.run(
-            [cmake_exec, '-S', 'third_party/fTetWild-src', '-B', 'third_party/fTetWild-src/build']
+            [
+                cmake_exec, '-S', 'third_party/fTetWild-src', '-B', 'third_party/fTetWild-src/build',
+                '-DCMAKE_POLICY_VERSION_MINIMUM=3.5'
+            ]
             + ftetwild_build_options, env=env_cmake_ftetwild, check=True)
         subprocess.run([cmake_exec, '--build', f'third_party/fTetWild-src/build', '--config', 'Release'], check=True)
         Path('third_party/fTetWild').mkdir(exist_ok=True)

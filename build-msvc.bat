@@ -225,7 +225,7 @@ if not exist ".\fTetWild-%ftetwild_version%-x86_64-windows" (
     echo ------------------------
     echo   downloading fTetWild
     echo ------------------------
-    curl.exe -L "https://github.com/chrismile/fTetWild/releases/download/v1.6.0/fTetWild-%ftetwild_version%-x86_64-windows.zip" --output fTetWild-%ftetwild_version%-x86_64-windows.zip
+    curl.exe -L "https://github.com/chrismile/fTetWild/releases/download/%ftetwild_version%/fTetWild-%ftetwild_version%-x86_64-windows.zip" --output fTetWild-%ftetwild_version%-x86_64-windows.zip
     mkdir "fTetWild-%ftetwild_version%-x86_64-windows"
     tar -xvzf "fTetWild-%ftetwild_version%-x86_64-windows.zip" -C "fTetWild-%ftetwild_version%-x86_64-windows"
     del "fTetWild-%ftetwild_version%-x86_64-windows.zip"
@@ -236,7 +236,7 @@ if not exist ".\tetgen-%tetgen_version%-x86_64-windows-gnu" (
     echo ------------------------
     echo    downloading tetgen
     echo ------------------------
-    curl.exe -L "https://github.com/chrismile/tetgen/releases/download/v1.6.0/tetgen-%tetgen_version%-x86_64-windows-gnu.zip" --output tetgen-%tetgen_version%-x86_64-windows-gnu.zip
+    curl.exe -L "https://github.com/chrismile/tetgen/releases/download/%tetgen_version%/tetgen-%tetgen_version%-x86_64-windows-gnu.zip" --output tetgen-%tetgen_version%-x86_64-windows-gnu.zip
     mkdir "tetgen-%tetgen_version%-x86_64-windows-gnu"
     tar -xvzf "tetgen-%tetgen_version%-x86_64-windows-gnu.zip" -C "tetgen-%tetgen_version%-x86_64-windows-gnu"
     del "tetgen-%tetgen_version%-x86_64-windows-gnu.zip"

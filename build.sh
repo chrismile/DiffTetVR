@@ -1041,7 +1041,7 @@ if $build_with_ftetwild_support; then
         git clone https://github.com/chrismile/fTetWild.git fTetWild-src
         mkdir -p fTetWild-src/build
         pushd fTetWild-src/build >/dev/null
-        cmake .. ${params_gen[@]+"${params_gen[@]}"} -DCMAKE_BUILD_TYPE=Release
+        cmake .. ${params_gen[@]+"${params_gen[@]}"} -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
         make -j $(nproc)
         popd >/dev/null
         mkdir -p fTetWild
