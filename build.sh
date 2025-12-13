@@ -297,15 +297,15 @@ if $use_msys && command -v pacman &> /dev/null && [ ! -d $build_dir_debug ] && [
             || ! is_installed_pacman "${pkg_prefix}-glew" || ! is_installed_pacman "${pkg_prefix}-vulkan-headers" \
             || ! is_installed_pacman "${pkg_prefix}-vulkan-loader" \
             || ! is_installed_pacman "${pkg_prefix}-vulkan-validation-layers" \
-            || ! is_installed_pacman "${pkg_prefix}-shaderc" || ! is_installed_pacman "${pkg_prefix}-jsoncpp" \
-            || ! is_installed_pacman "${pkg_prefix}-gmp"; then
+            || ! is_installed_pacman "${pkg_prefix}-shaderc" || ! is_installed_pacman "${pkg_prefix}-glslang" \
+            || ! is_installed_pacman "${pkg_prefix}-jsoncpp" || ! is_installed_pacman "${pkg_prefix}-gmp"; then
         echo "------------------------"
         echo "installing dependencies "
         echo "------------------------"
         pacman --noconfirm --needed -S ${pkg_prefix}-boost ${pkg_prefix}-icu ${pkg_prefix}-glm ${pkg_prefix}-libarchive \
         ${pkg_prefix}-tinyxml2 ${pkg_prefix}-libpng ${pkg_prefix}-sdl3 ${pkg_prefix}-sdl3-image ${pkg_prefix}-glew \
         ${pkg_prefix}-vulkan-headers ${pkg_prefix}-vulkan-loader ${pkg_prefix}-vulkan-validation-layers \
-        ${pkg_prefix}-shaderc ${pkg_prefix}-jsoncpp ${pkg_prefix}-gmp
+        ${pkg_prefix}-shaderc ${pkg_prefix}-glslang ${pkg_prefix}-jsoncpp ${pkg_prefix}-gmp
     fi
 elif $use_msys && command -v pacman &> /dev/null; then
     :
@@ -486,12 +486,13 @@ elif command -v pacman &> /dev/null && ! $use_conda; then
                 || ! is_installed_pacman "libarchive" || ! is_installed_pacman "tinyxml2" \
                 || ! is_installed_pacman "libpng" || ! is_installed_pacman "glew" \
                 || ! is_installed_pacman "vulkan-devel" || ! is_installed_pacman "shaderc" \
-                || ! is_installed_pacman "jsoncpp" || ! is_installed_pacman "gmp"; then
+                || ! is_installed_pacman "glslang" || ! is_installed_pacman "jsoncpp" \
+                || ! is_installed_pacman "gmp"; then
             echo "------------------------"
             echo "installing dependencies "
             echo "------------------------"
             sudo pacman --noconfirm --needed -S boost icu glm libarchive tinyxml2 libpng glew vulkan-devel shaderc \
-            jsoncpp gmp
+            glslang jsoncpp gmp
         fi
         if is_available_pacman "sdl3"; then
             if ! is_installed_pacman "sdl3"; then
@@ -539,14 +540,16 @@ elif command -v yum &> /dev/null && ! $use_conda; then
         if ! is_installed_rpm "boost-devel" || ! is_installed_rpm "libicu-devel" || ! is_installed_rpm "glm-devel" \
                 || ! is_installed_rpm "libarchive-devel" || ! is_installed_rpm "tinyxml2-devel" \
                 || ! is_installed_rpm "libpng-devel" || ! is_installed_rpm "glew-devel" \
-                || ! is_installed_rpm "vulkan-headers" || ! is_installed_rpm "libshaderc-devel" \
+                || ! is_installed_rpm "vulkan-headers" || ! is_installed_rpm "vulkan-loader" \
+                || ! is_installed_rpm "libshaderc-devel" || ! is_installed_rpm "glslang-devel" \
                 || ! is_installed_rpm "jsoncpp-devel" || ! is_installed_rpm "libstdc++-static" \
                 || ! is_installed_rpm "gmp-devel"; then
             echo "------------------------"
             echo "installing dependencies "
             echo "------------------------"
             sudo yum install -y boost-devel libicu-devel glm-devel libarchive-devel tinyxml2-devel libpng-devel \
-            glew-devel vulkan-headers libshaderc-devel jsoncpp-devel libstdc++-static gmp-devel
+            glew-devel vulkan-headers vulkan-loader libshaderc-devel glslang-devel jsoncpp-devel libstdc++-static \
+            gmp-devel
         fi
         if is_available_yum "SDL3-devel"; then
             if ! is_installed_rpm "SDL3-devel"; then
@@ -625,7 +628,8 @@ elif $use_conda && ! $use_macos; then
             || ! list_contains "$conda_pkg_list" "xorg-libxfixes" || ! list_contains "$conda_pkg_list" "xorg-libxau" \
             || ! list_contains "$conda_pkg_list" "xorg-libxrandr" || ! list_contains "$conda_pkg_list" "patchelf" \
             || ! list_contains "$conda_pkg_list" "libvulkan-headers" || ! list_contains "$conda_pkg_list" "shaderc" \
-            || ! list_contains "$conda_pkg_list" "jsoncpp" || ! list_contains "$conda_pkg_list" "conda-forge::gmp"; then
+            || ! list_contains "$conda_pkg_list" "glslang" || ! list_contains "$conda_pkg_list" "jsoncpp" \
+            || ! list_contains "$conda_pkg_list" "conda-forge::gmp"; then
         echo "------------------------"
         echo "installing dependencies "
         echo "------------------------"
@@ -633,7 +637,7 @@ elif $use_conda && ! $use_macos; then
         make cmake pkg-config gdb git mesa-libgl-devel-cos7-x86_64 libglvnd-glx-cos7-x86_64 \
         mesa-dri-drivers-cos7-aarch64 libxau-devel-cos7-aarch64 libselinux-devel-cos7-aarch64 \
         libxdamage-devel-cos7-aarch64 libxxf86vm-devel-cos7-aarch64 libxext-devel-cos7-aarch64 xorg-libxfixes \
-        xorg-libxau xorg-libxrandr patchelf libvulkan-headers shaderc jsoncpp conda-forge::gmp
+        xorg-libxau xorg-libxrandr patchelf libvulkan-headers shaderc glslang jsoncpp conda-forge::gmp
     fi
 else
     echo "Warning: Unsupported system package manager detected." >&2
