@@ -540,12 +540,13 @@ elif command -v yum &> /dev/null && ! $use_conda; then
                 || ! is_installed_rpm "libarchive-devel" || ! is_installed_rpm "tinyxml2-devel" \
                 || ! is_installed_rpm "libpng-devel" || ! is_installed_rpm "glew-devel" \
                 || ! is_installed_rpm "vulkan-headers" || ! is_installed_rpm "libshaderc-devel" \
-                || ! is_installed_rpm "jsoncpp-devel" || ! is_installed_rpm "gmp-devel"; then
+                || ! is_installed_rpm "jsoncpp-devel" || ! is_installed_rpm "libstdc++-static" \
+                || ! is_installed_rpm "gmp-devel"; then
             echo "------------------------"
             echo "installing dependencies "
             echo "------------------------"
             sudo yum install -y boost-devel libicu-devel glm-devel libarchive-devel tinyxml2-devel libpng-devel \
-            glew-devel vulkan-headers libshaderc-devel jsoncpp-devel gmp-devel
+            glew-devel vulkan-headers libshaderc-devel jsoncpp-devel libstdc++-static gmp-devel
         fi
         if is_available_yum "SDL3-devel"; then
             if ! is_installed_rpm "SDL3-devel"; then
