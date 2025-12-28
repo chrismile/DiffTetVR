@@ -504,6 +504,7 @@ void TetMeshVolumeRenderer::renderGuiShared(sgl::PropertyEditor& propertyEditor)
      * - Shading is not easy to implement with the projection pass at all.
      */
     if (propertyEditor.addCheckbox("Use Quality Metric", &showTetQuality)) {
+        renderer->syncWithCpu();
         tetMesh->setTetQualityMetric(tetQualityMetric);
         setShadersDirty(
                 rendererType == RendererType::PPLL || rendererType == RendererType::INTERSECTION
@@ -512,6 +513,7 @@ void TetMeshVolumeRenderer::renderGuiShared(sgl::PropertyEditor& propertyEditor)
     }
     if (rendererType == RendererType::PPLL) {
         if (showTetQuality && propertyEditor.addCheckbox("Use Shading", &useShading)) {
+            renderer->syncWithCpu();
             setShadersDirty(VolumeRendererPassType::RESOLVE);
             reRender = true;
         }
@@ -527,6 +529,7 @@ void TetMeshVolumeRenderer::renderGuiShared(sgl::PropertyEditor& propertyEditor)
     }
 
     if (propertyEditor.addCheckbox("Use Early Ray Out", &useEarlyRayTermination)) {
+        renderer->syncWithCpu();
         setShadersDirty(VolumeRendererPassType::ALL);
         checkRecreateTerminationIndexImage();
         reRender = true;
@@ -540,6 +543,7 @@ void TetMeshVolumeRenderer::renderGuiShared(sgl::PropertyEditor& propertyEditor)
     }
 
     if (propertyEditor.addCheckbox("Use Clip Plane", &useClipPlane)) {
+        renderer->syncWithCpu();
         setShadersDirty(VolumeRendererPassType::ALL);
         reRender = true;
     }
@@ -560,6 +564,7 @@ void TetMeshVolumeRenderer::renderGuiShared(sgl::PropertyEditor& propertyEditor)
 
     bool depthComplexityJustChanged = false;
     if (propertyEditor.addCheckbox("Show Depth Complexity", &showDepthComplexity)) {
+        renderer->syncWithCpu();
         setShadersDirty(VolumeRendererPassType::ALL);
         reRender = true;
         depthComplexityJustChanged = true;

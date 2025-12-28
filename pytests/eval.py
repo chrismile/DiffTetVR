@@ -32,6 +32,7 @@ import json
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
 import skimage
 import skimage.io
 import skimage.metrics
@@ -42,6 +43,18 @@ from datasets.actions import RendererTypeAction
 from datasets.paths import get_preshaded_path, get_regular_grids_path
 from datasets.imgutils import blend_image_premul
 from datasets.sample_view import make_view_matrix
+
+
+def save_tensor_png(file_path, data, convert_to_srgb=False):
+    # Convert linear RGB to sRGB.
+    if convert_to_srgb:
+        for i in range(3):
+            data[i, :, :] = np.power(data[i, :, :], 1.0 / 2.2)
+    data = np.clip(data, 0.0, 1.0)
+    #data = data.transpose(1, 2, 0)
+    data = (data * 255).astype('uint8')
+    image_out = Image.fromarray(data)
+    image_out.save(file_path)
 
 
 def skimage_to_torch(img):
@@ -98,6 +111,7 @@ def plot_test_case(test_name, stats_key=None):
         rendered_image = rendered_image.detach().cpu().numpy()
         rendered_image = rendered_image[110:400, :, :]
         blend_image_premul(rendered_image, [0.0, 0.0, 0.0, 1.0])
+        save_tensor_png(os.path.join(dataset_dir, f'{test_name}_{param}.png'), rendered_image)
         rendered_image = torch.tensor(np.transpose(rendered_image, (2, 0, 1)))
         image_metrics = compare_images(rendered_image_gt, rendered_image)
         results.append(image_metrics[metric_name])
@@ -224,7 +238,7 @@ if __name__ == '__main__':
     renderer_gt.set_attenuation(100.0)
     renderer_gt.set_clear_color(d.vec4(0.0, 0.0, 0.0, 0.0))
     renderer_gt.set_camera_fovy(math.atan(1.0 / 2.0) * 2.0)
-    renderer_gt.set_viewport_size(512, 512)
+    renderer_gt.set_viewport_size(args.img_width, args.img_height)
     renderer_gt.set_view_matrix(view_matrix_array)
     renderer_gt.load_transfer_function_from_file('Tooth3Gauss.xml')
 
@@ -238,6 +252,7 @@ if __name__ == '__main__':
     rendered_image_gt = rendered_image_gt.detach().cpu().numpy()
     rendered_image_gt = rendered_image_gt[110:400, :, :]
     blend_image_premul(rendered_image_gt, [0.0, 0.0, 0.0, 1.0])
+    save_tensor_png(os.path.join(dataset_dir, f'gt.png'), rendered_image_gt)
     rendered_image_gt = torch.tensor(np.transpose(rendered_image_gt, (2, 0, 1)))
 
     test_case_color()

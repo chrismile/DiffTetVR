@@ -155,6 +155,7 @@ private:
     bool newMeshLoaded = true;
     sgl::AABB3 boundingBox;
     TetMeshPtr tetMesh;
+    bool isStartupFile = true;
     sgl::TransferFunctionWindow transferFunctionWindow;
 };
 

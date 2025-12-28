@@ -79,7 +79,7 @@ layout(location = 0) out vec4 outputColor;
 
 #ifdef SHOW_DEPTH_COMPLEXITY
 // Stores the number of fragments using atomic operations.
-layout(binding = 3) coherent buffer DepthComplexityCounterBuffer {
+layout(binding = 5) coherent buffer DepthComplexityCounterBuffer {
     uint depthComplexityCounterBuffer[];
 };
 layout(push_constant) uniform PushConstants {

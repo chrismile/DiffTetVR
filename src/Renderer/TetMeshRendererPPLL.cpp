@@ -118,8 +118,8 @@ protected:
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
-        preprocessorDefines.insert(std::make_pair("PI_SQRT", std::to_string(std::sqrt(sgl::PI))));
-        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("PI_SQRT", sgl::toStringLocaleC(std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", sgl::toStringLocaleC(1.0f / std::sqrt(sgl::PI))));
         if (volumeRenderer->getShowTetQuality()) {
             preprocessorDefines.insert(std::make_pair("SHOW_TET_QUALITY", ""));
             if (volumeRenderer->getUseShading()) {
@@ -217,8 +217,8 @@ protected:
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("BACKWARD_PASS", ""));
         preprocessorDefines.insert(std::make_pair("RESOLVE_PASS", ""));
-        preprocessorDefines.insert(std::make_pair("PI_SQRT", std::to_string(std::sqrt(sgl::PI))));
-        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("PI_SQRT", sgl::toStringLocaleC(std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", sgl::toStringLocaleC(1.0f / std::sqrt(sgl::PI))));
         if (renderer->getDevice()->getPhysicalDeviceShaderAtomicFloatFeatures().shaderBufferFloat32AtomicAdd) {
             preprocessorDefines.insert(std::make_pair("SUPPORT_BUFFER_FLOAT_ATOMIC_ADD", ""));
             preprocessorDefines.insert(std::make_pair(
@@ -462,7 +462,7 @@ void TetMeshRendererPPLL::getVulkanShaderPreprocessorDefines(
 
     preprocessorDefines.insert(std::make_pair("MAX_NUM_FRAGS", sgl::toString(expectedMaxDepthComplexity)));
     if (sortingAlgorithmMode == SORTING_ALGORITHM_MODE_QUICKSORT
-        || sortingAlgorithmMode == SORTING_ALGORITHM_MODE_QUICKSORT_HYBRID) {
+            || sortingAlgorithmMode == SORTING_ALGORITHM_MODE_QUICKSORT_HYBRID) {
         int stackSize = int(std::ceil(std::log2(expectedMaxDepthComplexity)) * 2 + 4);
         preprocessorDefines.insert(std::make_pair("STACK_SIZE", sgl::toString(stackSize)));
     }
@@ -470,7 +470,7 @@ void TetMeshRendererPPLL::getVulkanShaderPreprocessorDefines(
     if (sortingAlgorithmMode == SORTING_ALGORITHM_MODE_PRIORITY_QUEUE) {
         preprocessorDefines.insert(std::make_pair("sortingAlgorithm", "frontToBackPQ"));
         if (renderer->getDevice()->getDeviceDriverId() == VK_DRIVER_ID_AMD_PROPRIETARY
-            || renderer->getDevice()->getDeviceDriverId() == VK_DRIVER_ID_AMD_OPEN_SOURCE) {
+                || renderer->getDevice()->getDeviceDriverId() == VK_DRIVER_ID_AMD_OPEN_SOURCE) {
             preprocessorDefines.insert(std::make_pair("INITIALIZE_ARRAY_POW2", ""));
         }
     } else if (sortingAlgorithmMode == SORTING_ALGORITHM_MODE_BUBBLE_SORT) {
@@ -565,7 +565,7 @@ void TetMeshRendererPPLL::reallocateFragmentBuffer() {
         } else {
             sgl::Logfile::get()->writeInfo(
                     std::string() + "Fragment buffer size GiB: "
-                    + std::to_string(double(fragmentBufferSizeBytes) / 1024.0 / 1024.0 / 1024.0));
+                    + sgl::toStringLocaleC(double(fragmentBufferSizeBytes) / 1024.0 / 1024.0 / 1024.0));
         }
 
         numFragmentBuffers = 1;
@@ -606,7 +606,7 @@ void TetMeshRendererPPLL::reallocateFragmentBuffer() {
         } else {
             sgl::Logfile::get()->writeInfo(
                     std::string() + "Fragment buffer size GiB: "
-                    + std::to_string(double(fragmentBufferSizeBytes) / 1024.0 / 1024.0 / 1024.0));
+                    + sgl::toStringLocaleC(double(fragmentBufferSizeBytes) / 1024.0 / 1024.0 / 1024.0));
         }
 
         numFragmentBuffers = sgl::sizeceil(fragmentBufferSizeBytes, maxStorageBufferSize);
@@ -777,17 +777,18 @@ void TetMeshRendererPPLL::setShadersDirty(VolumeRendererPassType passType) {
 
 #ifndef DISABLE_IMGUI
 void TetMeshRendererPPLL::renderGuiPropertyEditorNodes(sgl::PropertyEditor& propertyEditor) {
-    if (propertyEditor.addCombo(
+    // Only priority queue sorting is supported currently.
+    /*if (propertyEditor.addCombo(
             "Sorting Mode", (int*)&sortingAlgorithmMode,
             SORTING_MODE_NAMES, NUM_SORTING_MODES)) {
+        renderer->syncWithCpu();
         setShadersDirty(VolumeRendererPassType::RESOLVE);
         reRender = true;
-    }
+    }*/
     if (propertyEditor.addCombo(
             "Fragment Buffer Mode", (int*)&fragmentBufferMode,
             FRAGMENT_BUFFER_MODE_NAMES, IM_ARRAYSIZE(FRAGMENT_BUFFER_MODE_NAMES))) {
         renderer->syncWithCpu();
-        renderer->getDevice()->waitIdle();
         setShadersDirty(VolumeRendererPassType::ALL);
         reallocateFragmentBuffer();
         reRender = true;

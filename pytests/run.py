@@ -94,9 +94,10 @@ else:
 commands = []
 
 run_tooth_tests_params = False
-run_tooth_tests_numtets = True
+run_tooth_tests_numtets = False
 run_isosurface_tests = False
 run_nerf_synthetic_tests = False
+run_nerf_synthetic_tests_adaptive = True
 run_mip_nerf_360_tests = False
 
 shared_params_all = [
@@ -227,6 +228,7 @@ if run_nerf_synthetic_tests:
             '--attenuation', '25.0',
             '--lr_col', '0.08',
             '--lr_pos', '0.0',
+            '--num_epochs', '8',
             '--init_grid_largest', '128',
             '--gt_nerf_synthetic_data_path', os.path.join(nerf_datasets_path, f'nerf_synthetic/{nerf_scene_name_lower}')
         ])
@@ -243,6 +245,24 @@ if run_nerf_synthetic_tests:
         #    '--colmap_sparse_dirname', 'sparse/pycolmap',
         #    '--image_folder_name', 'train',
         #])
+
+if run_nerf_synthetic_tests_adaptive:
+    nerf_scene_names = ['Hotdog']
+    for nerf_scene_name in nerf_scene_names:
+        nerf_scene_name_lower = nerf_scene_name.lower()
+        commands.append([
+            python_cmd, 'train.py',
+            '--name', nerf_scene_name_lower,
+            '--out_dir', os.path.join(pathlib.Path.home(), f'datasets/Tet/{nerf_scene_name}_adaptive'),
+            '--attenuation', '25.0',
+            '--lr_col', '0.08',
+            '--lr_pos', '0.0',
+            '--num_epochs', '4',
+            '--init_grid_largest', '32',
+            '--coarse_to_fine', '--max_num_tets', '400000', '--fix_boundary', '--splits_ratio', '0.05',
+            '--split_grad_type', 'ABS_COLOR', '--coarse_to_fine_save_intermediate',
+            '--gt_nerf_synthetic_data_path', os.path.join(nerf_datasets_path, f'nerf_synthetic/{nerf_scene_name_lower}')
+        ])
 
 if run_mip_nerf_360_tests:
     commands.append([
@@ -272,7 +292,7 @@ if run_tooth_tests_params and run_tooth_tests_numtets:
 
 
 if __name__ == '__main__':
-    shall_send_email = True
+    shall_send_email = False
     pwd_path = os.path.join(pathlib.Path.home(), 'Documents', 'mailpwd.txt')
     use_email = pathlib.Path(pwd_path).is_file()
     if use_email:
@@ -301,9 +321,10 @@ if __name__ == '__main__':
             if use_email:
                 message_text_raw = f'The following command failed with code {proc_status}:\n'
                 message_text_raw += ' '.join(command) + '\n\n'
-                message_text_raw += '--- Output from stderr ---\n'
-                message_text_raw += stderr_string
-                message_text_raw += '---\n\n'
+                if len(stderr_string.strip()) > 0:
+                    message_text_raw += '--- Output from stderr ---\n'
+                    message_text_raw += stderr_string
+                    message_text_raw += '---\n\n'
                 message_text_raw += '--- Output from stdout ---\n'
                 message_text_raw += stdout_string
                 message_text_raw += '---'

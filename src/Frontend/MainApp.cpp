@@ -330,6 +330,7 @@ void MainApp::render() {
         tetMesh->loadTestData(TestCase::SINGLE_TETRAHEDRON);
         tetMeshVolumeRenderer->setTetMeshData(tetMesh);
         isFirstFrame = false;
+        isStartupFile = true;
     }
 
     SciVisApp::preRender();
@@ -417,6 +418,7 @@ void MainApp::renderGui() {
                 fileDialogDirectory = sgl::FileUtils::get()->getPathToFile(filename);
                 selectedDataSetIndex = 0;
                 customDataSetFileName = filename;
+                isStartupFile = false;
                 loadTetMeshDataSet(getSelectedDataSetFilename());
             } else {
                 sgl::Logfile::get()->writeError(
@@ -819,6 +821,7 @@ void MainApp::renderGuiMenuBar() {
                 int selectedDataSetIndexLocal = renderGuiDataSetSelectionMenu();
                 if (selectedDataSetIndexLocal >= 0) {
                     selectedDataSetIndex = selectedDataSetIndexLocal;
+                    isStartupFile = false;
                     loadTetMeshDataSet(getSelectedDataSetFilename());
                 }
 
@@ -904,6 +907,7 @@ void MainApp::renderGuiPropertyEditorBegin() {
                 "Data Set", &selectedDataSetIndex, dataSetNames.data(),
                 int(dataSetNames.size()))) {
             if (selectedDataSetIndex >= NUM_MANUAL_LOADERS) {
+                isStartupFile = false;
                 loadTetMeshDataSet(getSelectedDataSetFilename());
             }
         }
@@ -912,6 +916,7 @@ void MainApp::renderGuiPropertyEditorBegin() {
             ImGui::InputText("##datasetfilenamelabel", &customDataSetFileName);
             ImGui::SameLine();
             if (ImGui::Button("Load File")) {
+                isStartupFile = false;
                 loadTetMeshDataSet(getSelectedDataSetFilename());
             }
         }
@@ -1005,6 +1010,7 @@ void MainApp::onFileDropped(const std::string& droppedFileName) {
         fileDialogDirectory = sgl::FileUtils::get()->getPathToFile(droppedFileName);
         selectedDataSetIndex = 0;
         customDataSetFileName = droppedFileName;
+        isStartupFile = false;
         loadTetMeshDataSet(getSelectedDataSetFilename());
     } else {
         sgl::Logfile::get()->writeError(
@@ -1045,7 +1051,13 @@ void MainApp::loadTetMeshDataSet(const std::string& fileName, bool blockingDataL
     TetMeshPtr tetMesh(new TetMesh(device, &transferFunctionWindow));
 
     if (blockingDataLoading) {
-        bool dataLoaded = tetMesh->loadFromFile(fileName);
+        // Add check if action triggered reload of startup file (which is actually a test case, not a true file).
+        bool dataLoaded = false;
+        if (isStartupFile) {
+            tetMesh->loadTestData(TestCase::SINGLE_TETRAHEDRON);
+        } else {
+            dataLoaded = tetMesh->loadFromFile(fileName);
+        }
 
         if (dataLoaded) {
             this->tetMesh = tetMesh;

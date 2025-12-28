@@ -57,8 +57,8 @@ protected:
         sgl::vk::ShaderManager->invalidateShaderCache();
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("BLOCK_SIZE", std::to_string(BLOCK_SIZE)));
-        preprocessorDefines.insert(std::make_pair("PI_SQRT", std::to_string(std::sqrt(sgl::PI))));
-        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("PI_SQRT", sgl::toStringLocaleC(std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", sgl::toStringLocaleC(1.0f / std::sqrt(sgl::PI))));
         const auto& tetMesh = volumeRenderer->getTetMesh();
         if (tetMesh->getUseGradients()) {
             preprocessorDefines.insert(std::make_pair("SUPPORT_ADJOINT", ""));
@@ -297,8 +297,8 @@ protected:
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("BACKWARD_PASS", ""));
         preprocessorDefines.insert(std::make_pair("PROJECTION_TRIANGLE_GRADIENTS", ""));
-        preprocessorDefines.insert(std::make_pair("PI_SQRT", std::to_string(std::sqrt(sgl::PI))));
-        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("PI_SQRT", sgl::toStringLocaleC(std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", sgl::toStringLocaleC(1.0f / std::sqrt(sgl::PI))));
         if (renderer->getDevice()->getPhysicalDeviceShaderAtomicFloatFeatures().shaderBufferFloat32AtomicAdd) {
             preprocessorDefines.insert(std::make_pair("SUPPORT_BUFFER_FLOAT_ATOMIC_ADD", ""));
             preprocessorDefines.insert(std::make_pair(
@@ -445,8 +445,8 @@ protected:
         std::map<std::string, std::string> preprocessorDefines;
         preprocessorDefines.insert(std::make_pair("BACKWARD_PASS", ""));
         preprocessorDefines.insert(std::make_pair("BLOCK_SIZE", std::to_string(BLOCK_SIZE)));
-        preprocessorDefines.insert(std::make_pair("PI_SQRT", std::to_string(std::sqrt(sgl::PI))));
-        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", std::to_string(1.0f / std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("PI_SQRT", sgl::toStringLocaleC(std::sqrt(sgl::PI))));
+        preprocessorDefines.insert(std::make_pair("INV_PI_SQRT", sgl::toStringLocaleC(1.0f / std::sqrt(sgl::PI))));
         if (renderer->getDevice()->getPhysicalDeviceShaderAtomicFloatFeatures().shaderBufferFloat32AtomicAdd) {
             preprocessorDefines.insert(std::make_pair("SUPPORT_BUFFER_FLOAT_ATOMIC_ADD", ""));
             preprocessorDefines.insert(std::make_pair(

@@ -188,6 +188,9 @@ std::string getLibraryPath() {
 }
 
 ApplicationState::ApplicationState() {
+    // Avoid incorrect float to string conversion.
+    std::setlocale(LC_ALL, "C.UTF-8");
+
     // Initialize the filesystem utilities.
     sgl::FileUtils::get()->initialize("PyDiffTetVR", 1, argv);
 

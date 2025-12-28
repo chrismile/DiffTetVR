@@ -119,7 +119,7 @@ vec4 transferFunction(float attr) {
 
 #ifdef SHOW_DEPTH_COMPLEXITY
 // Stores the number of fragments using atomic operations.
-layout(binding = 9) coherent buffer DepthComplexityCounterBuffer {
+layout(binding = 10) coherent buffer DepthComplexityCounterBuffer {
     uint depthComplexityCounterBuffer[];
 };
 

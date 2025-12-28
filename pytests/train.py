@@ -372,15 +372,17 @@ def main():
         while True:
             # Train colors (freeze position state and set learning rate to zero).
             print('Optimizing colors...')
-            position_lr, position_state = copy_and_freeze_optimizer_var_state(optimizer, 'vertex_positions')
-            for image_gt, view_matrix_array in data_loader:
-                training_step(view_matrix_array)
+            for epoch_idx in range(args.num_epochs):
+                position_lr, position_state = copy_and_freeze_optimizer_var_state(optimizer, 'vertex_positions')
+                for image_gt, view_matrix_array in data_loader:
+                    training_step(view_matrix_array)
+                restore_optimizer_var_state(optimizer, 'vertex_positions', position_lr, position_state)
 
-            # Train positions + colors (set old position state).
-            print('Optimizing positions + colors...')
-            restore_optimizer_var_state(optimizer, 'vertex_positions', position_lr, position_state)
-            for image_gt, view_matrix_array in data_loader:
-                training_step(view_matrix_array)
+                if args.lr_pos > 0.0:
+                    # Train positions + colors (set old position state).
+                    print('Optimizing positions + colors...')
+                    for image_gt, view_matrix_array in data_loader:
+                        training_step(view_matrix_array)
 
             if tet_mesh_opt.get_num_cells() >= args.max_num_tets:
                 break
