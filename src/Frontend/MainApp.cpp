@@ -331,6 +331,12 @@ void MainApp::render() {
         tetMeshVolumeRenderer->setTetMeshData(tetMesh);
         isFirstFrame = false;
         isStartupFile = true;
+        boundingBox = tetMesh->getBoundingBox();
+        cameraPath.fromCirclePath(
+                boundingBox, "",
+                usePerformanceMeasurementMode
+                ? CAMERA_PATH_TIME_PERFORMANCE_MEASUREMENT : CAMERA_PATH_TIME_RECORDING,
+                usePerformanceMeasurementMode);
     }
 
     SciVisApp::preRender();
