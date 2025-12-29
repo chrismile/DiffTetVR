@@ -57,7 +57,8 @@ Windows.
 
 To install the library as a Python module, first install a version of PyTorch matching your GPU.
 Then, the following command must be called in the repository directory.
-It seems like `--no-build-isolation` is only necessary when installing in a Python venv, not a conda environment.
+The argument `--no-build-isolation` seems to be necessary with newer versions of pip to allow setup.py to access the
+version of PyTorch installed in the conda or pip environment.
 
 ```sh
 pip install --no-build-isolation .

@@ -95,9 +95,30 @@ def TorchExtension(name, sources, *args, **kwargs):
     libraries.append('torch_python')
     if IS_HIP_EXTENSION:  # (ROCM_HOME is not None) and (torch.version.hip is not None)
         assert ROCM_VERSION is not None
-        libraries.append('amdhip64' if ROCM_VERSION >= (3, 5) else 'hip_hcc')
+        if ROCM_VERSION < (3, 5):
+            libraries.append('hip_hcc')
+        if ROCM_VERSION < (6, 1, 2):
+            # https://rocm.docs.amd.com/projects/install-on-windows/en/latest/#hip-sdk-changes
+            libraries.append('amdhip64')
+        else:
+            # In theory, since ROCm 6.1.2, we would need to use "amdhip64_<VER>.dll"
+            # (see https://rocm.docs.amd.com/projects/install-on-windows/en/latest/#hip-sdk-changes).
+            # However, the object file is still "amdhip64.lib", and that is likely what we want to specify here.
+            #rocm_version_major = ROCM_VERSION[0]
+            #libraries.append(f'amdhip64_{rocm_version_major}')
+            libraries.append('amdhip64')
         libraries.append('c10_hip')
         libraries.append('torch_hip')
+        # torch/utils/cpp_extension.py uses the location of hipcc to determine the ROCM_HOME location.
+        # This seems to not work well with current nightly packages, as hipcc is in <env-root>/Scripts on Windows.
+        hip_runtime_opt1 = os.path.join(ROCM_HOME, 'include', 'hip', 'hip_runtime.h')
+        hip_runtime_opt2 = os.path.join(ROCM_HOME, 'Lib', 'site-packages', '_rocm_sdk_core', 'include', 'hip', 'hip_runtime.h')
+        if os.path.isfile(hip_runtime_opt1):
+            include_dirs.append(os.path.join(SYCL_HOME, 'include'))
+        elif os.path.isfile(hip_runtime_opt2):
+            include_dirs.append(os.path.join(SYCL_HOME, 'Lib', 'site-packages', '_rocm_sdk_core', 'include', 'hip'))
+        else:
+            raise RuntimeError('Could not determine ROCm paths.')
     elif CUDA_HOME is not None and torch.cuda.is_available():
         libraries.append('cudart')
         libraries.append('c10_cuda')
