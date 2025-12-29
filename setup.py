@@ -114,10 +114,11 @@ def TorchExtension(name, sources, *args, **kwargs):
         hip_runtime_opt1 = os.path.join(ROCM_HOME, 'include', 'hip', 'hip_runtime.h')
         hip_runtime_opt2 = os.path.join(ROCM_HOME, 'Lib', 'site-packages', '_rocm_sdk_core', 'include', 'hip', 'hip_runtime.h')
         if os.path.isfile(hip_runtime_opt1):
-            include_dirs.append(os.path.join(SYCL_HOME, 'include'))
+            include_dirs.append(os.path.join(ROCM_HOME, 'include'))
         elif os.path.isfile(hip_runtime_opt2):
-            include_dirs.append(os.path.join(SYCL_HOME, 'Lib', 'site-packages', '_rocm_sdk_core', 'include', 'hip'))
+            include_dirs.append(os.path.join(ROCM_HOME, 'Lib', 'site-packages', '_rocm_sdk_core', 'include'))
         else:
+            #include_dirs.append('third_party/sgl/src/Graphics/Vulkan/libs/hip/include')
             raise RuntimeError('Could not determine ROCm paths.')
     elif CUDA_HOME is not None and torch.cuda.is_available():
         libraries.append('cudart')
