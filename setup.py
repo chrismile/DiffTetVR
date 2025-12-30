@@ -115,8 +115,10 @@ def TorchExtension(name, sources, *args, **kwargs):
         hip_runtime_opt2 = os.path.join(ROCM_HOME, 'Lib', 'site-packages', '_rocm_sdk_core', 'include', 'hip', 'hip_runtime.h')
         if os.path.isfile(hip_runtime_opt1):
             include_dirs.append(os.path.join(ROCM_HOME, 'include'))
+            library_dirs.append(os.path.join(ROCM_HOME, 'lib'))
         elif os.path.isfile(hip_runtime_opt2):
             include_dirs.append(os.path.join(ROCM_HOME, 'Lib', 'site-packages', '_rocm_sdk_core', 'include'))
+            library_dirs.append(os.path.join(ROCM_HOME, 'Lib', 'site-packages', '_rocm_sdk_core', 'lib'))
         else:
             #include_dirs.append('third_party/sgl/src/Graphics/Vulkan/libs/hip/include')
             raise RuntimeError('Could not determine ROCm paths.')

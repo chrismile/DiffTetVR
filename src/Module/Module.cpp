@@ -29,16 +29,18 @@
 #include <pybind11/functional.h>
 #include <pybind11/numpy.h>
 
-#include <torch/script.h>
-#include <torch/types.h>
-#include <torch/extension.h>
-
 #ifdef SUPPORT_CUDA_INTEROP
 #include <Graphics/Vulkan/Utils/InteropCuda.hpp>
 #endif
 #ifdef SUPPORT_HIP_INTEROP
+// Needs to be included before torch/script.h, or errors in amd_hip_vector_defines.h occur for some reason.
 #include <Graphics/Vulkan/Utils/InteropHIP.hpp>
 #endif
+
+#include <torch/script.h>
+#include <torch/types.h>
+#include <torch/extension.h>
+
 #ifdef SUPPORT_CUDA_INTEROP
 #include <c10/cuda/CUDAStream.h>
 #endif
