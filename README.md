@@ -64,6 +64,13 @@ version of PyTorch installed in the conda or pip environment.
 pip install --no-build-isolation .
 ```
 
+On Windows, the commands below seems to occasionally be necessary to force the use of the x64 (not x86) compiler.
+
+```sh
+call "%ProgramFiles%\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat" amd64
+set DISTUTILS_USE_SDK=1
+```
+
 If the package should be installed in a conda environment, activate the corresponding environment first as follows.
 
 ```sh
@@ -164,8 +171,42 @@ pip install .
 
 ### AMD GPU Support
 
-DiffTetVR has WIP support for AMD GPUs via the Python module. However, AMD (as of 2025-03-30) only supports PyTorch
-via ROCm on Linux and on Windows via WSL. I have not been able to get Vulkan-HIP interop to work under WSL so far.
+DiffTetVR has WIP support for AMD GPUs via the Python module.
+
+#### AMD Windows
+
+On Windows, PyTorch ROCm support is experimental (as of 2025-12-30). One resource for information is, e.g.,
+https://www.amd.com/en/resources/support-articles/release-notes/RN-AMDGPU-WINDOWS-PYTORCH-7-1-1.html.
+Using ROCm on Windows via WSL has been supported for some time now, but I have not been able to get Vulkan-HIP interop
+to work under WSL.
+
+Commands for installing a nightly version of PyTorch for use on AMD Windows can be found at
+https://github.com/ROCm/TheRock/blob/main/RELEASES.md. Below, the correct commands for an RX 7900 XT can be found.
+```sh
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ --pre torch torchaudio torchvision
+```
+
+For testing if the installation of ROCm + PyTorch worked:
+```sh
+python -c "import torch; print(torch.cuda.isavailable()); print('Device name:', torch.cuda.get_device_name(0))"
+```
+
+As of 2025-12-30, the following issue is a critical blocker: https://github.com/ROCm/TheRock/issues/2733
+Building the Python module fails with the following error message:
+```
+error LNK2001: unresolved external symbol "__declspec(dllimport) public: __cdecl c10::ValueError::ValueError(struct c10::SourceLocation,class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >)" (__imp_??0ValueError@c10@@QEAA@USourceLocation@1@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z)
+        Hint on symbols that are defined and could potentially match:
+          "__declspec(dllimport) public: __cdecl c10::ValueError::ValueError(class c10::ValueError const &)" (__imp_??0ValueError@c10@@QEAA@AEBV01@@Z)
+      build\lib.win-amd64-cpython-312\difftetvr\difftetvr.cp312-win_amd64.pyd : fatal error LNK1120: 1 unresolved externals
+```
+
+
+#### AMD Linux
+
+On Linux, sharing semaphores between HIP and Vulkan is so far not supported (see
+https://rocm.docs.amd.com/projects/HIP/en/latest/reference/hip_runtime_api/modules/memory_management/external_resource_interoperability.html).
+This is necessary for supporting any PyTorch device other than "CPU".
 
 ```sh
 # https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html
@@ -173,17 +214,18 @@ sudo apt update
 sudo apt install "linux-headers-$(uname -r)" "linux-modules-extra-$(uname -r)"
 sudo apt install python3-setuptools python3-wheel
 sudo usermod -a -G render,video $LOGNAME
-wget https://repo.radeon.com/amdgpu-install/6.3.4/ubuntu/noble/amdgpu-install_6.3.60303-1_all.deb
-sudo apt install ./amdgpu-install_6.3.60304-1_all.deb
+wget https://repo.radeon.com/amdgpu-install/7.1.1/ubuntu/noble/amdgpu-install_7.1.1.70101-1_all.deb
+sudo apt install ./amdgpu-install_7.1.1.70101-1_all.deb
 sudo apt update
 sudo apt install amdgpu-dkms rocm
 # https://rocm.docs.amd.com/projects/radeon/en/latest/docs/install/wsl/install-radeon.html
-amdgpu-install -y --usecase=wsl,rocm,graphics --no-dkms
+#amdgpu-install -y --usecase=rocm,graphics --no-dkms
 
 conda create -n diffdvr python=3.12
 conda activate diffdvr
 conda install numpy sympy numba matplotlib tqdm scikit-image conda-forge::tensorboard conda-forge::opencv conda-forge::openexr-python
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm6.2.4
+#pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm6.2.4
+pip3 install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/rocm7.0
 ```
 
 

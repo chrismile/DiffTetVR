@@ -476,7 +476,7 @@ if cmake_found:
         radix_sort_lib_path = f'{tmp_path}/build/Release/vk-radix-sort.lib'
     else:
         radix_sort_lib_path = f'{tmp_path}/build/libvk-radix-sort.a'
-    extra_objects.append(radix_sort_lib_path)
+    extra_objects.append(os.path.abspath(radix_sort_lib_path))
     if not os.path.isfile(radix_sort_lib_path):
         volk_header_path = 'third_party/sgl/src/Graphics/Vulkan/libs/volk'
         volk_header_path = os.path.abspath(volk_header_path)
