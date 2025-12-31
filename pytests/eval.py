@@ -64,7 +64,7 @@ def skimage_to_torch(img):
     return tensor
 
 
-def compare_images(tensor_gt, tensor_approx):
+def compare_images(tensor_gt, tensor_approx, dataset_path):
     tensor_gt = torch.clip(tensor_gt, 0.0, 1.0)
     tensor_approx = torch.clip(tensor_approx, 0.0, 1.0)
 
@@ -75,6 +75,8 @@ def compare_images(tensor_gt, tensor_approx):
     data_range = img_gt.max() - img_approx.min()
     ssim = skimage.metrics.structural_similarity(
         img_gt, img_approx, data_range=data_range, channel_axis=-1, multichannel=True)
+
+    print(f'{dataset_path}: PSNR {psnr}')
 
     return {
         'MSE': mse,
@@ -87,9 +89,11 @@ def compare_images(tensor_gt, tensor_approx):
 def plot_test_case(test_name, stats_key=None):
     bintet_ext = '.bintet'
     params = []
+    dataset_paths = []
     for dataset_path in dataset_path_list:
         if dataset_path.startswith(test_name) and dataset_path.endswith(bintet_ext):
             param = dataset_path[len(test_name)+1:len(dataset_path)-len(bintet_ext)]
+            dataset_paths.append(dataset_path)
             if '.' in param or 'e' in param:
                 params.append(float(param))
             else:
@@ -102,7 +106,7 @@ def plot_test_case(test_name, stats_key=None):
     results = []
     x_params = []
     x_results = []
-    for param in params:
+    for idx, param in enumerate(params):
         tet_mesh = d.TetMesh()
         tet_mesh.load_from_file(os.path.join(dataset_dir, f'{test_name}_{param}.bintet'))
         renderer.set_tet_mesh(tet_mesh)
@@ -113,7 +117,7 @@ def plot_test_case(test_name, stats_key=None):
         blend_image_premul(rendered_image, [0.0, 0.0, 0.0, 1.0])
         save_tensor_png(os.path.join(dataset_dir, f'{test_name}_{param}.png'), rendered_image)
         rendered_image = torch.tensor(np.transpose(rendered_image, (2, 0, 1)))
-        image_metrics = compare_images(rendered_image_gt, rendered_image)
+        image_metrics = compare_images(rendered_image_gt, rendered_image, dataset_paths[idx])
         results.append(image_metrics[metric_name])
 
         if stats_key is not None:

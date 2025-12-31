@@ -317,11 +317,12 @@ if __name__ == '__main__':
             else:
                 stderr_string = err.decode('utf-8')
                 stdout_string = output.decode('utf-8')
+            has_stderr_output = len(stderr_string.strip()) > 0
 
             if use_email:
                 message_text_raw = f'The following command failed with code {proc_status}:\n'
                 message_text_raw += ' '.join(command) + '\n\n'
-                if len(stderr_string.strip()) > 0:
+                if has_stderr_output:
                     message_text_raw += '--- Output from stderr ---\n'
                     message_text_raw += stderr_string
                     message_text_raw += '---\n\n'
@@ -334,9 +335,10 @@ if __name__ == '__main__':
                 message_text_html += f'The following command failed with code {proc_status}:<br/>\n'
                 message_text_html += ' '.join(command) + '<br/><br/>\n\n'
                 message_text_html += '<font color="red" style="font-family: \'Courier New\', monospace;">\n'
-                message_text_html += '--- Output from stderr ---<br/>\n'
-                message_text_html += escape_html(stderr_string)
-                message_text_html += '---</font>\n<br/><br/>\n\n'
+                if has_stderr_output:
+                    message_text_html += '--- Output from stderr ---<br/>\n'
+                    message_text_html += escape_html(stderr_string)
+                    message_text_html += '---</font>\n<br/><br/>\n\n'
                 message_text_html += '<font style="font-family: \'Courier New\', monospace;">\n'
                 message_text_html += '--- Output from stdout ---<br/>\n'
                 message_text_html += escape_html(stdout_string)
@@ -352,20 +354,23 @@ if __name__ == '__main__':
             print('--- Output from stdout ---')
             print(stdout_string.rstrip('\n'))
             print('---\n')
-            print('--- Output from stderr ---', file=sys.stderr)
-            print(stderr_string.rstrip('\n'), file=sys.stderr)
-            print('---', file=sys.stderr)
+            if has_stderr_output:
+                print('--- Output from stderr ---', file=sys.stderr)
+                print(stderr_string.rstrip('\n'), file=sys.stderr)
+                print('---', file=sys.stderr)
             sys.exit(1)
             #raise Exception(f'Process returned error code {proc_status}.')
         elif not shall_send_email:
             stderr_string = err.decode('utf-8')
             stdout_string = output.decode('utf-8')
+            has_stderr_output = len(stderr_string.strip()) > 0
             print('--- Output from stdout ---')
             print(stdout_string.rstrip('\n'))
             print('---\n')
-            print('--- Output from stderr ---', file=sys.stderr)
-            print(stderr_string.rstrip('\n'), file=sys.stderr)
-            print('---', file=sys.stderr)
+            if has_stderr_output:
+                print('--- Output from stderr ---', file=sys.stderr)
+                print(stderr_string.rstrip('\n'), file=sys.stderr)
+                print('---', file=sys.stderr)
 
     message_text_raw = 'run.py finished successfully'
     message_text_html = \

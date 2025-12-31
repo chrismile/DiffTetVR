@@ -127,13 +127,25 @@ if __name__ == '__main__':
         renderer.set_camera_fovy(dataset.get_fovy())
         data_loader = DataLoader(dataset, shuffle=False, batch_size=None)
         img_idx = 0
+        image_metrics_avg = None
         for image_gt, view_matrix_array in data_loader:
             renderer.set_view_matrix(view_matrix_array.numpy())
             rendered_image = renderer.render()
             rendered_image = rendered_image.detach().cpu().numpy()
             blend_image_premul(rendered_image, [1.0, 1.0, 1.0, 1.0])
-            save_tensor_png(os.path.join(dataset_dir, 'test', f'r_{img_idx}.png'), rendered_image)
+            #save_tensor_png(os.path.join(dataset_dir, 'test', f'r_{img_idx}.png'), rendered_image)
             rendered_image = torch.tensor(np.transpose(rendered_image, (2, 0, 1)))
-            image_gt = image_gt.permute(2, 0, 1)
+            image_gt = image_gt.detach().cpu().numpy()
+            blend_image_premul(image_gt, [1.0, 1.0, 1.0, 1.0])
+            image_gt = torch.tensor(np.transpose(image_gt, (2, 0, 1)))
+            #image_gt = image_gt.permute(2, 0, 1)
             image_metrics = compare_images(image_gt, rendered_image)
+            if image_metrics_avg is None:
+                image_metrics_avg = image_metrics
+            else:
+                for k, v in image_metrics_avg.items():
+                    image_metrics_avg[k] += image_metrics[k]
             img_idx += 1
+        for k, v in image_metrics_avg.items():
+            image_metrics_avg[k] = image_metrics_avg[k] / img_idx
+        print(f'Average PSNR {nerf_scene_name}: {image_metrics_avg["PSNR"]}')
