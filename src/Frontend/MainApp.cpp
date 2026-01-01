@@ -807,6 +807,7 @@ int MainApp::renderGuiDataSetSelectionMenu() {
 
 void MainApp::renderGuiMenuBar() {
     bool openOptimizerDialog = false;
+    bool openRemoveTransparentTetsDialog = false;
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Open Tet Mesh...", "CTRL+O")) {
@@ -877,6 +878,10 @@ void MainApp::renderGuiMenuBar() {
                 tetMesh->unlinkTets();
             }
 
+            if (tetMesh && ImGui::MenuItem("Remove Transparent Tets...")) {
+                openRemoveTransparentTetsDialog = true;
+            }
+
             deviceSelector->renderGuiMenu();
 
             ImGui::EndMenu();
@@ -902,6 +907,27 @@ void MainApp::renderGuiMenuBar() {
     tetMeshOptimizer->renderGuiDialog();
     if (tetMeshOptimizer->getNeedsReRender()) {
         reRender = true;
+    }
+    if (openRemoveTransparentTetsDialog) {
+        ImGui::OpenPopup("Remove Transparent Tets");
+        isRemoveTransparentTetsDialogOpen = true;
+    }
+    if (isRemoveTransparentTetsDialogOpen) {
+        if (ImGui::BeginPopupModal(
+                "Remove Transparent Tets", &isRemoveTransparentTetsDialogOpen, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::InputFloat("Alpha Threshold", &removeTetsAlphaThreshold);
+            if (ImGui::Button("OK")) {
+                tetMesh->removeTransparentTets(removeTetsAlphaThreshold);
+                tetMeshVolumeRenderer->setTetMeshData(tetMesh);
+                reRender = true;
+                isRemoveTransparentTetsDialogOpen = false;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                isRemoveTransparentTetsDialogOpen = false;
+            }
+            ImGui::EndPopup();
+        }
     }
 }
 

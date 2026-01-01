@@ -1240,8 +1240,10 @@ void buildFacesSlim(
     }
     std::sort(tempFaces.begin(), tempFaces.end());
 
+    isBoundaryFace.clear();
     isBoundaryVertex.clear();
     isBoundaryVertex.resize(vertices.size(), false);
+    facesSlim.clear();
     facesSlim.reserve(tempFaces.size() / 2);
     uint32_t numFaces = 0;
     for (uint32_t i = 0; i < tempFaces.size(); ++i) {
@@ -1983,5 +1985,100 @@ void TetMesh::unlinkTets() {
     }
     if (getUseCellColors()) {
         setTetMeshDataCell(cellIndicesUnlinked, vertexPositionsUnlinked, cellColors);
+    }
+}
+
+void TetMesh::removeTransparentTets(float alphaThreshold) {
+    updateCellIndicesIfNecessary();
+    updateVerticesIfNecessary();
+    if (!forceUseOvmRepresentation) {
+        useOvmRepresentation = false;
+    }
+
+    const bool useVertexColors = getUseVertexColors();
+    const auto numTets = uint32_t(cellIndices.size() / 4);
+
+    // Find which tets are to be kept and which vertices are referenced by them.
+    size_t numUsedTets = 0;
+    std::vector<bool> vertexUsageMap(vertexPositions.size(), false);
+    std::vector<bool> tetUsageMap(numTets, false);
+    for (uint32_t tetIdx = 0; tetIdx < numTets; tetIdx++) {
+        bool aboveAlphaThreshold = false;
+        const uint32_t offset = tetIdx * 4;
+
+        if (useVertexColors) {
+            for (uint32_t i = offset; i < offset + 4; i++) {
+                size_t vidx = cellIndices.at(i);
+                const auto& vertexColor = vertexColors.at(vidx);
+                if (vertexColor.a >= alphaThreshold) {
+                    aboveAlphaThreshold = true;
+                    break;
+                }
+            }
+        } else {
+            aboveAlphaThreshold = cellColors.at(tetIdx).a >= alphaThreshold;
+        }
+
+        if (aboveAlphaThreshold) {
+            for (uint32_t i = offset; i < offset + 4; i++) {
+                size_t vidx = cellIndices.at(i);
+                vertexUsageMap[vidx] = true;
+            }
+            tetUsageMap[tetIdx] = true;
+            numUsedTets++;
+        }
+    }
+
+    // Count number of used vertices for compaction.
+    uint32_t numVerticesUsed = 0;
+    std::vector<uint32_t> newVertexIndexPositionList(vertexPositions.size());
+    for (size_t vertexIdx = 0; vertexIdx < vertexPositions.size(); vertexIdx++) {
+        newVertexIndexPositionList[vertexIdx] = numVerticesUsed;
+        if (vertexUsageMap[vertexIdx]) {
+            numVerticesUsed++;
+        }
+    }
+
+    // Compact vertices.
+    std::vector<glm::vec3> vertexPositionsNew;
+    vertexPositionsNew.reserve(numVerticesUsed);
+    std::vector<glm::vec4> vertexColorsNew;
+    if (useVertexColors) {
+        vertexColorsNew.reserve(numVerticesUsed);
+    }
+    for (size_t vertexIdx = 0; vertexIdx < vertexPositions.size(); vertexIdx++) {
+        if (vertexUsageMap[vertexIdx]) {
+            vertexPositionsNew.emplace_back(vertexPositions[vertexIdx]);
+            if (useVertexColors) {
+                vertexColorsNew.emplace_back(vertexColors[vertexIdx]);
+            }
+        }
+    }
+
+    // Compact indices.
+    std::vector<uint32_t> cellIndicesNew;
+    cellIndicesNew.reserve(numUsedTets * 4);
+    std::vector<glm::vec4> cellColorsNew;
+    if (!useVertexColors) {
+        cellColorsNew.reserve(numUsedTets);
+    }
+    for (uint32_t tetIdx = 0; tetIdx < numTets; tetIdx++) {
+        if (tetUsageMap[tetIdx]) {
+            const uint32_t offset = tetIdx * 4;
+            for (uint32_t i = offset; i < offset + 4; i++) {
+                size_t vidx = cellIndices.at(i);
+                cellIndicesNew.emplace_back(newVertexIndexPositionList[vidx]);
+            }
+            if (!useVertexColors) {
+                cellColorsNew.emplace_back(cellColors.at(tetIdx));
+            }
+        }
+    }
+
+    if (useVertexColors) {
+        setTetMeshData(cellIndicesNew, vertexPositionsNew, vertexColorsNew);
+    }
+    if (getUseCellColors()) {
+        setTetMeshDataCell(cellIndicesNew, vertexPositionsNew, cellColorsNew);
     }
 }

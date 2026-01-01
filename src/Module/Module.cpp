@@ -815,6 +815,8 @@ PYBIND11_MODULE(difftetvr, m) {
                  "Returns whether any tetrahedral element is degenerate (i.e., has a volume <= 0).")
             .def("unlink_tets", &TetMesh::unlinkTets,
                  "Removes the links between all tets, i.e., a potentially used shared index representation is reversed.")
+            .def("remove_transparent_tets", &TetMesh::removeTransparentTets, py::arg("alpha_threshold"),
+                 "Removes all tets that have no vertex adjacent with an alpha value greater than or equal the threshold.")
             .def("split_by_largest_gradient_magnitudes", [](
                     const TetMeshPtr& self, const std::shared_ptr<TetMeshVolumeRenderer>& volumeRenderer,
                     SplitGradientType splitGradientType, float splitsRatio) {

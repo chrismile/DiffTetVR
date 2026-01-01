@@ -213,6 +213,9 @@ class TetMesh:
     def unlink_tets(self) -> None:
         """ Removes the links between all tets, i.e., a potentially used shared index representation is reversed. """
         pass
+    def remove_transparent_tets(self, alpha_threshold) -> None:
+        """ Removes all tets that have no vertex adjacent with an alpha value greater than or equal the threshold. """
+        pass
     def split_by_largest_gradient_magnitudes(
             self, renderer: Renderer, split_gradient_type: SplitGradientType, splits_ratio: float) -> None:
         pass

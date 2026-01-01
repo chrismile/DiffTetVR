@@ -140,6 +140,9 @@ private:
     std::string saveTestMeshFileDialogDirectory;
     // Optimizer.
     TetMeshOptimizer* tetMeshOptimizer = nullptr;
+    // For removing tets with low opacity contribution.
+    bool isRemoveTransparentTetsDialogOpen = false;
+    float removeTetsAlphaThreshold = 0.1f;
 
 
     /// --- Visualization pipeline ---

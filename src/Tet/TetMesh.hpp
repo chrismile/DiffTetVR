@@ -186,6 +186,9 @@ public:
     // Removes the links between all tets, i.e., a potentially used shared index representation is reversed.
     void unlinkTets();
 
+    // Removes all tets that have no vertex adjacent with an alpha value greater than or equal the threshold.
+    void removeTransparentTets(float alphaThreshold);
+
 private:
     sgl::vk::Device* device;
 
