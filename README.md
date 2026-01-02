@@ -178,7 +178,7 @@ DiffTetVR has WIP support for AMD GPUs via the Python module.
 On Windows, PyTorch ROCm support is experimental (as of 2025-12-30). One resource for information is, e.g.,
 https://www.amd.com/en/resources/support-articles/release-notes/RN-AMDGPU-WINDOWS-PYTORCH-7-1-1.html.
 Using ROCm on Windows via WSL has been supported for some time now, but I have not been able to get Vulkan-HIP interop
-to work under WSL.
+to work under WSL at all.
 
 Commands for installing a nightly version of PyTorch for use on AMD Windows can be found at
 https://github.com/ROCm/TheRock/blob/main/RELEASES.md. Below, the correct commands for an RX 7900 XT can be found.
@@ -193,13 +193,16 @@ python -c "import torch; print(torch.cuda.isavailable()); print('Device name:', 
 ```
 
 As of 2025-12-30, the following issue is a critical blocker: https://github.com/ROCm/TheRock/issues/2733
-Building the Python module fails with the following error message:
+Building the Python module with MSVC fails with the following error message:
 ```
 error LNK2001: unresolved external symbol "__declspec(dllimport) public: __cdecl c10::ValueError::ValueError(struct c10::SourceLocation,class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >)" (__imp_??0ValueError@c10@@QEAA@USourceLocation@1@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z)
         Hint on symbols that are defined and could potentially match:
           "__declspec(dllimport) public: __cdecl c10::ValueError::ValueError(class c10::ValueError const &)" (__imp_??0ValueError@c10@@QEAA@AEBV01@@Z)
       build\lib.win-amd64-cpython-312\difftetvr\difftetvr.cp312-win_amd64.pyd : fatal error LNK1120: 1 unresolved externals
 ```
+
+As of 2026-01-02, `hipImportExternalSemaphore` returns "invalid argument" / `hipErrorInvalidValue` when using
+`hipExternalSemaphoreHandleTypeTimelineSemaphoreWin32`, so that is another critical blocker.
 
 
 #### AMD Linux
