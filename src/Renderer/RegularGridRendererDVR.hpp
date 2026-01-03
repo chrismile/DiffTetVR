@@ -83,14 +83,14 @@ public:
 
     // Public interface.
     void setOutputImage(sgl::vk::ImageViewPtr& colorImage);
-    virtual void recreateSwapchain(uint32_t width, uint32_t height);
-    virtual void setUseLinearRGB(bool _useLinearRGB);
-    virtual void setRegularGridData(const RegularGridPtr& _regularGrid);
+    void recreateSwapchain(uint32_t width, uint32_t height);
+    void setUseLinearRGB(bool _useLinearRGB);
+    void setRegularGridData(const RegularGridPtr& _regularGrid);
     [[nodiscard]] const RegularGridPtr& getRegularGridData() { return regularGrid; }
     bool loadTransferFunctionFromFile(const std::string& filePath);
     [[nodiscard]] inline float getAttenuationCoefficient() const { return attenuationCoefficient; }
     void setAttenuationCoefficient(float _attenuationCoefficient) { attenuationCoefficient = _attenuationCoefficient; reRender = true; }
-    virtual void setClearColor(const sgl::Color& _clearColor);
+    void setClearColor(const sgl::Color& _clearColor);
     [[nodiscard]] inline float getStepSize() const { return stepSize; }
     void setStepSize(float _stepSize) { stepSize = _stepSize; reRender = true; }
     [[nodiscard]] inline sgl::vk::Renderer* getRenderer() const { return renderer; }
