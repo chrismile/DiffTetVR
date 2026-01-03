@@ -51,10 +51,13 @@ except ImportError:
     SYCL_HOME = None
 
 extra_compile_args = []
+extra_objects = []
 if IS_WINDOWS:
     extra_compile_args.append('/std:c++17')
     extra_compile_args.append('/Zc:__cplusplus')
     extra_compile_args.append('/openmp')
+    if 'CXX' in os.environ and os.path.basename(os.environ['CXX']).startswith('clang'):
+        extra_objects.append('libomp.lib')
 else:
     extra_compile_args.append('-std=c++17')
     extra_compile_args.append('-fopenmp')
@@ -311,7 +314,6 @@ else:
 data_files_all = []
 data_files = ['src/Module/difftetvr.pyi']
 libraries = []
-extra_objects = []
 defines = [
     ('USE_GLM',),
     ('SUPPORT_VULKAN',),

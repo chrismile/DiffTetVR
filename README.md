@@ -201,6 +201,15 @@ error LNK2001: unresolved external symbol "__declspec(dllimport) public: __cdecl
       build\lib.win-amd64-cpython-312\difftetvr\difftetvr.cp312-win_amd64.pyd : fatal error LNK1120: 1 unresolved externals
 ```
 
+Due to this issue, the environment variables below must be set to use Clang instead of MSVC for compilation.
+The Ninja build system must be available on the system. You can download pre-build binaries, e.g., from
+https://github.com/ninja-build/ninja/releases.
+```sh
+set CC=<PATH_TO_ENV>\Lib\site-packages\_rocm_sdk_core\lib\llvm\bin\clang-cl.exe
+set CXX=<PATH_TO_ENV>\Lib\site-packages\_rocm_sdk_core\lib\llvm\bin\clang-cl.exe
+set PATH=%PATH%;<PATH_TO_NINJA>
+```
+
 As of 2026-01-02, `hipImportExternalSemaphore` returns "invalid argument" / `hipErrorInvalidValue` when using
 `hipExternalSemaphoreHandleTypeTimelineSemaphoreWin32`, so that is another critical blocker.
 
