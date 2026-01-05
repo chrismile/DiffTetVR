@@ -2,6 +2,9 @@
 
 DiffTetVR is a differentiable direct volume renderer for tetrahedral meshes.
 
+An article describing the method can be found on the [project page](https://chrismile.net/publications/difftetvr/) or
+on arXiv at https://arxiv.org/abs/2601.00114.
+
 
 ## Building and running the program
 
