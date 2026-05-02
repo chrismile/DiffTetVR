@@ -483,8 +483,8 @@ elif command -v pacman &> /dev/null && ! $use_conda; then
             autoconf-archive libxinerama libxcursor pkgconf libxkbcommon wayland-protocols wayland extra-cmake-modules
         fi
     else
-        if ! is_installed_pacman "boost" || ! is_installed_pacman "icu" || ! is_installed_pacman "glm" \
-                || ! is_installed_pacman "libarchive" || ! is_installed_pacman "tinyxml2" \
+        if ! is_installed_pacman "boost" || ! is_installed_pacman "boost-libs" || ! is_installed_pacman "icu" \
+                || ! is_installed_pacman "glm" || ! is_installed_pacman "libarchive" || ! is_installed_pacman "tinyxml2" \
                 || ! is_installed_pacman "libpng" || ! is_installed_pacman "glew" \
                 || ! is_installed_pacman "vulkan-devel" || ! is_installed_pacman "shaderc" \
                 || ! is_installed_pacman "glslang" || ! is_installed_pacman "jsoncpp" \
@@ -492,8 +492,8 @@ elif command -v pacman &> /dev/null && ! $use_conda; then
             echo "------------------------"
             echo "installing dependencies "
             echo "------------------------"
-            sudo pacman --noconfirm --needed -S boost icu glm libarchive tinyxml2 libpng glew vulkan-devel shaderc \
-            glslang jsoncpp gmp
+            sudo pacman --noconfirm --needed -S boost boost-libs icu glm libarchive tinyxml2 libpng glew vulkan-devel \
+            shaderc glslang jsoncpp gmp
         fi
         if is_available_pacman "sdl3"; then
             if ! is_installed_pacman "sdl3"; then
