@@ -68,6 +68,7 @@ use_conda=false
 conda_env_name="difftetvr"
 link_dynamic=false
 use_custom_vcpkg_triplet=false
+standalone=false
 custom_glslang=false
 build_with_ftetwild_support=true
 build_with_tetgen_support=true
@@ -945,7 +946,7 @@ if [ -f "./sgl/$build_dir/CMakeCache.txt" ]; then
     fi
 fi
 
-if [ ! -d "./sgl/$install_dir" ]; then
+if [ ! -d "./sgl/$install_dir" ] && ! $standalone; then
     echo "------------------------"
     echo "     building sgl       "
     echo "------------------------"
